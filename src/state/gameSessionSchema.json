@@ -1,0 +1,206 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GameSession",
+  "type": "object",
+  "required": [
+    "id",
+    "createdAt",
+    "updatedAt",
+    "players",
+    "teamsById",
+    "active",
+    "eventLog"
+  ],
+  "properties": {
+    "id": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" },
+    "players": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "$ref": "#/definitions/Player" }
+    },
+    "teamsById": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/Team" }
+    },
+    "active": { "$ref": "#/definitions/GameActiveState" },
+    "eventLog": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/GameEvent" }
+    },
+    "derivedCache": { "type": "object" }
+  },
+  "definitions": {
+    "Token": {
+      "type": "object",
+      "required": ["type", "expires"],
+      "properties": {
+        "type": { "type": "string" },
+        "source": { "type": "string" },
+        "expires": {
+          "type": "object",
+          "required": ["when"],
+          "properties": {
+            "when": {
+              "type": "string",
+              "enum": ["endOfActivation", "endOfRound", "never"]
+            },
+            "round": { "type": "number" }
+          }
+        }
+      }
+    },
+    "OperativeBase": {
+      "type": "object",
+      "required": ["stats", "weapons", "abilities", "rules"],
+      "properties": {
+        "stats": {
+          "type": "object",
+          "required": ["apl", "move", "save", "woundsMax"],
+          "properties": {
+            "apl": { "type": "number" },
+            "move": { "type": ["string", "number"] },
+            "save": { "type": "number" },
+            "woundsMax": { "type": "number" }
+          }
+        },
+        "weapons": { "type": "array" },
+        "abilities": { "type": "array" },
+        "rules": { "type": "array" }
+      }
+    },
+    "OperativeState": {
+      "type": "object",
+      "required": [
+        "woundsCurrent",
+        "order",
+        "tokens",
+        "effects",
+        "selectedWeaponId",
+        "equipment",
+        "activation"
+      ],
+      "properties": {
+        "woundsCurrent": { "type": "number" },
+        "order": { "type": "string", "enum": ["conceal", "engage"] },
+        "tokens": { "type": "array", "items": { "$ref": "#/definitions/Token" } },
+        "effects": { "type": "array", "items": { "type": "string" } },
+        "selectedWeaponId": { "type": ["string", "null"] },
+        "equipment": { "type": "array", "items": { "type": "string" } },
+        "activation": {
+          "type": "object",
+          "required": ["aplCurrent", "activatedThisRound"],
+          "properties": {
+            "aplCurrent": { "type": "number" },
+            "activatedThisRound": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "Operative": {
+      "type": "object",
+      "required": ["id", "teamId", "name", "role", "base", "state"],
+      "properties": {
+        "id": { "type": "string" },
+        "teamId": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "base": { "$ref": "#/definitions/OperativeBase" },
+        "state": { "$ref": "#/definitions/OperativeState" }
+      }
+    },
+    "Team": {
+      "type": "object",
+      "required": ["id", "factionKey", "name", "operatives", "resources", "ployState"],
+      "properties": {
+        "id": { "type": "string" },
+        "factionKey": { "type": "string" },
+        "name": { "type": "string" },
+        "operatives": { "type": "array", "items": { "$ref": "#/definitions/Operative" } },
+        "resources": {
+          "type": "object",
+          "required": ["cp", "vp"],
+          "properties": {
+            "cp": { "type": "number" },
+            "vp": { "type": "number" }
+          }
+        },
+        "ployState": {
+          "type": "object",
+          "required": ["strategic", "tactical"],
+          "properties": {
+            "strategic": { "type": "array", "items": { "type": "string" } },
+            "tactical": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "notes": { "type": "object" }
+      }
+    },
+    "Player": {
+      "type": "object",
+      "required": ["id", "displayName", "selectedTeamId"],
+      "properties": {
+        "id": { "type": "string" },
+        "displayName": { "type": "string" },
+        "selectedTeamId": { "type": "string" },
+        "ui": { "type": "object" }
+      }
+    },
+    "GameActivation": {
+      "type": "object",
+      "required": ["operativeId", "aplSpent"],
+      "properties": {
+        "operativeId": { "type": ["string", "null"] },
+        "aplSpent": { "type": "number" }
+      }
+    },
+    "GameActiveState": {
+      "type": "object",
+      "required": [
+        "turn",
+        "round",
+        "phase",
+        "initiativePlayerId",
+        "activePlayerId",
+        "activation"
+      ],
+      "properties": {
+        "turn": { "type": "number" },
+        "round": { "type": "number" },
+        "phase": { "type": "string", "enum": ["strategy", "firefight", "end"] },
+        "initiativePlayerId": { "type": "string" },
+        "activePlayerId": { "type": "string" },
+        "activation": { "$ref": "#/definitions/GameActivation" }
+      }
+    },
+    "GameEvent": {
+      "type": "object",
+      "required": ["id", "t", "type", "actorPlayerId", "payload"],
+      "properties": {
+        "id": { "type": "string" },
+        "t": { "type": "string", "format": "date-time" },
+        "type": {
+          "type": "string",
+          "enum": [
+            "SET_ORDER",
+            "APPLY_DAMAGE",
+            "HEAL",
+            "ADD_TOKEN",
+            "REMOVE_TOKEN",
+            "SELECT_OPERATIVE",
+            "SELECT_WEAPON",
+            "SPEND_APL",
+            "END_ACTIVATION",
+            "NEXT_PHASE",
+            "NEXT_ROUND"
+          ]
+        },
+        "actorPlayerId": { "type": "string" },
+        "payload": { "type": "object" },
+        "undo": { "type": "object" }
+      }
+    }
+  }
+}
