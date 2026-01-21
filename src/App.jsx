@@ -1,6 +1,6 @@
 import "./App.css";
-import UnitCard from "./components/UnitCard";
-import kommandos from "./data/kommandos.json";
+import UnitCard from "./ui/components/UnitCard";
+import kommandos from "./data/killteams/kommandos.json";
 import { useReducer, useState } from "react";
 
 const initialStateFromJson = kommandos;
