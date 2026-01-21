@@ -56,12 +56,28 @@ function DefenseAllocationModal({
 
   const [selectedDefenseId, setSelectedDefenseId] = useState(null);
   const [allocations, setAllocations] = useState({});
+  const [draggedDefenseId, setDraggedDefenseId] = useState(null);
 
   if (!open) return null;
 
   const reset = () => {
     setSelectedDefenseId(null);
     setAllocations({});
+    setDraggedDefenseId(null);
+  };
+  const handleDrop = (attackId) => {
+    if (draggedDefenseId == null) return;
+
+    const defense = defenseEntries.find((entry) => entry.id === draggedDefenseId);
+    const attack = attackEntries.find((entry) => entry.id === attackId);
+
+    if (!canAssignDefenseToAttack(defense, attack)) return;
+
+    setAllocations((prev) => ({
+      ...prev,
+      [draggedDefenseId]: attackId,
+    }));
+    setDraggedDefenseId(null);
   };
 
   const allocationCounts = attackEntries.reduce((acc, attack) => {
@@ -186,27 +202,62 @@ function DefenseAllocationModal({
           <div className="allocation__block">
             <div className="allocation__label">Attack Dice</div>
             <div className="allocation__grid">
-              {attackEntries.map((attack) => (
-                <button
-                  key={attack.id}
-                  type="button"
-                  className={`allocation__die allocation__die--${attack.type}`}
-                  onClick={() => handleAttackClick(attack.id)}
-                >
-                  <div className="allocation__pips">
-                    {Array.from({ length: 9 }).map((_, pipIndex) => (
-                      <span
-                        key={pipIndex}
-                        className={`allocation__pip ${
-                          pipIndicesForValue(attack.value).includes(pipIndex)
-                            ? "allocation__pip--on"
-                            : ""
-                        }`}
-                      />
-                    ))}
-                  </div>
-                </button>
-              ))}
+              {attackEntries.map((attack) => {
+                const allocationsForAttack = Object.entries(allocations)
+                  .filter(([, attackId]) => Number(attackId) === attack.id)
+                  .map(([defenseId]) => Number(defenseId));
+                const counts = allocationCounts[attack.id] || { crits: 0, hits: 0 };
+                const isNegated =
+                  attack.type === "hit"
+                    ? counts.crits + counts.hits >= 1
+                    : attack.type === "crit"
+                      ? counts.crits >= 1 || counts.hits >= 2
+                      : false;
+
+                return (
+                  <button
+                    key={attack.id}
+                    type="button"
+                    className={`allocation__die allocation__die--${attack.type} ${
+                      draggedDefenseId != null ? "allocation__die--droppable" : ""
+                    } ${isNegated ? "allocation__die--negated" : ""}`}
+                    onClick={() => handleAttackClick(attack.id)}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                    }}
+                    onDrop={() => handleDrop(attack.id)}
+                  >
+                    <div className="allocation__pips">
+                      {Array.from({ length: 9 }).map((_, pipIndex) => (
+                        <span
+                          key={pipIndex}
+                          className={`allocation__pip ${
+                            pipIndicesForValue(attack.value).includes(pipIndex)
+                              ? "allocation__pip--on"
+                              : ""
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    {allocationsForAttack.length > 0 && (
+                      <div className="allocation__assigned">
+                        {allocationsForAttack.map((defenseId) => {
+                          const defense = defenseEntries.find((d) => d.id === defenseId);
+                          const tagClass =
+                            defense?.type === "crit"
+                              ? "allocation__assigned-tag allocation__assigned-tag--crit"
+                              : "allocation__assigned-tag";
+                          return (
+                            <span key={defenseId} className={tagClass}>
+                              {defense?.type === "crit" ? "C" : "S"}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -225,6 +276,12 @@ function DefenseAllocationModal({
                     className={`allocation__die allocation__die--${defense.type} ${
                       isSelected ? "allocation__die--selected" : ""
                     } ${isAllocated ? "allocation__die--allocated" : ""}`}
+                    draggable={defense.type !== "miss" && !isAllocated}
+                    onDragStart={() => {
+                      if (defense.type === "miss" || isAllocated) return;
+                      setDraggedDefenseId(defense.id);
+                    }}
+                    onDragEnd={() => setDraggedDefenseId(null)}
                     onClick={() => {
                       if (isAllocated) {
                         removeAllocation(defense.id);
