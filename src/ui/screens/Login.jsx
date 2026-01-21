@@ -26,6 +26,15 @@ function Login({ onSelectPlayer }) {
 						</button>
 					))}
 				</div>
+				<div className="login-screen__actions">
+					<button
+						className="login-screen__btn"
+						type="button"
+						onClick={() => navigate("/multiplayer")}
+					>
+						Multiplayer lobby
+					</button>
+				</div>
 			</div>
 		</div>
 	);

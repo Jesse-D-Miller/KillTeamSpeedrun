@@ -9,6 +9,7 @@ import DefenseAllocationModal from "./ui/components/DefenseAllocationModal";
 import Login from "./ui/screens/Login";
 import ArmySelector from "./ui/screens/ArmySelector";
 import UnitSelector from "./ui/screens/UnitSelector";
+import MultiplayerLobby from "./ui/screens/MultiplayerLobby";
 import { gameReducer } from "./state/gameReducer";
 import { createLogEntry } from "./state/actionCreator";
 import { resolveAttack } from "./engine/rules/resolveAttack";
@@ -35,6 +36,13 @@ const armies = Object.entries(killteamModules).map(([path, data]) => ({
   name: getArmyKey(path).replace(/[-_]+/g, " "),
   units: normalizeKillteamData(data),
 }));
+
+const generateClientId = () => {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
 
 function GameOverlay({ initialUnits }) {
   const [state, dispatch] = useReducer(gameReducer, {
@@ -318,10 +326,21 @@ function ArmyOverlayRoute() {
 }
 
 function App() {
+  useEffect(() => {
+    const existingId = localStorage.getItem("kt_playerId");
+    if (!existingId) {
+      localStorage.setItem("kt_playerId", generateClientId());
+    }
+    if (!localStorage.getItem("kt_playerName")) {
+      localStorage.setItem("kt_playerName", "");
+    }
+  }, []);
+
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/multiplayer" element={<MultiplayerLobby />} />
       <Route path="/:username/army-selector" element={<ArmySelector />} />
       <Route path="/:username/unit-selector" element={<UnitSelector />} />
       <Route path="/:username/army" element={<ArmyOverlayRoute />} />

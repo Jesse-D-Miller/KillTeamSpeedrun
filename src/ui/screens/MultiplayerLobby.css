@@ -1,0 +1,131 @@
+.lobby-screen {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: rgba(255, 255, 255, 0.92);
+  background: radial-gradient(circle at top, rgba(100, 140, 255, 0.25), transparent 55%),
+    linear-gradient(180deg, rgba(10, 12, 18, 0.98), rgba(8, 8, 12, 0.98));
+  z-index: 5;
+}
+
+.lobby-panel {
+  width: min(720px, 92vw);
+  display: grid;
+  gap: 20px;
+  padding: 24px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(18, 20, 28, 0.9);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+
+.lobby-title {
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.lobby-field {
+  display: grid;
+  gap: 8px;
+}
+
+.lobby-field label {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.lobby-field input {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.3);
+  color: inherit;
+}
+
+.lobby-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.lobby-btn {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.lobby-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(90, 140, 255, 0.7);
+  background: rgba(90, 140, 255, 0.18);
+}
+
+.lobby-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lobby-btn--primary {
+  border-color: rgba(90, 140, 255, 0.7);
+  background: rgba(90, 140, 255, 0.25);
+}
+
+.lobby-slot-row {
+  display: flex;
+  gap: 12px;
+}
+
+.lobby-slot {
+  flex: 1;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lobby-slot--active {
+  border-color: rgba(90, 140, 255, 0.8);
+  background: rgba(90, 140, 255, 0.25);
+}
+
+.lobby-status {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.lobby-players {
+  display: grid;
+  gap: 6px;
+}
+
+.lobby-sub {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.lobby-error {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 110, 110, 0.6);
+  background: rgba(255, 110, 110, 0.12);
+  color: rgba(255, 210, 210, 0.95);
+  font-size: 0.85rem;
+}
