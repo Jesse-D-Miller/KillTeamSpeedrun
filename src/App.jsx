@@ -13,8 +13,10 @@ import MultiplayerLobby from "./ui/screens/MultiplayerLobby";
 import { gameReducer } from "./state/gameReducer";
 import { createLogEntry } from "./state/actionCreator";
 import { resolveAttack } from "./engine/rules/resolveAttack";
-import { useEffect, useReducer, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { connectWS } from "./lib/multiplayer";
+import { getOrCreatePlayerId } from "./lib/playerIdentity";
 
 const killteamModules = import.meta.glob("./data/killteams/*.json", {
   eager: true,
@@ -44,7 +46,7 @@ const generateClientId = () => {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-function GameOverlay({ initialUnits }) {
+function GameOverlay({ initialUnits, playerSlot, gameCode }) {
   const [state, dispatch] = useReducer(gameReducer, {
     game: initialUnits,
     log: {
@@ -52,6 +54,8 @@ function GameOverlay({ initialUnits }) {
       cursor: 0,
     },
   });
+  const socketRef = useRef(null);
+  const seenLogIdsRef = useRef(new Set());
   const [attackerId, setAttackerId] = useState(null);
   const [defenderId, setDefenderId] = useState(null);
   const [leftTab, setLeftTab] = useState("units");
@@ -80,10 +84,15 @@ function GameOverlay({ initialUnits }) {
   const defender = state.game.find((u) => u.id === defenderId);
   const teamAUnits = state.game.filter((unit) => unit.teamId === "alpha");
   const teamBUnits = state.game.filter((unit) => unit.teamId === "beta");
+  const myTeamId = playerSlot === "B" ? "beta" : "alpha";
+  const myTeamUnits = myTeamId === "alpha" ? teamAUnits : teamBUnits;
   const selectedUnit =
-    teamAUnits.find((u) => u.id === selectedUnitId) ??
-    teamAUnits[0] ??
+    myTeamUnits.find((u) => u.id === selectedUnitId) ??
+    myTeamUnits[0] ??
     null;
+  const attackerTeamId = selectedUnit?.teamId || myTeamId;
+  const opponentUnits =
+    attackerTeamId === "alpha" ? teamBUnits : teamAUnits;
 
   const selectedWeaponName =
     selectedUnit?.state?.selectedWeapon || selectedUnit?.weapons?.[0]?.name;
@@ -93,17 +102,82 @@ function GameOverlay({ initialUnits }) {
   const canShoot = selectedWeapon?.mode === "ranged";
 
   useEffect(() => {
-    if (!selectedUnit && teamAUnits.length > 0) {
-      setSelectedUnitId(teamAUnits[0].id);
+    if (!selectedUnit && myTeamUnits.length > 0) {
+      setSelectedUnitId(myTeamUnits[0].id);
     }
-  }, [selectedUnit, teamAUnits]);
+  }, [selectedUnit, myTeamUnits]);
 
   useEffect(() => {
     if (!shootModalOpen) return;
-    if (teamBUnits.length > 0 && !selectedTargetId) {
-      setSelectedTargetId(teamBUnits[0].id);
+    if (opponentUnits.length > 0 && !selectedTargetId) {
+      setSelectedTargetId(opponentUnits[0].id);
     }
-  }, [shootModalOpen, teamBUnits, selectedTargetId]);
+  }, [shootModalOpen, opponentUnits, selectedTargetId]);
+
+  const applyRemoteLogEvent = (event) => {
+    if (!event || event.kind !== "LOG_ENTRY") return;
+    const entry = event.payload?.entry;
+    if (!entry?.id) return;
+    if (seenLogIdsRef.current.has(entry.id)) return;
+    seenLogIdsRef.current.add(entry.id);
+    dispatch({ type: "LOG_PUSH", payload: entry });
+  };
+
+  useEffect(() => {
+    if (!gameCode || !playerSlot) return undefined;
+
+    const socket = connectWS({
+      code: gameCode,
+      playerId: getOrCreatePlayerId(),
+      onMessage: (message) => {
+        if (message.type === "SNAPSHOT" && Array.isArray(message.eventLog)) {
+          message.eventLog.forEach(applyRemoteLogEvent);
+          return;
+        }
+        if (message.type === "EVENT" && message.event) {
+          applyRemoteLogEvent(message.event);
+        }
+      },
+    });
+
+    socketRef.current = socket;
+
+    return () => {
+      socketRef.current = null;
+      socket.close();
+    };
+  }, [gameCode, playerSlot]);
+
+  useEffect(() => {
+    if (!gameCode || !playerSlot) return;
+    const entry = state.log.entries[state.log.cursor - 1];
+    if (!entry?.id) return;
+    if (seenLogIdsRef.current.has(entry.id)) return;
+    seenLogIdsRef.current.add(entry.id);
+
+    const sanitizedEntry = {
+      ...entry,
+      undo: null,
+      redo: null,
+    };
+
+    const event = {
+      id:
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      ts: Date.now(),
+      slot: playerSlot,
+      kind: "LOG_ENTRY",
+      payload: { entry: sanitizedEntry },
+    };
+
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(
+        JSON.stringify({ type: "EVENT", code: gameCode, slot: playerSlot, event }),
+      );
+    }
+  }, [state.log.cursor, state.log.entries, gameCode, playerSlot]);
 
   return (
     <div className="App">
@@ -128,7 +202,7 @@ function GameOverlay({ initialUnits }) {
 
           {leftTab === "units" ? (
             <UnitListNav
-              units={teamAUnits}
+              units={myTeamUnits}
               selectedUnitId={selectedUnit?.id}
               onSelectUnit={setSelectedUnitId}
             />
@@ -153,7 +227,7 @@ function GameOverlay({ initialUnits }) {
               />
               <ShootActionCard
                 attacker={selectedUnit}
-                hasTargets={teamBUnits.length > 0 && canShoot}
+                hasTargets={opponentUnits.length > 0 && canShoot}
                 onShoot={() => {
                   if (!canShoot) {
                     logEntry({
@@ -180,7 +254,7 @@ function GameOverlay({ initialUnits }) {
       <TargetSelectModal
         open={shootModalOpen}
         attacker={selectedUnit}
-        targets={teamBUnits}
+        targets={opponentUnits}
         selectedTargetId={selectedTargetId}
         onSelectTarget={setSelectedTargetId}
         onClose={() => setShootModalOpen(false)}
@@ -189,7 +263,7 @@ function GameOverlay({ initialUnits }) {
           setDefenderId(selectedTargetId);
           logEntry({
             type: "SHOOT_DECLARED",
-            summary: `${selectedUnit?.name || "Attacker"} declared Shoot vs ${teamBUnits.find((u) => u.id === selectedTargetId)?.name || "defender"}`,
+            summary: `${selectedUnit?.name || "Attacker"} declared Shoot vs ${opponentUnits.find((u) => u.id === selectedTargetId)?.name || "defender"}`,
             meta: {
               attackerId: selectedUnit?.id,
               defenderId: selectedTargetId,
@@ -283,10 +357,25 @@ function GameOverlay({ initialUnits }) {
 
 function ArmyOverlayRoute() {
   const location = useLocation();
+  const gameCode = location.state?.gameCode;
   const slot = location.state?.slot;
   const armyKey = location.state?.armyKey;
-  const armyKeyA = location.state?.armyKeyA || (slot === "A" ? armyKey : undefined) || armyKey;
-  const armyKeyB = location.state?.armyKeyB || (slot === "B" ? armyKey : undefined) || armyKey;
+  const storedArmyKeyA = gameCode
+    ? localStorage.getItem(`kt_game_${gameCode}_army_A`)
+    : null;
+  const storedArmyKeyB = gameCode
+    ? localStorage.getItem(`kt_game_${gameCode}_army_B`)
+    : null;
+  const armyKeyA =
+    location.state?.armyKeyA ||
+    (slot === "A" ? armyKey : undefined) ||
+    storedArmyKeyA ||
+    armyKey;
+  const armyKeyB =
+    location.state?.armyKeyB ||
+    (slot === "B" ? armyKey : undefined) ||
+    storedArmyKeyB ||
+    armyKey;
   const selectedUnitIds = location.state?.selectedUnitIds;
   const selectedUnitIdsA =
     location.state?.selectedUnitIdsA || (slot === "A" ? selectedUnitIds : undefined);
@@ -326,6 +415,8 @@ function ArmyOverlayRoute() {
     <GameOverlay
       key={`${teamA?.key || "team-a"}-${teamB?.key || "team-b"}`}
       initialUnits={combinedUnits}
+      playerSlot={slot}
+      gameCode={gameCode}
     />
   );
 }

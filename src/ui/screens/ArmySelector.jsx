@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import "./ArmySelector.css";
+import { getOrCreatePlayerId } from "../../lib/playerIdentity";
+import { connectWS } from "../../lib/multiplayer";
 
 const killteamModules = import.meta.glob("../../data/killteams/*.json", {
   eager: true,
@@ -23,10 +25,12 @@ function ArmySelector() {
   const navigate = useNavigate();
   const location = useLocation();
   const slot = location.state?.slot;
+  const gameCode = location.state?.gameCode;
   const isSingleSelect = Boolean(slot);
   const [armyKey, setArmyKey] = useState(null);
   const [armyKeyA, setArmyKeyA] = useState(null);
   const [armyKeyB, setArmyKeyB] = useState(null);
+  const socketRef = useRef(null);
   const armies = useMemo(
     () =>
       Object.entries(killteamModules).map(([path, data]) => ({
@@ -61,6 +65,71 @@ function ArmySelector() {
     }
     setArmyKeyB(key);
   };
+
+  const storageKeyForSlot = (slotId) =>
+    gameCode ? `kt_game_${gameCode}_army_${slotId}` : null;
+
+  const storeArmySelection = (slotId, key) => {
+    const storageKey = storageKeyForSlot(slotId);
+    if (!storageKey) return;
+    if (!key) {
+      localStorage.removeItem(storageKey);
+      return;
+    }
+    localStorage.setItem(storageKey, key);
+  };
+
+  const applyArmyEvent = (event) => {
+    if (!event || event.kind !== "ARMY_SELECTED") return;
+    const eventSlot = event.slot;
+    const selectedKey = event.payload?.armyKey;
+    if (!eventSlot || !selectedKey) return;
+    storeArmySelection(eventSlot, selectedKey);
+  };
+
+  const emitEvent = (kind, payload = {}) => {
+    if (!gameCode || !slot) return;
+    const event = {
+      id:
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      ts: Date.now(),
+      slot,
+      kind,
+      payload,
+    };
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(
+        JSON.stringify({ type: "EVENT", code: gameCode, slot, event }),
+      );
+    }
+  };
+
+  useEffect(() => {
+    if (!gameCode || !slot) return undefined;
+
+    const socket = connectWS({
+      code: gameCode,
+      playerId: getOrCreatePlayerId(),
+      onMessage: (message) => {
+        if (message.type === "SNAPSHOT" && Array.isArray(message.eventLog)) {
+          message.eventLog.forEach(applyArmyEvent);
+          return;
+        }
+        if (message.type === "EVENT" && message.event) {
+          applyArmyEvent(message.event);
+        }
+      },
+    });
+
+    socketRef.current = socket;
+
+    return () => {
+      socketRef.current = null;
+      socket.close();
+    };
+  }, [gameCode, slot]);
 
   return (
     <div className="army-selector">
@@ -133,11 +202,17 @@ function ArmySelector() {
             type="button"
             disabled={isSingleSelect ? !armyKey : !armyKeyA || !armyKeyB}
             onClick={() =>
-              navigate(`/${username}/unit-selector`, {
-                state: isSingleSelect
-                  ? { armyKey, slot }
-                  : { armyKeyA, armyKeyB },
-              })
+              {
+                if (isSingleSelect) {
+                  storeArmySelection(slot, armyKey);
+                  emitEvent("ARMY_SELECTED", { armyKey });
+                }
+                navigate(`/${username}/unit-selector`, {
+                  state: isSingleSelect
+                    ? { armyKey, slot, gameCode }
+                    : { armyKeyA, armyKeyB },
+                });
+              }
             }
           >
             Next
