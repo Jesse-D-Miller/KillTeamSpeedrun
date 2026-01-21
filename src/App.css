@@ -42,6 +42,14 @@
 .statbox__value { font-size: 1.25rem; font-weight: 900; line-height: 1.1; }
 .statbox__sub { font-size: 0.8rem; opacity: 0.75; margin-top: 2px; }
 
+.stat--up {
+  color: rgba(120, 255, 140, 0.95);
+}
+
+.stat--down {
+  color: rgba(255, 110, 110, 0.95);
+}
+
 .kt-card__controls {
   display: grid;
   grid-template-columns: 64px 64px 1fr 160px;

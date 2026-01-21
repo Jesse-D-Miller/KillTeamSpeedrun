@@ -1,4 +1,11 @@
 import { resolveAttack } from "../../engine/rules/resolveAttack";
+import {
+  isInjured,
+  statDeltaClass,
+  statDeltaClassLowerIsBetter,
+  unitMove,
+  weaponHit,
+} from "../../engine/selectors/unitSelectors";
 
 function UnitCard({
   unit,
@@ -12,9 +19,17 @@ function UnitCard({
 }) {
   if (!unit) return null;
 
+  const toNumber = (value) => {
+    const parsed = Number(String(value).replace("+", ""));
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+
   const { name, stats, state, weapons = [], rules = [], abilities = [] } = unit;
 
-  const isInjured = state.woundsCurrent < stats.woundsMax / 2;
+  const isUnitInjured = isInjured(unit);
+  const baseMove = toNumber(stats.move);
+  const effectiveMove = unitMove(unit);
+  const moveDeltaClass = statDeltaClass(baseMove, effectiveMove);
 
   const woundsPct = Math.round(
     stats.woundsMax === 0 ? 0 : (state.woundsCurrent / stats.woundsMax) * 100,
@@ -28,7 +43,7 @@ function UnitCard({
     weapons.find((w) => w.name === selectedWeaponName) || weapons[0];
 
   return (
-    <article className={`kt-card ${isInjured ? "kt-card--injured" : ""}`}>
+    <article className={`kt-card ${isUnitInjured ? "kt-card--injured" : ""}`}>
       {/* Header */}
       <header className="kt-card__header">
         <div className="kt-card__title">
@@ -42,7 +57,9 @@ function UnitCard({
           </div>
           <div className="statbox">
             <div className="statbox__label">MOVE</div>
-            <div className="statbox__value">{stats.move}"</div>
+            <div className={`statbox__value ${moveDeltaClass}`}>
+              {effectiveMove ?? stats.move}"
+            </div>
           </div>
           <div className="statbox">
             <div className="statbox__label">SAVE</div>
@@ -101,7 +118,7 @@ function UnitCard({
           >
             {state.order.toUpperCase()}
           </span>
-          {isInjured && <span className="pill pill--red">INJURED</span>}
+          {isUnitInjured && <span className="pill pill--red">INJURED</span>}
         </div>
 
         <button
@@ -171,7 +188,19 @@ function UnitCard({
                 >
                   <td className="left">{w.name}</td>
                   <td>{w.atk}</td>
-                  <td>{w.hit}+</td>
+                  {(() => {
+                    const effectiveHit = weaponHit(w, unit);
+                    const baseHit = toNumber(w.hit);
+                    const hitDeltaClass = statDeltaClassLowerIsBetter(
+                      baseHit,
+                      effectiveHit,
+                    );
+                    return (
+                      <td className={hitDeltaClass}>
+                        {(effectiveHit ?? w.hit)}+
+                      </td>
+                    );
+                  })()}
                   <td>{w.dmg}</td>
                   <td className="left">{w.wr}</td>
                 </tr>
