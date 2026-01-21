@@ -1,4 +1,15 @@
-function UnitCard({ unit, dispatch }) {
+import { resolveAttack } from "../rules/resolveAttack";
+
+function UnitCard({
+  unit,
+  dispatch,
+  attackerId,
+  defenderId,
+  setAttackerId,
+  setDefenderId,
+  attacker,
+  defender,
+}) {
   if (!unit) return null;
 
   const { name, stats, state, weapons = [], rules = [], abilities = [] } = unit;
@@ -102,6 +113,31 @@ function UnitCard({ unit, dispatch }) {
           Toggle Order
         </button>
       </section>
+
+      <button className="btn btn--ghost" onClick={() => setAttackerId(unit.id)}>
+        {attackerId === unit.id ? "Attacker ✓" : "Set Attacker"}
+      </button>
+
+      <button className="btn btn--ghost" onClick={() => setDefenderId(unit.id)}>
+        {defenderId === unit.id ? "Defender ✓" : "Set Defender"}
+      </button>
+
+      <button
+        className="btn"
+        disabled={!attacker || !defender || attacker.id !== unit.id}
+        onClick={() => {
+          const result = resolveAttack({
+            attacker,
+            defender,
+            weapon: selectedWeapon,
+            attackDice: [6, 5, 3, 1],
+            defenseDice: [6, 6],
+          });
+          console.log(result);
+        }}
+      >
+        Test Attack
+      </button>
 
       {/* Weapons table */}
       <section className="kt-card__section">
