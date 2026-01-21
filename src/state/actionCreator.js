@@ -26,3 +26,13 @@ export function undo() {
 export function redo() {
 	return { type: "REDO" };
 }
+
+export function applyDamage(targetUnitId, damage) {
+	return {
+		type: "APPLY_DAMAGE",
+		payload: {
+			targetUnitId,
+			damage,
+		},
+	};
+}

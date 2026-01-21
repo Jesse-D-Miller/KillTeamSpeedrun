@@ -231,12 +231,22 @@ function GameOverlay({ initialUnits }) {
           const defender = pendingAttack?.defender;
           const [normalDmg, critDmg] =
             weapon?.dmg?.split("/").map(Number) ?? [0, 0];
-          const totalDamage = remainingHits * normalDmg + remainingCrits * critDmg;
+          const safeNormalDmg = Number.isFinite(normalDmg) ? normalDmg : 0;
+          const safeCritDmg = Number.isFinite(critDmg) ? critDmg : 0;
+          const totalDamage =
+            remainingHits * safeNormalDmg + remainingCrits * safeCritDmg;
           const hits = attackEntries.filter((d) => d.type === "hit").length;
           const crits = attackEntries.filter((d) => d.type === "crit").length;
           const defenseHits = defenseEntries.filter((d) => d.type === "hit").length;
           const defenseCrits = defenseEntries.filter((d) => d.type === "crit").length;
           const savesUsed = defenseHits + defenseCrits;
+
+          if (defender?.id) {
+            dispatch({
+              type: "APPLY_DAMAGE",
+              payload: { targetUnitId: defender.id, damage: totalDamage },
+            });
+          }
 
           logEntry({
             type: "ATTACK_RESOLVED",
