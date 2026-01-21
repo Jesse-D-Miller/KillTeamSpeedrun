@@ -16,16 +16,94 @@
       "selectedWeapon": "Slugga"
     },
     "weapons": [
-      { "name": "Slugga", "mode": "ranged", "atk": 4, "hit": 4, "dmg": "3/4", "wr": "Range 8\"" },
-      { "name": "Big choppa", "mode": "melee", "atk": 5, "hit": 3, "dmg": "5/6", "wr": "-" },
-      { "name": "Power klaw", "mode": "melee", "atk": 4, "hit": 3, "dmg": "5/7", "wr": "Brutal, Shock" }
+      {
+        "name": "Slugga",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 4,
+        "dmg": "3/4",
+        "wr": "Range 8\""
+      },
+      {
+        "name": "Big choppa",
+        "mode": "melee",
+        "atk": 5,
+        "hit": 3,
+        "dmg": "5/6",
+        "wr": "-"
+      },
+      {
+        "name": "Power klaw",
+        "mode": "melee",
+        "atk": 4,
+        "hit": 3,
+        "dmg": "5/7",
+        "wr": "Brutal, Shock"
+      }
     ],
     "rules": [
-      { "name": "Krumpin’ Time", "text": "This operative can perform two Fight actions during its activation." }
+      {
+        "name": "Krumpin’ Time",
+        "text": "This operative can perform two Fight actions during its activation."
+      }
     ],
     "abilities": [
-      { "name": "GET IT DUN!", "kind": "support", "cost": 1, "text": "Select one other friendly ... add 1 to its APL stat." }
+      {
+        "name": "GET IT DUN!",
+        "kind": "support",
+        "cost": 1,
+        "text": "Select one other friendly KOMMANDO operative (excluding BOMB SQUIG) visible to and within 6\" of this operative. Until the end of that operative’s next activation, add 1 to its APL stat. This operative cannot perform this action while within control range of an enemy operative, or while counteracting."
+      }
     ]
+  },
+  {
+    "id": "kommando-bomb-squig",
+    "name": "Bomb Squig",
+    "role": "Operative",
+    "stats": { "apl": 2, "move": 6, "save": 5, "woundsMax": 5 },
+    "state": {
+      "woundsCurrent": 5,
+      "order": "engage",
+      "effects": [],
+      "selectedWeapon": "Explosives"
+    },
+    "weapons": [
+      {
+        "name": "Explosives",
+        "mode": "ranged",
+        "atk": 6,
+        "hit": 4,
+        "dmg": "4/5",
+        "wr": "Blast 1\", Limited 1, Explosive*"
+      },
+      {
+        "name": "Bite",
+        "mode": "melee",
+        "atk": 3,
+        "hit": 4,
+        "dmg": "4/5",
+        "wr": "-"
+      }
+    ],
+    "rules": [
+      {
+        "name": "Explosive",
+        "text": "This operative can perform the Shoot action with this weapon while within control range of an enemy operative. Don’t select a valid target. Instead, this operative is always the primary target and cannot be in cover or obscured."
+      },
+      {
+        "name": "Boom!",
+        "text": "If this operative is incapacitated during a battle in which it hasn’t used its explosives, roll one D6, or two D6 if you wish. If any result is a 4+, this operative performs a free Shoot action with its explosives before it’s removed from the killzone."
+      },
+      {
+        "name": "Stoopid",
+        "text": "In the Firefight phase, whenever you determine this operative’s order, you cannot select Conceal. This operative cannot perform any actions other than Charge, Dash, Fight, Reposition and Shoot. It cannot use any weapons that aren’t on its datacard."
+      },
+      {
+        "name": "Expendable",
+        "text": "This operative is ignored for your opponent’s kill/elimination op (when it’s incapacitated, and when determining your starting number of operatives). It’s also ignored for victory conditions and scoring VPs if either require operatives to ‘escape’, ‘survive’ or be incapacitated by enemy operatives."
+      }
+    ],
+    "abilities": []
   },
   {
     "id": "kommando-boy-1",
@@ -44,11 +122,70 @@
       "selectedWeapon": "Slugga"
     },
     "weapons": [
-      { "name": "Slugga", "mode": "ranged", "atk": 4, "hit": 4, "dmg": "3/4", "wr": "Range 8\"" },
-      { "name": "Choppa", "mode": "melee", "atk": 4, "hit": 3, "dmg": "4/5", "wr": "-" }
+      {
+        "name": "Slugga",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 4,
+        "dmg": "3/4",
+        "wr": "Range 8\""
+      },
+      {
+        "name": "Choppa",
+        "mode": "melee",
+        "atk": 4,
+        "hit": 3,
+        "dmg": "4/5",
+        "wr": "-"
+      }
     ],
     "rules": [
-      { "name": "Taktical Wot-notz",  "text": "N/A" }
+      {
+        "name": "Taktical Wot-notz",
+        "text": "You can do each of the following once per turning point: one friendly KOMMANDO BOY operative can perform the Smoke Grenade action; one friendly KOMMANDO BOY operative can perform the Stun Grenade action. Performing these actions using this rule doesn’t count towards their action limits."
+      }
+    ],
+    "abilities": []
+  },
+  {
+    "id": "kommando-boy-2",
+    "name": "Boy",
+    "role": "Operative",
+    "stats": {
+      "apl": 2,
+      "move": 6,
+      "save": 5,
+      "woundsMax": 10
+    },
+    "state": {
+      "woundsCurrent": 10,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "Slugga"
+    },
+    "weapons": [
+      {
+        "name": "Slugga",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 4,
+        "dmg": "3/4",
+        "wr": "Range 8\""
+      },
+      {
+        "name": "Choppa",
+        "mode": "melee",
+        "atk": 4,
+        "hit": 3,
+        "dmg": "4/5",
+        "wr": "-"
+      }
+    ],
+    "rules": [
+      {
+        "name": "Taktical Wot-notz",
+        "text": "You can do each of the following once per turning point: one friendly KOMMANDO BOY operative can perform the Smoke Grenade action; one friendly KOMMANDO BOY operative can perform the Stun Grenade action. Performing these actions using this rule doesn’t count towards their action limits."
+      }
     ],
     "abilities": []
   },
@@ -69,8 +206,22 @@
       "selectedWeapon": "Slugga"
     },
     "weapons": [
-      { "name": "Slugga", "mode": "ranged", "atk": 4, "hit": 4, "dmg": "3/4", "wr": "Range 8\"" },
-      { "name": "Breacha Ram", "mode": "melee", "atk": 4, "hit": 4, "dmg": "5/5", "wr": "Brutal, Severe, Shock" }
+      {
+        "name": "Slugga",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 4,
+        "dmg": "3/4",
+        "wr": "Range 8\""
+      },
+      {
+        "name": "Breacha Ram",
+        "mode": "melee",
+        "atk": 4,
+        "hit": 4,
+        "dmg": "5/5",
+        "wr": "Brutal, Severe, Shock"
+      }
     ],
     "rules": [],
     "abilities": [
@@ -78,9 +229,310 @@
         "name": "BREACH",
         "kind": "movement",
         "cost": 1,
-        "text": "Place one of your Breach markers within this operative’s control range as close as possible to a terrain feature within control range of it. Whenever an operative is within 1\" of that marker, it treats parts of that terrain feature that are no more than 1\" thick as Accessible terrain. "
+        "text": "Place one of your Breach markers within this operative’s control range as close as possible to a terrain feature within control range of it. Whenever an operative is within 1\" of that marker, it treats parts of that terrain feature that are no more than 1\" thick as Accessible terrain. This operative can perform this action during the Charge or Reposition action, and it can do so for 1 less AP during those actions. Any remaining move distance can be used after it does so. This operative cannot perform this action while within control range of an enemy operative, or if a terrain feature isn’t within its control range."
       }
     ]
+  },
+  {
+    "id": "kommando-burna-boy",
+    "name": "Burna Boy",
+    "role": "Operative",
+    "stats": { "apl": 2, "move": 6, "save": 5, "woundsMax": 10 },
+    "state": {
+      "woundsCurrent": 10,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "Burna (standard)"
+    },
+    "weapons": [
+      {
+        "name": "Burna (standard)",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 2,
+        "dmg": "3/3",
+        "wr": "Range 8\", Saturate, Torrent 2\""
+      },
+      {
+        "name": "Burna (deluge)",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 2,
+        "dmg": "3/3",
+        "wr": "Range 4\", Saturate, Seek Light, Torrent 0\"*"
+      },
+      {
+        "name": "Fists",
+        "mode": "melee",
+        "atk": 3,
+        "hit": 3,
+        "dmg": "3/4",
+        "wr": "-"
+      }
+    ],
+    "rules": [
+      {
+        "name": "Torrent 0\" note",
+        "text": "Torrent 0\" means you cannot select secondary targets, but this weapon still has the Torrent weapon rule for all other rules purposes."
+      }
+    ],
+    "abilities": []
+  },
+  {
+    "id": "kommando-comms-boy",
+    "name": "Comms Boy",
+    "role": "Operative",
+    "stats": { "apl": 2, "move": 6, "save": 5, "woundsMax": 10 },
+    "state": {
+      "woundsCurrent": 10,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "Shokka pistol"
+    },
+    "weapons": [
+      {
+        "name": "Shokka pistol",
+        "mode": "ranged",
+        "atk": 6,
+        "hit": 4,
+        "dmg": "1/0",
+        "wr": "Range 8\", Devastating 2, Severe, Stun"
+      },
+      {
+        "name": "Fists",
+        "mode": "melee",
+        "atk": 3,
+        "hit": 3,
+        "dmg": "3/4",
+        "wr": "-"
+      }
+    ],
+    "rules": [
+      {
+        "name": "I Got a Plan, Ladz",
+        "text": "Once during each of this operative’s activations, it can perform the Pick Up Marker, Place Marker or a mission action for 1 less AP."
+      }
+    ],
+    "abilities": [
+      {
+        "name": "LISTEN IN",
+        "kind": "support",
+        "cost": 1,
+        "text": "Select one other friendly KOMMANDO operative (excluding BOMB SQUIG) visible to and within 6\" of this operative. Until the end of that operative’s next activation, add 1 to its APL stat. This operative cannot perform this action while within control range of an enemy operative."
+      }
+    ]
+  },
+  {
+    "id": "kommando-dakka-boy",
+    "name": "Dakka Boy",
+    "role": "Operative",
+    "stats": { "apl": 2, "move": 6, "save": 5, "woundsMax": 10 },
+    "state": {
+      "woundsCurrent": 10,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "Dakka shoota (short range)"
+    },
+    "weapons": [
+      {
+        "name": "Dakka shoota (short range)",
+        "mode": "ranged",
+        "atk": 5,
+        "hit": 4,
+        "dmg": "3/4",
+        "wr": "Range 6\""
+      },
+      {
+        "name": "Dakka shoota (long range)",
+        "mode": "ranged",
+        "atk": 5,
+        "hit": 4,
+        "dmg": "3/4",
+        "wr": "Range 9\", Ceaseless"
+      },
+      {
+        "name": "Fists",
+        "mode": "melee",
+        "atk": 3,
+        "hit": 3,
+        "dmg": "3/4",
+        "wr": "-"
+      }
+    ],
+    "rules": [],
+    "abilities": [
+      {
+        "name": "DAKKA DASH",
+        "kind": "movement",
+        "cost": 1,
+        "text": "Perform a free Dash action and a free Shoot action with this operative in any order. You can only select a dakka shoota for that Shoot action. This operative cannot perform this action while it has a Conceal order, or while within control range of an enemy operative."
+      }
+    ]
+  },
+  {
+    "id": "kommando-grot",
+    "name": "Grot",
+    "role": "Operative",
+    "stats": { "apl": 2, "move": 6, "save": 5, "woundsMax": 5 },
+    "state": {
+      "woundsCurrent": 5,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "Grot choppa"
+    },
+    "weapons": [
+      {
+        "name": "Grot choppa",
+        "mode": "melee",
+        "atk": 3,
+        "hit": 5,
+        "dmg": "1/4",
+        "wr": "-"
+      }
+    ],
+    "rules": [
+      {
+        "name": "Sneaky Zogger",
+        "text": "This operative cannot have an Engage order. Whenever this operative is in cover, it cannot be selected as a valid target (taking precedence over all other rules except being within 2\")."
+      }
+    ],
+    "abilities": [
+      {
+        "name": "GRAPPLING HOOK",
+        "kind": "movement",
+        "cost": 1,
+        "text": "Select a visible point on a terrain feature for this operative. Remove this operative from the killzone and set it back up within 1\" horizontally of that point in a location it can be placed, not within control range of enemy operatives, and with that point visible to it. This operative cannot perform the Operate Hatch action during this action. This action is treated as a Reposition action. This operative cannot perform this action while within control range of an enemy operative, or during an activation in which it performed the Charge or Fall Back action (or vice versa)."
+      }
+    ]
+  },
+  {
+    "id": "kommando-rokkit-boy",
+    "name": "Rokkit Boy",
+    "role": "Operative",
+    "stats": { "apl": 2, "move": 6, "save": 5, "woundsMax": 10 },
+    "state": {
+      "woundsCurrent": 10,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "Rokkit launcha (aimed)"
+    },
+    "weapons": [
+      {
+        "name": "Rokkit launcha (aimed)",
+        "mode": "ranged",
+        "atk": 6,
+        "hit": 4,
+        "dmg": "4/5",
+        "wr": "Blast 1\", Ceaseless, Heavy (Dash only)"
+      },
+      {
+        "name": "Rokkit launcha (mobile)",
+        "mode": "ranged",
+        "atk": 6,
+        "hit": 4,
+        "dmg": "4/5",
+        "wr": "Blast 1\""
+      },
+      {
+        "name": "Fists",
+        "mode": "melee",
+        "atk": 3,
+        "hit": 3,
+        "dmg": "3/4",
+        "wr": "-"
+      }
+    ],
+    "rules": [],
+    "abilities": []
+  },
+  {
+    "id": "kommando-slasha-boy",
+    "name": "Slasha Boy",
+    "role": "Operative",
+    "stats": { "apl": 2, "move": 6, "save": 5, "woundsMax": 10 },
+    "state": {
+      "woundsCurrent": 10,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "Throwing knives"
+    },
+    "weapons": [
+      {
+        "name": "Throwing knives",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 3,
+        "dmg": "2/5",
+        "wr": "Range 6\", Silent"
+      },
+      {
+        "name": "Twin choppas",
+        "mode": "melee",
+        "atk": 4,
+        "hit": 3,
+        "dmg": "4/5",
+        "wr": "Ceaseless, Lethal 5+"
+      }
+    ],
+    "rules": [
+      {
+        "name": "Dat All You Got?",
+        "text": "After this operative fights or retaliates, if it wasn’t incapacitated, you can inflict D3 damage on the enemy operative in that sequence."
+      }
+    ],
+    "abilities": []
+  },
+  {
+    "id": "kommando-snipa-boy",
+    "name": "Snipa Boy",
+    "role": "Operative",
+    "stats": { "apl": 2, "move": 6, "save": 5, "woundsMax": 10 },
+    "state": {
+      "woundsCurrent": 10,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "Scoped big shoota (stationary)"
+    },
+    "weapons": [
+      {
+        "name": "Scoped big shoota (concealed)",
+        "mode": "ranged",
+        "atk": 5,
+        "hit": 3,
+        "dmg": "3/3",
+        "wr": "Devastating 2, Heavy, Silent, Concealed Position*"
+      },
+      {
+        "name": "Scoped big shoota (stationary)",
+        "mode": "ranged",
+        "atk": 5,
+        "hit": 3,
+        "dmg": "3/3",
+        "wr": "Devastating 2, Heavy"
+      },
+      {
+        "name": "Scoped big shoota (sweeping)",
+        "mode": "ranged",
+        "atk": 5,
+        "hit": 3,
+        "dmg": "3/4",
+        "wr": "Heavy (Dash only), Torrent 1\""
+      },
+      {
+        "name": "Fists",
+        "mode": "melee",
+        "atk": 3,
+        "hit": 3,
+        "dmg": "3/4",
+        "wr": "-"
+      }
+    ],
+    "rules": [
+      {
+        "name": "Concealed Position",
+        "text": "This operative can only use the scoped big shoota (concealed) profile the first time it’s performing the Shoot action during the battle."
+      }
+    ],
+    "abilities": []
   }
-  
 ]

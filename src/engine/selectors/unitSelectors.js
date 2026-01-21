@@ -1,6 +1,6 @@
 export function isInjured(unit) {
   if (!unit?.state || !unit?.stats) return false;
-  return unit.state.woundsCurrent <= unit.stats.woundsMax / 2;
+  return unit.state.woundsCurrent < unit.stats.woundsMax / 2;
 }
 
 function parseStatValue(value) {

@@ -19,26 +19,25 @@ body,
   overflow: auto;
 }
 
-/* Grid wrapper for unit cards */
-.kt-grid {
+.kt-shell {
   display: grid;
-  gap: 10px;
-
-  /* IMPORTANT: minmax(0, 1fr) prevents overflow weirdness */
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  align-items: start;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  gap: 12px;
+  height: 100%;
 }
 
-/* iPad portrait-ish */
-@media (min-width: 768px) {
-  .kt-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.kt-detail {
+  min-height: 0;
+  overflow: auto;
 }
 
-/* iPad landscape-ish / desktop */
-@media (min-width: 1024px) {
-  .kt-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+.kt-empty {
+  padding: 16px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+@media (max-width: 900px) {
+  .kt-shell {
+    grid-template-columns: 1fr;
   }
 }
