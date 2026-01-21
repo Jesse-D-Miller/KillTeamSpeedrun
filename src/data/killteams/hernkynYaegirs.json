@@ -1,0 +1,223 @@
+[
+  {
+    "id": "yaegir-theyn",
+    "name": "Yaegir Theyn",
+    "role": "Leader",
+    "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 9 },
+    "state": { "woundsCurrent": 9, "order": "conceal", "effects": [], "selectedWeapon": "Bolt shotgun (short range)" },
+    "weapons": [
+      { "name": "Bolt revolver", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "3/5", "wr": "Range 8\"" },
+      { "name": "Bolt shotgun (short range)", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "4/4", "wr": "Range 6\"" },
+      { "name": "Bolt shotgun (long range)", "mode": "ranged", "atk": 4, "hit": 5, "dmg": "2/2", "wr": "-" },
+      { "name": "Plasma knife", "mode": "melee", "atk": 4, "hit": 3, "dmg": "3/5", "wr": "Lethal 5+" }
+    ],
+    "rules": [
+      {
+        "name": "Veteran Adventurer",
+        "text": "In the Ready step of each Strategy phase after the first, if this operative isn’t within control range of enemy operatives, you gain 1 Resourceful point."
+      },
+      {
+        "name": "Outright Conviction",
+        "text": "The first time this operative would be incapacitated during the battle, it’s not incapacitated, has 1 wound remaining and cannot be incapacitated for the remainder of the action. All remaining attack dice are discarded."
+      }
+    ],
+    "abilities": []
+  },
+
+  {
+    "id": "yaegir-bladekyn",
+    "name": "Yaegir Bladekyn",
+    "role": "Operative",
+    "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
+    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "Dual plasma knives" },
+    "weapons": [
+      { "name": "Throwing plasma knife", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "3/5", "wr": "Range 6\", Lethal 5+, Limited 1, Silent" },
+      { "name": "Dual plasma knives", "mode": "melee", "atk": 4, "hit": 3, "dmg": "3/5", "wr": "Ceaseless, Lethal 5+" }
+    ],
+    "rules": [
+      { "name": "Stalker", "text": "This operative can perform the Charge action while it has a Conceal order." },
+      {
+        "name": "Irrepressible Hardiness",
+        "text": "If this operative is incapacitated during the Fight action, you can strike the enemy operative in that sequence with one of your unresolved successes before this operative is removed from the killzone."
+      }
+    ],
+    "abilities": []
+  },
+
+  {
+    "id": "yaegir-bombast",
+    "name": "Yaegir Bombast",
+    "role": "Operative",
+    "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
+    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "Wroughtlock revolvers" },
+    "weapons": [
+      { "name": "Wroughtlock revolvers", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "3/5", "wr": "Range 9\", Ceaseless, Lethal 5+" },
+      { "name": "Fists", "mode": "melee", "atk": 3, "hit": 4, "dmg": "2/3", "wr": "-" }
+    ],
+    "rules": [
+      {
+        "name": "Wroughtlock Negotiation",
+        "text": "STRATEGIC GAMBIT. This operative can immediately perform a free Shoot action (you can change its order to Engage to do so)."
+      },
+      {
+        "name": "Brazen Killer",
+        "text": "Whenever this operative incapacitates an enemy operative with its wroughtlock revolvers, roll one D6 separately for each other enemy operative visible to and within 2\" of that enemy operative: if the result is higher than that other enemy operative’s APL stat, subtract 1 from its APL stat until the end of its next activation."
+      }
+    ],
+    "abilities": []
+  },
+
+  {
+    "id": "yaegir-gunner",
+    "name": "Yaegir Gunner",
+    "role": "Operative",
+    "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
+    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "APM launcher (armour piercing)" },
+    "weapons": [
+      { "name": "APM launcher (armour piercing)", "mode": "ranged", "atk": 5, "hit": 4, "dmg": "4/5", "wr": "Heavy (Reposition only), Piercing 1, Bipod" },
+      { "name": "APM launcher (breaching)", "mode": "ranged", "atk": 5, "hit": 4, "dmg": "3/5", "wr": "Blast 2\", Heavy (Reposition only), Bipod" },
+      { "name": "APM launcher (high explosive)", "mode": "ranged", "atk": 5, "hit": 4, "dmg": "2/4", "wr": "Blast 3\", Heavy (Reposition only), Bipod" },
+      { "name": "Fists", "mode": "melee", "atk": 3, "hit": 4, "dmg": "2/3", "wr": "-" }
+    ],
+    "rules": [
+      {
+        "name": "Bipod",
+        "text": "Whenever this operative is shooting with an APM launcher, if it hasn’t moved during the activation, or if it’s a counteraction, that weapon has the Ceaseless weapon rule."
+      }
+    ],
+    "abilities": []
+  },
+
+  {
+    "id": "yaegir-ironbraek",
+    "name": "Yaegir Ironbraek",
+    "role": "Operative",
+    "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
+    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "Bolt revolver" },
+    "weapons": [
+      { "name": "Bolt revolver", "mode": "ranged", "atk": 4, "hit": 4, "dmg": "3/5", "wr": "Range 8\"" },
+      { "name": "Entrencher", "mode": "melee", "atk": 3, "hit": 4, "dmg": "3/4", "wr": "-" }
+    ],
+    "rules": [
+      {
+        "name": "Minefield",
+        "text": "You have five Minefield markers. Three are HY-Pex mines and two are blank. Set them up reverse-side down as if one item of equipment, each >2\" from other markers/access points/Accessible terrain, and >6\" from opponent’s drop zone and your other Minefield markers. When this operative is readied, if not within control range of enemy operatives, you can reset (flip back) one flipped Minefield marker within its control range."
+      },
+      {
+        "name": "HY-Pex Mines",
+        "text": "Whenever one of your reverse-side down Minefield markers is within an enemy operative’s control range and not within a friendly Hernkyn Yaegir’s control range, flip it. If blank: no effect. If HY-Pex mine: inflict 3 damage, then roll 1D6; if result is less than that enemy’s Save stat, inflict additional damage equal to the dice result; regardless, if it isn’t incapacitated, end its action (if any). That marker isn’t removed."
+      }
+    ],
+    "abilities": []
+  },
+
+  {
+    "id": "yaegir-riflekyn",
+    "name": "Yaegir Riflekyn",
+    "role": "Operative",
+    "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
+    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "Magna-coil rifle (stationary)" },
+    "weapons": [
+      { "name": "Magna-coil rifle (concealed)", "mode": "ranged", "atk": 4, "hit": 2, "dmg": "3/3", "wr": "Devastating 3, Heavy, Piercing 1, Silent, Concealed Position" },
+      { "name": "Magna-coil rifle (mobile)", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "3/4", "wr": "Heavy (Reposition only), Piercing 1" },
+      { "name": "Magna-coil rifle (stationary)", "mode": "ranged", "atk": 4, "hit": 2, "dmg": "3/3", "wr": "Devastating 3, Heavy, Piercing 1" },
+      { "name": "Fists", "mode": "melee", "atk": 3, "hit": 4, "dmg": "2/3", "wr": "-" }
+    ],
+    "rules": [
+      { "name": "Concealed Position", "text": "This operative can only use Magna-coil rifle (concealed) the first time it performs the Shoot action during the battle." },
+      {
+        "name": "Weavewërke Cloak",
+        "text": "Whenever an operative is shooting this operative: ignore Saturate; if you can retain any cover saves, you can retain one additional cover save, or retain one cover save as a critical success instead (not cumulative with improved cover saves from Vantage)."
+      }
+    ],
+    "abilities": []
+  },
+
+  {
+    "id": "yaegir-tracker",
+    "name": "Yaegir Tracker",
+    "role": "Operative",
+    "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
+    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "SiNR handbow" },
+    "weapons": [
+      { "name": "SiNR handbow", "mode": "ranged", "atk": 4, "hit": 4, "dmg": "3/5", "wr": "Silent" },
+      { "name": "Throwing hatchet", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "3/5", "wr": "Range 6\", Limited 1, Rending, Silent" },
+      { "name": "Hatchet", "mode": "melee", "atk": 4, "hit": 3, "dmg": "4/5", "wr": "-" }
+    ],
+    "rules": [
+      {
+        "name": "Pan Spectral Visor",
+        "text": "Whenever this operative is shooting an operative within 6\" of it: its weapons have Seek Light; that operative cannot be obscured."
+      },
+      {
+        "name": "Tracker",
+        "text": "Whenever this operative is shooting against or fighting against an expended operative within 6\" of it, its weapons have Punishing."
+      }
+    ],
+    "abilities": []
+  },
+
+  {
+    "id": "yaegir-warrior-1",
+    "name": "Yaegir Warrior",
+    "role": "Operative",
+    "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
+    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "Bolt shotgun (short range)" },
+    "weapons": [
+      { "name": "Bolt revolver", "mode": "ranged", "atk": 4, "hit": 4, "dmg": "3/5", "wr": "Range 8\"" },
+      { "name": "Bolt shotgun (short range)", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "4/4", "wr": "Range 6\"" },
+      { "name": "Bolt shotgun (long range)", "mode": "ranged", "atk": 4, "hit": 5, "dmg": "2/2", "wr": "-" },
+      { "name": "Fists", "mode": "melee", "atk": 3, "hit": 4, "dmg": "2/3", "wr": "-" },
+      { "name": "Plasma knife", "mode": "melee", "atk": 4, "hit": 4, "dmg": "3/5", "wr": "Lethal 5+" }
+    ],
+    "rules": [
+      {
+        "name": "Intrepid",
+        "text": "Whenever you spend a Resourceful point for this operative, the following take precedence: if you add 1 to its APL stat, it lasts until the start of its next activation instead; if it regains lost wounds, it regains up to 4 instead."
+      }
+    ],
+    "abilities": []
+  },
+  {
+    "id": "yaegir-warrior-2",
+    "name": "Yaegir Warrior",
+    "role": "Operative",
+    "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
+    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "Bolt shotgun (short range)" },
+    "weapons": [
+      { "name": "Bolt revolver", "mode": "ranged", "atk": 4, "hit": 4, "dmg": "3/5", "wr": "Range 8\"" },
+      { "name": "Bolt shotgun (short range)", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "4/4", "wr": "Range 6\"" },
+      { "name": "Bolt shotgun (long range)", "mode": "ranged", "atk": 4, "hit": 5, "dmg": "2/2", "wr": "-" },
+      { "name": "Fists", "mode": "melee", "atk": 3, "hit": 4, "dmg": "2/3", "wr": "-" },
+      { "name": "Plasma knife", "mode": "melee", "atk": 4, "hit": 4, "dmg": "3/5", "wr": "Lethal 5+" }
+    ],
+    "rules": [
+      {
+        "name": "Intrepid",
+        "text": "Whenever you spend a Resourceful point for this operative, the following take precedence: if you add 1 to its APL stat, it lasts until the start of its next activation instead; if it regains lost wounds, it regains up to 4 instead."
+      }
+    ],
+    "abilities": []
+  },
+  {
+    "id": "yaegir-warrior-3",
+    "name": "Yaegir Warrior",
+    "role": "Operative",
+    "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
+    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "Bolt shotgun (short range)" },
+    "weapons": [
+      { "name": "Bolt revolver", "mode": "ranged", "atk": 4, "hit": 4, "dmg": "3/5", "wr": "Range 8\"" },
+      { "name": "Bolt shotgun (short range)", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "4/4", "wr": "Range 6\"" },
+      { "name": "Bolt shotgun (long range)", "mode": "ranged", "atk": 4, "hit": 5, "dmg": "2/2", "wr": "-" },
+      { "name": "Fists", "mode": "melee", "atk": 3, "hit": 4, "dmg": "2/3", "wr": "-" },
+      { "name": "Plasma knife", "mode": "melee", "atk": 4, "hit": 4, "dmg": "3/5", "wr": "Lethal 5+" }
+    ],
+    "rules": [
+      {
+        "name": "Intrepid",
+        "text": "Whenever you spend a Resourceful point for this operative, the following take precedence: if you add 1 to its APL stat, it lasts until the start of its next activation instead; if it regains lost wounds, it regains up to 4 instead."
+      }
+    ],
+    "abilities": []
+  }
+]
