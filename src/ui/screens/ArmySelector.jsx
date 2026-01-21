@@ -46,7 +46,9 @@ function ArmySelector() {
               className="army-selector__tile"
               type="button"
               onClick={() =>
-                navigate(`/${username}/army`, { state: { armyKey: army.key } })
+                navigate(`/${username}/unit-selector`, {
+                  state: { armyKey: army.key },
+                })
               }
             >
               <div className="army-selector__tile-name">{army.name}</div>

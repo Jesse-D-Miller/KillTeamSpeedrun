@@ -3,6 +3,7 @@ import UnitCard from "./ui/components/UnitCard";
 import UnitListNav from "./ui/components/UnitListNav";
 import Login from "./ui/screens/Login";
 import ArmySelector from "./ui/screens/ArmySelector";
+import UnitSelector from "./ui/screens/UnitSelector";
 import { gameReducer } from "./state/gameReducer";
 import { useEffect, useReducer, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
@@ -83,14 +84,18 @@ function GameOverlay({ initialUnits }) {
 function ArmyOverlayRoute() {
   const location = useLocation();
   const selectedKey = location.state?.armyKey;
+  const selectedUnitIds = location.state?.selectedUnitIds;
   const selectedArmy = armies.find((army) => army.key === selectedKey);
   const fallbackArmy = armies[0];
   const units = (selectedArmy || fallbackArmy)?.units ?? [];
+  const filteredUnits = Array.isArray(selectedUnitIds)
+    ? units.filter((unit) => selectedUnitIds.includes(unit.id))
+    : units;
 
   return (
     <GameOverlay
       key={selectedArmy?.key || fallbackArmy?.key}
-      initialUnits={units}
+      initialUnits={filteredUnits}
     />
   );
 }
@@ -101,6 +106,7 @@ function App() {
       <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/login" element={<Login />} />
       <Route path="/:username/army-selector" element={<ArmySelector />} />
+      <Route path="/:username/unit-selector" element={<UnitSelector />} />
       <Route path="/:username/army" element={<ArmyOverlayRoute />} />
       <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
