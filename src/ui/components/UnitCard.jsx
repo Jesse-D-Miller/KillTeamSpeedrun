@@ -1,5 +1,4 @@
 import "./UnitCard.css";
-import { resolveAttack } from "../../engine/rules/resolveAttack";
 import {
   isInjured,
   statDeltaClass,
@@ -11,12 +10,6 @@ import {
 function UnitCard({
   unit,
   dispatch,
-  attackerId,
-  defenderId,
-  setAttackerId,
-  setDefenderId,
-  attacker,
-  defender,
   onLog,
 }) {
   if (!unit) return null;
@@ -132,73 +125,6 @@ function UnitCard({
           Toggle Order
         </button>
       </section>
-
-      <div className="kt-card__actions">
-        <button
-          className="btn btn--ghost"
-          onClick={() => setAttackerId(unit.id)}
-        >
-          {attackerId === unit.id ? "Attacker ✓" : "Set Attacker"}
-        </button>
-
-        <button
-          className="btn btn--ghost"
-          onClick={() => setDefenderId(unit.id)}
-        >
-          {defenderId === unit.id ? "Defender ✓" : "Set Defender"}
-        </button>
-
-        <button
-          className="btn"
-          disabled={!attacker || !defender || attacker.id !== unit.id}
-          onClick={() => {
-            const result = resolveAttack({
-              attacker,
-              defender,
-              weapon: selectedWeapon,
-              attackDice: [6, 5, 3, 1],
-              defenseDice: [6, 6],
-            });
-            console.log(result);
-
-            if (onLog) {
-              if (result?.error) {
-                onLog({
-                  type: "ATTACK_RESOLVED",
-                  summary: `Attack: ${selectedWeapon?.name || "Weapon"} vs ${defender?.name || "defender"} — ${result.error}`,
-                  meta: {
-                    attackerId: attacker?.id,
-                    defenderId: defender?.id,
-                    weaponName: selectedWeapon?.name,
-                  },
-                });
-              } else {
-                const { hits, crits, saves, remainingHits, remainingCrits } =
-                  result?.breakdown || {};
-                const savesUsed =
-                  (saves?.hits ?? 0) + (saves?.crits ?? 0);
-                onLog({
-                  type: "ATTACK_RESOLVED",
-                  summary: `${attacker?.name || "Attacker"}: ${selectedWeapon?.name || "Weapon"} vs ${defender?.name || "defender"} — hits ${hits ?? 0}, crits ${crits ?? 0}, saves ${savesUsed}, dmg ${result?.damage ?? 0}`,
-                  meta: {
-                    attackerId: attacker?.id,
-                    defenderId: defender?.id,
-                    weaponName: selectedWeapon?.name,
-                    hits,
-                    crits,
-                    saves,
-                    remainingHits,
-                    remainingCrits,
-                    damage: result?.damage,
-                  },
-                });
-              }
-            }
-          }}
-        >
-          Test Attack
-        </button>
-      </div>
 
       {/* Weapons table */}
       <section className="kt-card__section">

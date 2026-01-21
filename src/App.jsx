@@ -4,11 +4,13 @@ import UnitListNav from "./ui/components/UnitListNav";
 import LogsWindow from "./ui/components/LogsWindow";
 import ShootActionCard from "./ui/components/ShootActionCard";
 import TargetSelectModal from "./ui/components/TargetSelectModal";
+import DiceInputModal from "./ui/components/DiceInputModal";
 import Login from "./ui/screens/Login";
 import ArmySelector from "./ui/screens/ArmySelector";
 import UnitSelector from "./ui/screens/UnitSelector";
 import { gameReducer } from "./state/gameReducer";
 import { createLogEntry } from "./state/actionCreator";
+import { resolveAttack } from "./engine/rules/resolveAttack";
 import { useEffect, useReducer, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
@@ -46,6 +48,7 @@ function GameOverlay({ initialUnits }) {
   const [leftTab, setLeftTab] = useState("units");
   const [shootModalOpen, setShootModalOpen] = useState(false);
   const [selectedTargetId, setSelectedTargetId] = useState(null);
+  const [diceModalOpen, setDiceModalOpen] = useState(false);
 
   const logEntry = ({ type, summary, meta }) => {
     const entry = createLogEntry({
@@ -66,11 +69,17 @@ function GameOverlay({ initialUnits }) {
   const defender = state.game.find((u) => u.id === defenderId);
   const teamAUnits = state.game.filter((unit) => unit.teamId === "alpha");
   const teamBUnits = state.game.filter((unit) => unit.teamId === "beta");
-
   const selectedUnit =
     teamAUnits.find((u) => u.id === selectedUnitId) ??
     teamAUnits[0] ??
     null;
+
+  const selectedWeaponName =
+    selectedUnit?.state?.selectedWeapon || selectedUnit?.weapons?.[0]?.name;
+  const selectedWeapon =
+    selectedUnit?.weapons?.find((w) => w.name === selectedWeaponName) ||
+    selectedUnit?.weapons?.[0];
+  const canShoot = selectedWeapon?.mode === "ranged";
 
   useEffect(() => {
     if (!selectedUnit && teamAUnits.length > 0) {
@@ -129,18 +138,23 @@ function GameOverlay({ initialUnits }) {
                 key={selectedUnit.id}
                 unit={selectedUnit}
                 dispatch={dispatch}
-                attackerId={attackerId}
-                defenderId={defenderId}
-                setAttackerId={setAttackerId}
-                setDefenderId={setDefenderId}
-                attacker={attacker}
-                defender={defender}
                 onLog={logEntry}
               />
               <ShootActionCard
                 attacker={selectedUnit}
-                hasTargets={teamBUnits.length > 0}
+                hasTargets={teamBUnits.length > 0 && canShoot}
                 onShoot={() => {
+                  if (!canShoot) {
+                    logEntry({
+                      type: "ACTION_REJECTED",
+                      summary: `${selectedUnit?.name || "Unit"} cannot Shoot — selected weapon is not ranged`,
+                      meta: {
+                        unitId: selectedUnit?.id,
+                        weaponName: selectedWeapon?.name,
+                      },
+                    });
+                    return;
+                  }
                   setAttackerId(selectedUnit.id);
                   setShootModalOpen(true);
                 }}
@@ -171,6 +185,60 @@ function GameOverlay({ initialUnits }) {
             },
           });
           setShootModalOpen(false);
+          setDiceModalOpen(true);
+        }}
+      />
+
+      <DiceInputModal
+        open={diceModalOpen}
+        attacker={attacker}
+        defender={defender}
+        attackDiceCount={selectedWeapon?.atk ?? 0}
+        defenseDiceCount={3}
+        onClose={() => setDiceModalOpen(false)}
+        onConfirm={({ attackDice, defenseDice }) => {
+          const result = selectedWeapon
+            ? resolveAttack({
+                attacker,
+                defender,
+                weapon: selectedWeapon,
+                attackDice,
+                defenseDice,
+              })
+            : { error: "No weapon selected" };
+
+          if (result?.error) {
+            logEntry({
+              type: "ATTACK_RESOLVED",
+              summary: `Attack: ${selectedWeapon?.name || "Weapon"} vs ${defender?.name || "defender"} — ${result.error}`,
+              meta: {
+                attackerId: attacker?.id,
+                defenderId: defender?.id,
+                weaponName: selectedWeapon?.name,
+              },
+            });
+          } else {
+            const { hits, crits, saves, remainingHits, remainingCrits } =
+              result?.breakdown || {};
+            const savesUsed =
+              (saves?.hits ?? 0) + (saves?.crits ?? 0);
+            logEntry({
+              type: "ATTACK_RESOLVED",
+              summary: `${attacker?.name || "Attacker"}: ${selectedWeapon?.name || "Weapon"} vs ${defender?.name || "defender"} — hits ${hits ?? 0}, crits ${crits ?? 0}, saves ${savesUsed}, dmg ${result?.damage ?? 0}`,
+              meta: {
+                attackerId: attacker?.id,
+                defenderId: defender?.id,
+                weaponName: selectedWeapon?.name,
+                hits,
+                crits,
+                saves,
+                remainingHits,
+                remainingCrits,
+                damage: result?.damage,
+              },
+            });
+          }
+          setDiceModalOpen(false);
         }}
       />
     </div>

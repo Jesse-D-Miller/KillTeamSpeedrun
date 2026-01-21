@@ -35,7 +35,28 @@ function TargetSelectModal({
                 type="button"
                 onClick={() => onSelectTarget(unit.id)}
               >
-                {unit.name}
+                <div className="kt-modal__tile-name">{unit.name}</div>
+                <div className="kt-modal__tile-sub">SV {unit.stats.save}+</div>
+                <div className="kt-modal__bar">
+                  <div
+                    className={`kt-modal__bar-fill ${
+                      unit.state.woundsCurrent < unit.stats.woundsMax / 2
+                        ? "kt-modal__bar-fill--injured"
+                        : ""
+                    }`}
+                    style={{
+                      width: `${Math.max(
+                        0,
+                        Math.min(
+                          100,
+                          unit.stats.woundsMax === 0
+                            ? 0
+                            : (unit.state.woundsCurrent / unit.stats.woundsMax) * 100,
+                        ),
+                      )}%`,
+                    }}
+                  />
+                </div>
               </button>
             ))
           )}
