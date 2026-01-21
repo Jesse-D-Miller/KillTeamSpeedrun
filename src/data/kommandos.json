@@ -13,12 +13,12 @@
       "woundsCurrent": 14,
       "order": "conceal",
       "effects": [],
-      "selected weapon": "Slugga"
+      "selectedWeapon": "Slugga"
     },
     "weapons": [
-      { "name": "Slugga", "atk": 4, "hit": 4, "dmg": "3/4", "wr": "Range 8\"" },
-      { "name": "Big choppa", "atk": 5, "hit": 3, "dmg": "5/6", "wr": "-" },
-      { "name": "Power klaw", "atk": 4, "hit": 3, "dmg": "5/7", "wr": "Brutal, Shock" }
+      { "name": "Slugga", "mode": "ranged", "atk": 4, "hit": 4, "dmg": "3/4", "wr": "Range 8\"" },
+      { "name": "Big choppa", "mode": "melee", "atk": 5, "hit": 3, "dmg": "5/6", "wr": "-" },
+      { "name": "Power klaw", "mode": "melee", "atk": 4, "hit": 3, "dmg": "5/7", "wr": "Brutal, Shock" }
     ],
     "rules": [
       { "name": "Krumpin’ Time", "text": "This operative can perform two Fight actions during its activation." }
@@ -41,11 +41,11 @@
       "woundsCurrent": 10,
       "order": "conceal",
       "effects": [],
-      "selected weapon": "Slugga"
+      "selectedWeapon": "Slugga"
     },
     "weapons": [
-      { "name": "Slugga", "atk": 4, "hit": 4, "dmg": "3/4", "wr": "Range 8\"" },
-      { "name": "Choppa", "atk": 4, "hit": 3, "dmg": "4/5", "wr": "-" }
+      { "name": "Slugga", "mode": "ranged", "atk": 4, "hit": 4, "dmg": "3/4", "wr": "Range 8\"" },
+      { "name": "Choppa", "mode": "melee", "atk": 4, "hit": 3, "dmg": "4/5", "wr": "-" }
     ],
     "rules": [
       { "name": "Taktical Wot-notz",  "text": "N/A" }
@@ -66,11 +66,11 @@
       "woundsCurrent": 10,
       "order": "conceal",
       "effects": [],
-      "selected weapon": "Slugga"
+      "selectedWeapon": "Slugga"
     },
     "weapons": [
-      { "name": "Slugga", "atk": 4, "hit": 4, "dmg": "3/4", "wr": "Range 8\"" },
-      { "name": "Breacha Ram", "atk": 4, "hit": 4, "dmg": "5/5", "wr": "Brutal, Severe, Shock" }
+      { "name": "Slugga", "mode": "ranged", "atk": 4, "hit": 4, "dmg": "3/4", "wr": "Range 8\"" },
+      { "name": "Breacha Ram", "mode": "melee", "atk": 4, "hit": 4, "dmg": "5/5", "wr": "Brutal, Severe, Shock" }
     ],
     "rules": [],
     "abilities": [
