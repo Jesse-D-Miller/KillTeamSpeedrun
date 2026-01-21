@@ -26,6 +26,44 @@ body,
   height: 100%;
 }
 
+.kt-main {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 12px;
+  min-height: 0;
+}
+
+.kt-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 12, 14, 0.95);
+}
+
+.kt-topbar__item {
+  display: grid;
+  gap: 2px;
+  min-width: 90px;
+}
+
+.kt-topbar__label {
+  font-size: 0.65rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  font-weight: 800;
+}
+
+.kt-topbar__value {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
 .kt-nav {
   background: rgba(12, 12, 14, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.08);

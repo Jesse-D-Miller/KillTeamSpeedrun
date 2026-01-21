@@ -101,6 +101,10 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
     selectedUnit?.weapons?.find((w) => w.name === selectedWeaponName) ||
     selectedUnit?.weapons?.[0];
   const canShoot = selectedWeapon?.mode === "ranged";
+  const cp = 0;
+  const vp = 0;
+  const turningPoint = 1;
+  const phase = "Strategy";
 
   useEffect(() => {
     if (!selectedUnit && myTeamUnits.length > 0) {
@@ -237,40 +241,60 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
             />
           )}
         </aside>
+        <div className="kt-main">
+          <header className="kt-topbar">
+            <div className="kt-topbar__item">
+              <span className="kt-topbar__label">Phase</span>
+              <span className="kt-topbar__value">{phase}</span>
+            </div>
+            <div className="kt-topbar__item">
+              <span className="kt-topbar__label">Turning Point</span>
+              <span className="kt-topbar__value">{turningPoint}</span>
+            </div>
+            <div className="kt-topbar__item">
+              <span className="kt-topbar__label">VP</span>
+              <span className="kt-topbar__value">{vp}</span>
+            </div>
+            <div className="kt-topbar__item">
+              <span className="kt-topbar__label">CP</span>
+              <span className="kt-topbar__value">{cp}</span>
+            </div>
+          </header>
 
-        <main className="kt-detail">
-          {selectedUnit ? (
-            <>
-              <UnitCard
-                key={selectedUnit.id}
-                unit={selectedUnit}
-                dispatch={dispatch}
-                onLog={logEntry}
-              />
-              <ShootActionCard
-                attacker={selectedUnit}
-                hasTargets={opponentUnits.length > 0 && canShoot}
-                onShoot={() => {
-                  if (!canShoot) {
-                    logEntry({
-                      type: "ACTION_REJECTED",
-                      summary: `${selectedUnit?.name || "Unit"} cannot Shoot — selected weapon is not ranged`,
-                      meta: {
-                        unitId: selectedUnit?.id,
-                        weaponName: selectedWeapon?.name,
-                      },
-                    });
-                    return;
-                  }
-                  setAttackerId(selectedUnit.id);
-                  setShootModalOpen(true);
-                }}
-              />
-            </>
-          ) : (
-            <div className="kt-empty">No units loaded</div>
-          )}
-        </main>
+          <main className="kt-detail">
+            {selectedUnit ? (
+              <>
+                <UnitCard
+                  key={selectedUnit.id}
+                  unit={selectedUnit}
+                  dispatch={dispatch}
+                  onLog={logEntry}
+                />
+                <ShootActionCard
+                  attacker={selectedUnit}
+                  hasTargets={opponentUnits.length > 0 && canShoot}
+                  onShoot={() => {
+                    if (!canShoot) {
+                      logEntry({
+                        type: "ACTION_REJECTED",
+                        summary: `${selectedUnit?.name || "Unit"} cannot Shoot — selected weapon is not ranged`,
+                        meta: {
+                          unitId: selectedUnit?.id,
+                          weaponName: selectedWeapon?.name,
+                        },
+                      });
+                      return;
+                    }
+                    setAttackerId(selectedUnit.id);
+                    setShootModalOpen(true);
+                  }}
+                />
+              </>
+            ) : (
+              <div className="kt-empty">No units loaded</div>
+            )}
+          </main>
+        </div>
       </div>
 
       <TargetSelectModal
