@@ -1,20 +1,60 @@
 function UnitCard({ unit, dispatch }) {
-  if (!unit) {
-    return null;
-  }
+  if (!unit) return null;
 
-  const { name, stats, state } = unit;
+  const { name, stats, state, weapons = [], rules = [], abilities = [] } = unit;
+
+  const isInjured = state.woundsCurrent < stats.woundsMax / 2;
+
+  const woundsPct =
+    stats.woundsMax === 0 ? 0 : (state.woundsCurrent / stats.woundsMax) * 100;
+
   return (
-    <div className="unit-card">
-      <h2>{name}</h2>
-      <p>APL: {stats.apl}</p>
-      <p>Move: {stats.move}</p>
-      <p>Save: {stats.save}+</p>
-      <p>
-        Wounds: {state.woundsCurrent}/{stats.woundsMax}
-      </p>
-      <div className="controls">
+    <article className={`kt-card ${isInjured ? "kt-card--injured" : ""}`}>
+      {/* Header */}
+      <header className="kt-card__header">
+        <div className="kt-card__title">
+          <div className="kt-card__name">{name.toUpperCase()}</div>
+        </div>
+
+        <div className="kt-card__stats">
+          <div className="statbox">
+            <div className="statbox__label">APL</div>
+            <div className="statbox__value">{stats.apl}</div>
+          </div>
+          <div className="statbox">
+            <div className="statbox__label">MOVE</div>
+            <div className="statbox__value">{stats.move}"</div>
+          </div>
+          <div className="statbox">
+            <div className="statbox__label">SAVE</div>
+            <div className="statbox__value">{stats.save}+</div>
+          </div>
+          <div className="statbox">
+            <div className="statbox__label">WOUNDS</div>
+            <div className="statbox__value">{state.woundsCurrent}</div>
+            <div className="statbox__sub">/ {stats.woundsMax}</div>
+          </div>
+        </div>
+      </header>
+
+      {/* Wounds bar */}
+      <div className="wounds">
+        <div className="wounds__top">
+          <span className="wounds__label">Wounds</span>
+          <span className="wounds__value">
+            {state.woundsCurrent}/{stats.woundsMax}
+          </span>
+        </div>
+
+        <div className="wounds__bar">
+          <div className="wounds__fill" style={{ width: `${woundsPct}%` }} />
+        </div>
+      </div>
+
+      {/* Wounds controls */}
+      <section className="kt-card__controls">
         <button
+          className="btn"
           onClick={() =>
             dispatch({
               type: "DAMAGE_UNIT",
@@ -22,43 +62,85 @@ function UnitCard({ unit, dispatch }) {
             })
           }
         >
-          -1 Wound
+          -1
         </button>
-
         <button
+          className="btn"
           onClick={() =>
-            dispatch({
-              type: "HEAL_UNIT",
-              payload: { id: unit.id, amount: 1 },
-            })
+            dispatch({ type: "HEAL_UNIT", payload: { id: unit.id, amount: 1 } })
           }
         >
-          +1 Wound
+          +1
         </button>
 
-        <button
-          onClick={() =>
-            dispatch({
-              type: "TOGGLE_INJURED",
-              payload: { id: unit.id },
-            })
-          }
-        >
-          {state.injured ? "Clear Injured" : "Set Injured"}
-        </button>
+        <div className="kt-card__status">
+          <span
+            className={`pill ${state.order === "conceal" ? "pill--blue" : "pill--orange"}`}
+          >
+            {state.order.toUpperCase()}
+          </span>
+          {isInjured && <span className="pill pill--red">INJURED</span>}
+        </div>
 
         <button
+          className="btn btn--ghost"
           onClick={() =>
-            dispatch({
-              type: "TOGGLE_ORDER",
-              payload: { id: unit.id },
-            })
+            dispatch({ type: "TOGGLE_ORDER", payload: { id: unit.id } })
           }
         >
-          Order: {state.order}
+          Toggle Order
         </button>
-      </div>
-    </div>
+      </section>
+
+      {/* Weapons table */}
+      <section className="kt-card__section">
+        <div className="kt-card__sectionline" />
+        <table className="kt-table">
+          <thead>
+            <tr>
+              <th className="left">NAME</th>
+              <th>ATK</th>
+              <th>HIT</th>
+              <th>DMG</th>
+              <th className="left">WR</th>
+            </tr>
+          </thead>
+          <tbody>
+            {weapons.map((w) => (
+              <tr key={w.name} className="kt-row">
+                <td className="left">{w.name}</td>
+                <td>{w.atk}</td>
+                <td>{w.hit}+</td>
+                <td>{w.dmg}</td>
+                <td className="left">{w.wr}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      {/* Rules */}
+      {rules.length > 0 && (
+        <section className="kt-card__section kt-card__rules">
+          {rules.map((r) => (
+            <p key={r.name} className="ruleline">
+              <span className="ruleline__name">{r.name}:</span> {r.text}
+            </p>
+          ))}
+        </section>
+      )}
+
+      {/* Abilities */}
+      {abilities.map((a) => (
+        <section key={a.name} className="kt-card__ability">
+          <div className="ability__bar">
+            <div className="ability__name">{a.name}</div>
+            <div className="ability__cost">{a.cost}AP</div>
+          </div>
+          {a.text && <div className="ability__text">{a.text}</div>}
+        </section>
+      ))}
+    </article>
   );
 }
 

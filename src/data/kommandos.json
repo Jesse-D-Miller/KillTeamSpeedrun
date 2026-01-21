@@ -11,16 +11,19 @@
     },
     "state": {
       "woundsCurrent": 14,
-      "injured": false,
       "order": "conceal",
       "effects": []
     },
+    "weapons": [
+      { "name": "Slugga", "atk": 4, "hit": 4, "dmg": "3/4", "wr": "Range 8\"" },
+      { "name": "Big choppa", "atk": 5, "hit": 3, "dmg": "5/6", "wr": "-" },
+      { "name": "Power klaw", "atk": 4, "hit": 3, "dmg": "5/7", "wr": "Brutal, Shock" }
+    ],
+    "rules": [
+      { "name": "Krumpin’ Time", "text": "This operative can perform two Fight actions during its activation." }
+    ],
     "abilities": [
-      {
-        "name": "GET IT DUN!",
-        "kind": "support",
-        "cost": 1
-      }
+      { "name": "GET IT DUN!", "kind": "support", "cost": 1, "text": "Select one other friendly ... add 1 to its APL stat." }
     ]
   },
   {
@@ -35,7 +38,6 @@
     },
     "state": {
       "woundsCurrent": 10,
-      "injured": false,
       "order": "conceal",
       "effects": []
     },
@@ -53,7 +55,6 @@
     },
     "state": {
       "woundsCurrent": 10,
-      "injured": false,
       "order": "conceal",
       "effects": []
     },
@@ -65,4 +66,5 @@
       }
     ]
   }
+  
 ]
