@@ -6,10 +6,15 @@ function UnitCard({ unit, dispatch }) {
   const isInjured = state.woundsCurrent < stats.woundsMax / 2;
 
   const woundsPct = Math.round(
-  stats.woundsMax === 0 ? 0 : (state.woundsCurrent / stats.woundsMax) * 100
-);
-const safeWoundsPct = Math.max(0, Math.min(100, woundsPct));
+    stats.woundsMax === 0 ? 0 : (state.woundsCurrent / stats.woundsMax) * 100,
+  );
+  const safeWoundsPct = Math.max(0, Math.min(100, woundsPct));
 
+  const selectedWeaponName =
+    state.selectedWeapon || (weapons[0] ? weapons[0].name : "");
+
+  const selectedWeapon =
+    weapons.find((w) => w.name === selectedWeaponName) || weapons[0];
 
   return (
     <article className={`kt-card ${isInjured ? "kt-card--injured" : ""}`}>
@@ -50,7 +55,10 @@ const safeWoundsPct = Math.max(0, Math.min(100, woundsPct));
         </div>
 
         <div className="wounds__bar">
-          <div className="wounds__fill" style={{ width: `${safeWoundsPct}%` }} />
+          <div
+            className="wounds__fill"
+            style={{ width: `${safeWoundsPct}%` }}
+          />
         </div>
       </div>
 
@@ -109,15 +117,30 @@ const safeWoundsPct = Math.max(0, Math.min(100, woundsPct));
             </tr>
           </thead>
           <tbody>
-            {weapons.map((w) => (
-              <tr key={w.name} className="kt-row">
-                <td className="left">{w.name}</td>
-                <td>{w.atk}</td>
-                <td>{w.hit}+</td>
-                <td>{w.dmg}</td>
-                <td className="left">{w.wr}</td>
-              </tr>
-            ))}
+            {weapons.map((w) => {
+              const isSelected = w.name === selectedWeaponName;
+
+              return (
+                <tr
+                  key={w.name}
+                  className={`kt-row ${isSelected ? "kt-row--selected" : ""}`}
+                  onClick={() =>
+                    dispatch({
+                      type: "SET_SELECTED_WEAPON",
+                      payload: { id: unit.id, weaponName: w.name },
+                    })
+                  }
+                  role="button"
+                  tabIndex={0}
+                >
+                  <td className="left">{w.name}</td>
+                  <td>{w.atk}</td>
+                  <td>{w.hit}+</td>
+                  <td>{w.dmg}</td>
+                  <td className="left">{w.wr}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </section>

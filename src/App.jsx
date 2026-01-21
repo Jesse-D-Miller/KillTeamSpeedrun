@@ -78,6 +78,21 @@ function reducer(state, action) {
       );
     }
 
+    case "SET_SELECTED_WEAPON": {
+      const { id, weaponName } = action.payload;
+      return state.map((unit) =>
+        unit.id === id
+          ? {
+              ...unit,
+              state: {
+                ...unit.state,
+                selectedWeapon: weaponName,
+              },
+            }
+          : unit,
+      );
+    }
+
     default:
       return state;
   }

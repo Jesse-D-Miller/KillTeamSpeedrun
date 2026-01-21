@@ -12,7 +12,8 @@
     "state": {
       "woundsCurrent": 14,
       "order": "conceal",
-      "effects": []
+      "effects": [],
+      "selected weapon": "Slugga"
     },
     "weapons": [
       { "name": "Slugga", "atk": 4, "hit": 4, "dmg": "3/4", "wr": "Range 8\"" },
@@ -39,13 +40,21 @@
     "state": {
       "woundsCurrent": 10,
       "order": "conceal",
-      "effects": []
+      "effects": [],
+      "selected weapon": "Slugga"
     },
+    "weapons": [
+      { "name": "Slugga", "atk": 4, "hit": 4, "dmg": "3/4", "wr": "Range 8\"" },
+      { "name": "Choppa", "atk": 4, "hit": 3, "dmg": "4/5", "wr": "-" }
+    ],
+    "rules": [
+      { "name": "Taktical Wot-notz",  "text": "N/A" }
+    ],
     "abilities": []
   },
   {
-    "id": "kommando-burna-boy",
-    "name": "Burna Boy",
+    "id": "kommando-breacha-boy",
+    "name": "Breacha Boy",
     "role": "Operative",
     "stats": {
       "apl": 2,
@@ -56,13 +65,20 @@
     "state": {
       "woundsCurrent": 10,
       "order": "conceal",
-      "effects": []
+      "effects": [],
+      "selected weapon": "Slugga"
     },
+    "weapons": [
+      { "name": "Slugga", "atk": 4, "hit": 4, "dmg": "3/4", "wr": "Range 8\"" },
+      { "name": "Breacha Ram", "atk": 4, "hit": 4, "dmg": "5/5", "wr": "Brutal, Severe, Shock" }
+    ],
+    "rules": [],
     "abilities": [
       {
         "name": "BREACH",
         "kind": "movement",
-        "cost": 1
+        "cost": 1,
+        "text": "Place one of your Breach markers within this operative’s control range as close as possible to a terrain feature within control range of it. Whenever an operative is within 1\" of that marker, it treats parts of that terrain feature that are no more than 1\" thick as Accessible terrain. "
       }
     ]
   }
