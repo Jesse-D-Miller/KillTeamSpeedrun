@@ -26,6 +26,34 @@
   margin-top: 8px;
 }
 
+.army-selector__teams {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.army-selector__team {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.army-selector__team-label {
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  font-weight: 700;
+}
+
+.army-selector__team-name {
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
 .army-selector__tile {
   display: grid;
   gap: 6px;
@@ -43,6 +71,16 @@
   transform: translateY(-2px);
   border-color: rgba(80, 180, 255, 0.7);
   background: rgba(80, 180, 255, 0.18);
+}
+
+.army-selector__tile--a {
+  border-color: rgba(120, 255, 140, 0.7);
+  background: rgba(120, 255, 140, 0.18);
+}
+
+.army-selector__tile--b {
+  border-color: rgba(160, 120, 255, 0.7);
+  background: rgba(160, 120, 255, 0.18);
 }
 
 .army-selector__tile-name {
@@ -73,4 +111,24 @@
 .army-selector__name {
   font-weight: 800;
   text-transform: capitalize;
+}
+
+.army-selector__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.army-selector__next {
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-weight: 800;
+  background: rgba(80, 180, 255, 0.2);
+  border: 1px solid rgba(80, 180, 255, 0.5);
+  color: rgba(255, 255, 255, 0.95);
+  cursor: pointer;
+}
+
+.army-selector__next:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }

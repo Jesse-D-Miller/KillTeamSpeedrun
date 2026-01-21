@@ -2,6 +2,8 @@ import "./App.css";
 import UnitCard from "./ui/components/UnitCard";
 import UnitListNav from "./ui/components/UnitListNav";
 import LogsWindow from "./ui/components/LogsWindow";
+import ShootActionCard from "./ui/components/ShootActionCard";
+import TargetSelectModal from "./ui/components/TargetSelectModal";
 import Login from "./ui/screens/Login";
 import ArmySelector from "./ui/screens/ArmySelector";
 import UnitSelector from "./ui/screens/UnitSelector";
@@ -42,6 +44,8 @@ function GameOverlay({ initialUnits }) {
   const [attackerId, setAttackerId] = useState(null);
   const [defenderId, setDefenderId] = useState(null);
   const [leftTab, setLeftTab] = useState("units");
+  const [shootModalOpen, setShootModalOpen] = useState(false);
+  const [selectedTargetId, setSelectedTargetId] = useState(null);
 
   const logEntry = ({ type, summary, meta }) => {
     const entry = createLogEntry({
@@ -60,17 +64,26 @@ function GameOverlay({ initialUnits }) {
 
   const attacker = state.game.find((u) => u.id === attackerId);
   const defender = state.game.find((u) => u.id === defenderId);
+  const teamAUnits = state.game.filter((unit) => unit.teamId === "alpha");
+  const teamBUnits = state.game.filter((unit) => unit.teamId === "beta");
 
   const selectedUnit =
-    state.game.find((u) => u.id === selectedUnitId) ??
-    state.game[0] ??
+    teamAUnits.find((u) => u.id === selectedUnitId) ??
+    teamAUnits[0] ??
     null;
 
   useEffect(() => {
-    if (!selectedUnit && state.game.length > 0) {
-      setSelectedUnitId(state.game[0].id);
+    if (!selectedUnit && teamAUnits.length > 0) {
+      setSelectedUnitId(teamAUnits[0].id);
     }
-  }, [selectedUnit, state.game]);
+  }, [selectedUnit, teamAUnits]);
+
+  useEffect(() => {
+    if (!shootModalOpen) return;
+    if (teamBUnits.length > 0 && !selectedTargetId) {
+      setSelectedTargetId(teamBUnits[0].id);
+    }
+  }, [shootModalOpen, teamBUnits, selectedTargetId]);
 
   return (
     <div className="App">
@@ -95,7 +108,7 @@ function GameOverlay({ initialUnits }) {
 
           {leftTab === "units" ? (
             <UnitListNav
-              units={state.game}
+              units={teamAUnits}
               selectedUnitId={selectedUnit?.id}
               onSelectUnit={setSelectedUnitId}
             />
@@ -111,42 +124,99 @@ function GameOverlay({ initialUnits }) {
 
         <main className="kt-detail">
           {selectedUnit ? (
-            <UnitCard
-              key={selectedUnit.id}
-              unit={selectedUnit}
-              dispatch={dispatch}
-              attackerId={attackerId}
-              defenderId={defenderId}
-              setAttackerId={setAttackerId}
-              setDefenderId={setDefenderId}
-              attacker={attacker}
-              defender={defender}
-              onLog={logEntry}
-            />
+            <>
+              <UnitCard
+                key={selectedUnit.id}
+                unit={selectedUnit}
+                dispatch={dispatch}
+                attackerId={attackerId}
+                defenderId={defenderId}
+                setAttackerId={setAttackerId}
+                setDefenderId={setDefenderId}
+                attacker={attacker}
+                defender={defender}
+                onLog={logEntry}
+              />
+              <ShootActionCard
+                attacker={selectedUnit}
+                hasTargets={teamBUnits.length > 0}
+                onShoot={() => {
+                  setAttackerId(selectedUnit.id);
+                  setShootModalOpen(true);
+                }}
+              />
+            </>
           ) : (
             <div className="kt-empty">No units loaded</div>
           )}
         </main>
       </div>
+
+      <TargetSelectModal
+        open={shootModalOpen}
+        attacker={selectedUnit}
+        targets={teamBUnits}
+        selectedTargetId={selectedTargetId}
+        onSelectTarget={setSelectedTargetId}
+        onClose={() => setShootModalOpen(false)}
+        onConfirm={() => {
+          if (!selectedTargetId) return;
+          setDefenderId(selectedTargetId);
+          logEntry({
+            type: "SHOOT_DECLARED",
+            summary: `${selectedUnit?.name || "Attacker"} declared Shoot vs ${teamBUnits.find((u) => u.id === selectedTargetId)?.name || "defender"}`,
+            meta: {
+              attackerId: selectedUnit?.id,
+              defenderId: selectedTargetId,
+            },
+          });
+          setShootModalOpen(false);
+        }}
+      />
     </div>
   );
 }
 
 function ArmyOverlayRoute() {
   const location = useLocation();
-  const selectedKey = location.state?.armyKey;
-  const selectedUnitIds = location.state?.selectedUnitIds;
-  const selectedArmy = armies.find((army) => army.key === selectedKey);
-  const fallbackArmy = armies[0];
-  const units = (selectedArmy || fallbackArmy)?.units ?? [];
-  const filteredUnits = Array.isArray(selectedUnitIds)
-    ? units.filter((unit) => selectedUnitIds.includes(unit.id))
-    : units;
+  const armyKeyA = location.state?.armyKeyA || location.state?.armyKey;
+  const armyKeyB = location.state?.armyKeyB || location.state?.armyKey;
+  const selectedUnitIdsA = location.state?.selectedUnitIdsA;
+  const selectedUnitIdsB = location.state?.selectedUnitIdsB;
+
+  const teamA = armies.find((army) => army.key === armyKeyA) || armies[0];
+  const teamB = armies.find((army) => army.key === armyKeyB) || teamA;
+
+  const filteredUnitsA = Array.isArray(selectedUnitIdsA)
+    ? teamA.units.filter((unit) => selectedUnitIdsA.includes(unit.id))
+    : teamA.units;
+
+  const filteredUnitsB = Array.isArray(selectedUnitIdsB)
+    ? teamB.units.filter((unit) => selectedUnitIdsB.includes(unit.id))
+    : teamB.units;
+
+  const buildTeamUnits = (units, teamId) =>
+    units.map((unit) => ({
+      ...unit,
+      id: `${teamId}:${unit.id}`,
+      baseId: unit.id,
+      teamId,
+      stats: { ...unit.stats },
+      state: { ...unit.state },
+      weapons: unit.weapons?.map((weapon) => ({ ...weapon })) ?? [],
+      rules: unit.rules?.map((rule) => ({ ...rule })) ?? [],
+      abilities: unit.abilities?.map((ability) => ({ ...ability })) ?? [],
+    }));
+
+  const combinedUnits = [
+    ...buildTeamUnits(filteredUnitsA, "alpha"),
+    ...buildTeamUnits(filteredUnitsB, "beta"),
+  ];
 
   return (
     <GameOverlay
-      key={selectedArmy?.key || fallbackArmy?.key}
-      initialUnits={filteredUnits}
+      key={`${teamA?.key || "team-a"}-${teamB?.key || "team-b"}`}
+      initialUnits={combinedUnits}
     />
   );
 }

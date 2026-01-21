@@ -16,26 +16,47 @@ function UnitSelector() {
 	const { username } = useParams();
 	const navigate = useNavigate();
 	const location = useLocation();
-	const selectedArmyKey = location.state?.armyKey;
+	const armyKeyA = location.state?.armyKeyA;
+	const armyKeyB = location.state?.armyKeyB;
 
-	const armyUnits = useMemo(() => {
+	const armyUnitsA = useMemo(() => {
 		const entry = Object.entries(killteamModules).find(([path]) =>
-			path.includes(`${selectedArmyKey}.json`),
+			path.includes(`${armyKeyA}.json`),
 		);
 		if (!entry) return [];
 		return normalizeKillteamData(entry[1]);
-	}, [selectedArmyKey]);
+	}, [armyKeyA]);
 
-	const [selectedUnitIds, setSelectedUnitIds] = useState(
-		armyUnits.map((unit) => unit.id),
+	const armyUnitsB = useMemo(() => {
+		const entry = Object.entries(killteamModules).find(([path]) =>
+			path.includes(`${armyKeyB}.json`),
+		);
+		if (!entry) return [];
+		return normalizeKillteamData(entry[1]);
+	}, [armyKeyB]);
+
+	const [activeTeam, setActiveTeam] = useState("alpha");
+	const [selectedUnitIdsA, setSelectedUnitIdsA] = useState(
+		armyUnitsA.map((unit) => unit.id),
+	);
+	const [selectedUnitIdsB, setSelectedUnitIdsB] = useState(
+		armyUnitsB.map((unit) => unit.id),
 	);
 
 	const toggleUnit = (unitId) => {
-		setSelectedUnitIds((prev) =>
-			prev.includes(unitId)
-				? prev.filter((id) => id !== unitId)
-				: [...prev, unitId],
-		);
+		if (activeTeam === "alpha") {
+			setSelectedUnitIdsA((prev) =>
+				prev.includes(unitId)
+					? prev.filter((id) => id !== unitId)
+					: [...prev, unitId],
+			);
+		} else {
+			setSelectedUnitIdsB((prev) =>
+				prev.includes(unitId)
+					? prev.filter((id) => id !== unitId)
+					: [...prev, unitId],
+			);
+		}
 	};
 
 	return (
@@ -46,9 +67,28 @@ function UnitSelector() {
 					Player: <span className="unit-selector__name">{username}</span>
 				</p>
 
+				<div className="unit-selector__tabs">
+					<button
+						type="button"
+						className={`unit-selector__tab ${activeTeam === "alpha" ? "unit-selector__tab--active" : ""}`}
+						onClick={() => setActiveTeam("alpha")}
+					>
+						Team A
+					</button>
+					<button
+						type="button"
+						className={`unit-selector__tab ${activeTeam === "beta" ? "unit-selector__tab--active" : ""}`}
+						onClick={() => setActiveTeam("beta")}
+					>
+						Team B
+					</button>
+				</div>
+
 				<div className="unit-selector__grid">
-					{armyUnits.map((unit) => {
-						const isSelected = selectedUnitIds.includes(unit.id);
+					{(activeTeam === "alpha" ? armyUnitsA : armyUnitsB).map((unit) => {
+						const selectedIds =
+							activeTeam === "alpha" ? selectedUnitIdsA : selectedUnitIdsB;
+						const isSelected = selectedIds.includes(unit.id);
 						return (
 							<button
 								key={unit.id}
@@ -68,12 +108,14 @@ function UnitSelector() {
 					<button
 						className="unit-selector__next"
 						type="button"
-						disabled={selectedUnitIds.length === 0}
+						disabled={selectedUnitIdsA.length === 0 || selectedUnitIdsB.length === 0}
 						onClick={() =>
 							navigate(`/${username}/army`, {
 								state: {
-									armyKey: selectedArmyKey,
-									selectedUnitIds,
+									armyKeyA,
+									armyKeyB,
+									selectedUnitIdsA,
+									selectedUnitIdsB,
 								},
 							})
 						}

@@ -43,6 +43,30 @@
   gap: 12px;
 }
 
+.unit-selector__tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.unit-selector__tab {
+  border-radius: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  cursor: pointer;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.75rem;
+}
+
+.unit-selector__tab--active {
+  border-color: rgba(120, 255, 140, 0.7);
+  background: rgba(120, 255, 140, 0.18);
+}
+
 .unit-selector__tile {
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.12);

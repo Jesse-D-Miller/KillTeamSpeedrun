@@ -28,6 +28,17 @@ function UnitListNav({ units, selectedUnitId, onSelectUnit }) {
 								<div className="kt-navitem__name">{unit.name}</div>
 
 								<div className="kt-navitem__tags">
+									{unit.teamId && (
+										<span
+											className={`kt-chip ${
+												unit.teamId === "alpha"
+													? "kt-chip--green"
+													: "kt-chip--purple"
+											}`}
+										>
+											{unit.teamId === "alpha" ? "A" : "B"}
+										</span>
+									)}
 									<span
 										className={`kt-chip ${
 											unit.state.order === "conceal"
