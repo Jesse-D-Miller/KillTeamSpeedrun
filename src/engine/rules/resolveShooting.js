@@ -1,4 +1,4 @@
-import { parseHits } from "./resolveDice.js";
+import { allocateDefense, parseHits } from "./resolveDice.js";
 
 export function resolveShooting({
   attacker,
@@ -14,16 +14,15 @@ export function resolveShooting({
   const { hits, crits } = parseHits(attackDice, weapon.hit);
   const defense = parseHits(defenseDice, defender.stats.save);
 
-  let remainingHits = hits;
-  let remainingCrits = crits;
+  const allocation = allocateDefense({
+    attackHits: hits,
+    attackCrits: crits,
+    defenseHits: defense.hits,
+    defenseCrits: defense.crits,
+  });
 
-  // save against hits
-  const savesUsed = Math.min(defense.hits, remainingHits);
-  remainingHits -= savesUsed;
-
-  // save against crits
-  const critsSavesUsed = Math.min(defense.crits, remainingCrits);
-  remainingCrits -= critsSavesUsed;
+  const remainingHits = allocation.remainingHits;
+  const remainingCrits = allocation.remainingCrits;
 
   // damage calculation
   const [normalDmg, critDmg] = weapon.dmg.split("/").map(Number);
@@ -36,6 +35,7 @@ export function resolveShooting({
       hits,
       crits,
       saves: defense,
+      allocation,
       remainingHits,
       remainingCrits,
     },

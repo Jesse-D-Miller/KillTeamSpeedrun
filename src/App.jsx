@@ -5,6 +5,7 @@ import LogsWindow from "./ui/components/LogsWindow";
 import ShootActionCard from "./ui/components/ShootActionCard";
 import TargetSelectModal from "./ui/components/TargetSelectModal";
 import DiceInputModal from "./ui/components/DiceInputModal";
+import DefenseAllocationModal from "./ui/components/DefenseAllocationModal";
 import Login from "./ui/screens/Login";
 import ArmySelector from "./ui/screens/ArmySelector";
 import UnitSelector from "./ui/screens/UnitSelector";
@@ -49,6 +50,8 @@ function GameOverlay({ initialUnits }) {
   const [shootModalOpen, setShootModalOpen] = useState(false);
   const [selectedTargetId, setSelectedTargetId] = useState(null);
   const [diceModalOpen, setDiceModalOpen] = useState(false);
+  const [allocationModalOpen, setAllocationModalOpen] = useState(false);
+  const [pendingAttack, setPendingAttack] = useState(null);
 
   const logEntry = ({ type, summary, meta }) => {
     const entry = createLogEntry({
@@ -197,48 +200,63 @@ function GameOverlay({ initialUnits }) {
         defenseDiceCount={3}
         onClose={() => setDiceModalOpen(false)}
         onConfirm={({ attackDice, defenseDice }) => {
-          const result = selectedWeapon
-            ? resolveAttack({
-                attacker,
-                defender,
-                weapon: selectedWeapon,
-                attackDice,
-                defenseDice,
-              })
-            : { error: "No weapon selected" };
-
-          if (result?.error) {
-            logEntry({
-              type: "ATTACK_RESOLVED",
-              summary: `Attack: ${selectedWeapon?.name || "Weapon"} vs ${defender?.name || "defender"} — ${result.error}`,
-              meta: {
-                attackerId: attacker?.id,
-                defenderId: defender?.id,
-                weaponName: selectedWeapon?.name,
-              },
-            });
-          } else {
-            const { hits, crits, saves, remainingHits, remainingCrits } =
-              result?.breakdown || {};
-            const savesUsed =
-              (saves?.hits ?? 0) + (saves?.crits ?? 0);
-            logEntry({
-              type: "ATTACK_RESOLVED",
-              summary: `${attacker?.name || "Attacker"}: ${selectedWeapon?.name || "Weapon"} vs ${defender?.name || "defender"} — hits ${hits ?? 0}, crits ${crits ?? 0}, saves ${savesUsed}, dmg ${result?.damage ?? 0}`,
-              meta: {
-                attackerId: attacker?.id,
-                defenderId: defender?.id,
-                weaponName: selectedWeapon?.name,
-                hits,
-                crits,
-                saves,
-                remainingHits,
-                remainingCrits,
-                damage: result?.damage,
-              },
-            });
-          }
+          setPendingAttack({
+            attacker,
+            defender,
+            weapon: selectedWeapon,
+            attackDice,
+            defenseDice,
+          });
           setDiceModalOpen(false);
+          setAllocationModalOpen(true);
+        }}
+      />
+
+      <DefenseAllocationModal
+        open={allocationModalOpen}
+        attacker={pendingAttack?.attacker}
+        defender={pendingAttack?.defender}
+        weapon={pendingAttack?.weapon}
+        attackDice={pendingAttack?.attackDice ?? []}
+        defenseDice={pendingAttack?.defenseDice ?? []}
+        hitThreshold={pendingAttack?.weapon?.hit ?? 6}
+        saveThreshold={pendingAttack?.defender?.stats?.save ?? 6}
+        onClose={() => {
+          setAllocationModalOpen(false);
+          setPendingAttack(null);
+        }}
+        onConfirm={({ remainingHits, remainingCrits, defenseEntries, attackEntries }) => {
+          const weapon = pendingAttack?.weapon;
+          const attacker = pendingAttack?.attacker;
+          const defender = pendingAttack?.defender;
+          const [normalDmg, critDmg] =
+            weapon?.dmg?.split("/").map(Number) ?? [0, 0];
+          const totalDamage = remainingHits * normalDmg + remainingCrits * critDmg;
+          const hits = attackEntries.filter((d) => d.type === "hit").length;
+          const crits = attackEntries.filter((d) => d.type === "crit").length;
+          const defenseHits = defenseEntries.filter((d) => d.type === "hit").length;
+          const defenseCrits = defenseEntries.filter((d) => d.type === "crit").length;
+          const savesUsed = defenseHits + defenseCrits;
+
+          logEntry({
+            type: "ATTACK_RESOLVED",
+            summary: `${attacker?.name || "Attacker"}: ${weapon?.name || "Weapon"} vs ${defender?.name || "defender"} — hits ${hits}, crits ${crits}, saves ${savesUsed}, dmg ${totalDamage}`,
+            meta: {
+              attackerId: attacker?.id,
+              defenderId: defender?.id,
+              weaponName: weapon?.name,
+              hits,
+              crits,
+              defenseHits,
+              defenseCrits,
+              remainingHits,
+              remainingCrits,
+              damage: totalDamage,
+            },
+          });
+
+          setAllocationModalOpen(false);
+          setPendingAttack(null);
         }}
       />
     </div>
