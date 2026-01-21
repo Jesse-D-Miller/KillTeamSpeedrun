@@ -1,0 +1,58 @@
+.kt-log {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 10px;
+  min-height: 0;
+}
+
+.kt-log__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.kt-log__btn {
+  border-radius: 8px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  cursor: pointer;
+}
+
+.kt-log__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.kt-log__list {
+  display: grid;
+  gap: 8px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.kt-log__item {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 8px 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.kt-log__summary {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.kt-log__meta {
+  font-size: 0.7rem;
+  opacity: 0.6;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.kt-log__empty {
+  opacity: 0.6;
+  font-size: 0.85rem;
+}

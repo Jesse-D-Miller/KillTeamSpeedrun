@@ -1,10 +1,12 @@
 import "./App.css";
 import UnitCard from "./ui/components/UnitCard";
 import UnitListNav from "./ui/components/UnitListNav";
+import LogsWindow from "./ui/components/LogsWindow";
 import Login from "./ui/screens/Login";
 import ArmySelector from "./ui/screens/ArmySelector";
 import UnitSelector from "./ui/screens/UnitSelector";
 import { gameReducer } from "./state/gameReducer";
+import { createLogEntry } from "./state/actionCreator";
 import { useEffect, useReducer, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
@@ -30,34 +32,82 @@ const armies = Object.entries(killteamModules).map(([path, data]) => ({
 }));
 
 function GameOverlay({ initialUnits }) {
-  const [state, dispatch] = useReducer(gameReducer, initialUnits);
+  const [state, dispatch] = useReducer(gameReducer, {
+    game: initialUnits,
+    log: {
+      entries: [],
+      cursor: 0,
+    },
+  });
   const [attackerId, setAttackerId] = useState(null);
   const [defenderId, setDefenderId] = useState(null);
+  const [leftTab, setLeftTab] = useState("units");
+
+  const logEntry = ({ type, summary, meta }) => {
+    const entry = createLogEntry({
+      type,
+      summary,
+      meta,
+      undo: state.game,
+      redo: state.game,
+    });
+    dispatch({ type: "LOG_PUSH", payload: entry });
+  };
 
   const [selectedUnitId, setSelectedUnitId] = useState(
     initialUnits?.[0]?.id ?? null,
   );
 
-  const attacker = state.find((u) => u.id === attackerId);
-  const defender = state.find((u) => u.id === defenderId);
+  const attacker = state.game.find((u) => u.id === attackerId);
+  const defender = state.game.find((u) => u.id === defenderId);
 
   const selectedUnit =
-    state.find((u) => u.id === selectedUnitId) ?? state[0] ?? null;
+    state.game.find((u) => u.id === selectedUnitId) ??
+    state.game[0] ??
+    null;
 
   useEffect(() => {
-    if (!selectedUnit && state.length > 0) {
-      setSelectedUnitId(state[0].id);
+    if (!selectedUnit && state.game.length > 0) {
+      setSelectedUnitId(state.game[0].id);
     }
-  }, [selectedUnit, state]);
+  }, [selectedUnit, state.game]);
 
   return (
     <div className="App">
       <div className="kt-shell">
-        <UnitListNav
-          units={state}
-          selectedUnitId={selectedUnit?.id}
-          onSelectUnit={setSelectedUnitId}
-        />
+        <aside className="kt-nav">
+          <div className="kt-nav__tabs">
+            <button
+              type="button"
+              className={`kt-nav__tab ${leftTab === "units" ? "kt-nav__tab--active" : ""}`}
+              onClick={() => setLeftTab("units")}
+            >
+              Units
+            </button>
+            <button
+              type="button"
+              className={`kt-nav__tab ${leftTab === "log" ? "kt-nav__tab--active" : ""}`}
+              onClick={() => setLeftTab("log")}
+            >
+              Log
+            </button>
+          </div>
+
+          {leftTab === "units" ? (
+            <UnitListNav
+              units={state.game}
+              selectedUnitId={selectedUnit?.id}
+              onSelectUnit={setSelectedUnitId}
+            />
+          ) : (
+            <LogsWindow
+              entries={state.log.entries}
+              cursor={state.log.cursor}
+              onUndo={() => dispatch({ type: "UNDO" })}
+              onRedo={() => dispatch({ type: "REDO" })}
+            />
+          )}
+        </aside>
 
         <main className="kt-detail">
           {selectedUnit ? (
@@ -71,6 +121,7 @@ function GameOverlay({ initialUnits }) {
               setDefenderId={setDefenderId}
               attacker={attacker}
               defender={defender}
+              onLog={logEntry}
             />
           ) : (
             <div className="kt-empty">No units loaded</div>

@@ -17,6 +17,7 @@ function UnitCard({
   setDefenderId,
   attacker,
   defender,
+  onLog,
 }) {
   if (!unit) return null;
 
@@ -159,6 +160,40 @@ function UnitCard({
               defenseDice: [6, 6],
             });
             console.log(result);
+
+            if (onLog) {
+              if (result?.error) {
+                onLog({
+                  type: "ATTACK_RESOLVED",
+                  summary: `Attack: ${selectedWeapon?.name || "Weapon"} vs ${defender?.name || "defender"} — ${result.error}`,
+                  meta: {
+                    attackerId: attacker?.id,
+                    defenderId: defender?.id,
+                    weaponName: selectedWeapon?.name,
+                  },
+                });
+              } else {
+                const { hits, crits, saves, remainingHits, remainingCrits } =
+                  result?.breakdown || {};
+                const savesUsed =
+                  (saves?.hits ?? 0) + (saves?.crits ?? 0);
+                onLog({
+                  type: "ATTACK_RESOLVED",
+                  summary: `${attacker?.name || "Attacker"}: ${selectedWeapon?.name || "Weapon"} vs ${defender?.name || "defender"} — hits ${hits ?? 0}, crits ${crits ?? 0}, saves ${savesUsed}, dmg ${result?.damage ?? 0}`,
+                  meta: {
+                    attackerId: attacker?.id,
+                    defenderId: defender?.id,
+                    weaponName: selectedWeapon?.name,
+                    hits,
+                    crits,
+                    saves,
+                    remainingHits,
+                    remainingCrits,
+                    damage: result?.damage,
+                  },
+                });
+              }
+            }
           }}
         >
           Test Attack

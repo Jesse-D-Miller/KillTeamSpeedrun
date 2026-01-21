@@ -3,11 +3,8 @@ import { isInjured, unitMove } from "../../engine/selectors/unitSelectors";
 
 function UnitListNav({ units, selectedUnitId, onSelectUnit }) {
 	return (
-		<aside className="kt-nav">
-			<div className="kt-nav__header">Units</div>
-
-			<div className="kt-nav__list">
-				{units.map((unit) => {
+		<div className="kt-nav__list">
+			{units.map((unit) => {
 					const isSelected = unit.id === selectedUnitId;
 					const woundsPct =
 						unit.stats.woundsMax === 0
@@ -71,8 +68,7 @@ function UnitListNav({ units, selectedUnitId, onSelectUnit }) {
 						</button>
 					);
 				})}
-			</div>
-		</aside>
+		</div>
 	);
 }
 
