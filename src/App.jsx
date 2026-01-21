@@ -56,6 +56,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
   });
   const socketRef = useRef(null);
   const seenLogIdsRef = useRef(new Set());
+  const seenDamageIdsRef = useRef(new Set());
   const [attackerId, setAttackerId] = useState(null);
   const [defenderId, setDefenderId] = useState(null);
   const [leftTab, setLeftTab] = useState("units");
@@ -114,6 +115,26 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
     }
   }, [shootModalOpen, opponentUnits, selectedTargetId]);
 
+  const sendMultiplayerEvent = (kind, payload = {}) => {
+    if (!gameCode || !playerSlot) return;
+    const event = {
+      id:
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      ts: Date.now(),
+      slot: playerSlot,
+      kind,
+      payload,
+    };
+
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(
+        JSON.stringify({ type: "EVENT", code: gameCode, slot: playerSlot, event }),
+      );
+    }
+  };
+
   const applyRemoteLogEvent = (event) => {
     if (!event || event.kind !== "LOG_ENTRY") return;
     const entry = event.payload?.entry;
@@ -121,6 +142,18 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
     if (seenLogIdsRef.current.has(entry.id)) return;
     seenLogIdsRef.current.add(entry.id);
     dispatch({ type: "LOG_PUSH", payload: entry });
+  };
+
+  const applyRemoteDamageEvent = (event) => {
+    if (!event || event.kind !== "DAMAGE_APPLIED") return;
+    if (!event.id || seenDamageIdsRef.current.has(event.id)) return;
+    const { targetUnitId, damage } = event.payload || {};
+    if (!targetUnitId || typeof damage !== "number") return;
+    seenDamageIdsRef.current.add(event.id);
+    dispatch({
+      type: "APPLY_DAMAGE",
+      payload: { targetUnitId, damage },
+    });
   };
 
   useEffect(() => {
@@ -131,11 +164,15 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
       playerId: getOrCreatePlayerId(),
       onMessage: (message) => {
         if (message.type === "SNAPSHOT" && Array.isArray(message.eventLog)) {
-          message.eventLog.forEach(applyRemoteLogEvent);
+          message.eventLog.forEach((event) => {
+            applyRemoteLogEvent(event);
+            applyRemoteDamageEvent(event);
+          });
           return;
         }
         if (message.type === "EVENT" && message.event) {
           applyRemoteLogEvent(message.event);
+          applyRemoteDamageEvent(message.event);
         }
       },
     });
@@ -161,22 +198,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
       redo: null,
     };
 
-    const event = {
-      id:
-        typeof crypto !== "undefined" && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      ts: Date.now(),
-      slot: playerSlot,
-      kind: "LOG_ENTRY",
-      payload: { entry: sanitizedEntry },
-    };
-
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(
-        JSON.stringify({ type: "EVENT", code: gameCode, slot: playerSlot, event }),
-      );
-    }
+    sendMultiplayerEvent("LOG_ENTRY", { entry: sanitizedEntry });
   }, [state.log.cursor, state.log.entries, gameCode, playerSlot]);
 
   return (
@@ -327,6 +349,10 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
             dispatch({
               type: "APPLY_DAMAGE",
               payload: { targetUnitId: defender.id, damage: totalDamage },
+            });
+            sendMultiplayerEvent("DAMAGE_APPLIED", {
+              targetUnitId: defender.id,
+              damage: totalDamage,
             });
           }
 

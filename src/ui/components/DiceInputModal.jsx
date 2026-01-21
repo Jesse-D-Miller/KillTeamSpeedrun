@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./DiceInputModal.css";
 
 function buildInitialDice(count) {
@@ -16,6 +16,15 @@ function DiceInputModal({
 }) {
   const [attackDice, setAttackDice] = useState(() => buildInitialDice(attackDiceCount));
   const [defenseDice, setDefenseDice] = useState(() => buildInitialDice(defenseDiceCount));
+  const [autoRoll, setAutoRoll] = useState(false);
+
+  const rollDice = (count) =>
+    Array.from({ length: count }, () => String(1 + Math.floor(Math.random() * 6)));
+
+  const applyAutoRoll = () => {
+    setAttackDice(rollDice(attackDiceCount));
+    setDefenseDice(rollDice(defenseDiceCount));
+  };
 
   const resetDice = useMemo(
     () => () => {
@@ -24,6 +33,11 @@ function DiceInputModal({
     },
     [attackDiceCount, defenseDiceCount],
   );
+
+  useEffect(() => {
+    if (!open || !autoRoll) return;
+    applyAutoRoll();
+  }, [open, autoRoll, attackDiceCount, defenseDiceCount]);
 
   if (!open) return null;
 
@@ -70,11 +84,21 @@ function DiceInputModal({
         }}
       />
       <div className="kt-modal__panel">
-        <div className="kt-modal__header">
-          <div className="kt-modal__title">Enter Dice</div>
-          <div className="kt-modal__subtitle">
-            {attacker?.name || "Attacker"} → {defender?.name || "Defender"}
+        <div className="kt-modal__header kt-modal__header--with-toggle">
+          <div>
+            <div className="kt-modal__title">Enter Dice</div>
+            <div className="kt-modal__subtitle">
+              {attacker?.name || "Attacker"} → {defender?.name || "Defender"}
+            </div>
           </div>
+          <label className="dice-input__toggle-label dice-input__toggle-label--compact">
+            <input
+              type="checkbox"
+              checked={autoRoll}
+              onChange={(event) => setAutoRoll(event.target.checked)}
+            />
+            Auto-roll
+          </label>
         </div>
 
         <div className="dice-input">

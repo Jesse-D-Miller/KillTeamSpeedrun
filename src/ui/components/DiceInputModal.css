@@ -71,3 +71,24 @@
 .dice-input__pip--on {
   opacity: 1;
 }
+
+.dice-input__toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+
+.dice-input__toggle-label--compact {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.kt-modal__header--with-toggle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
