@@ -37,19 +37,21 @@ function GameOverlay({ initialUnits }) {
 
   return (
     <div className="App">
-      {state.map((unit) => (
-        <UnitCard
-          key={unit.id}
-          unit={unit}
-          dispatch={dispatch}
-          attackerId={attackerId}
-          defenderId={defenderId}
-          setAttackerId={setAttackerId}
-          setDefenderId={setDefenderId}
-          attacker={attacker}
-          defender={defender}
-        />
-      ))}
+      <div className="kt-grid">
+        {state.map((unit) => (
+          <UnitCard
+            key={unit.id}
+            unit={unit}
+            dispatch={dispatch}
+            attackerId={attackerId}
+            defenderId={defenderId}
+            setAttackerId={setAttackerId}
+            setDefenderId={setDefenderId}
+            attacker={attacker}
+            defender={defender}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -61,7 +63,12 @@ function ArmyOverlayRoute() {
   const fallbackArmy = armies[0];
   const units = (selectedArmy || fallbackArmy)?.units ?? [];
 
-  return <GameOverlay key={selectedArmy?.key || fallbackArmy?.key} initialUnits={units} />;
+  return (
+    <GameOverlay
+      key={selectedArmy?.key || fallbackArmy?.key}
+      initialUnits={units}
+    />
+  );
 }
 
 function App() {
