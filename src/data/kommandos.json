@@ -24,9 +24,9 @@
     ]
   },
   {
-    "id": "kommando-boy",
+    "id": "kommando-boy-1",
     "name": "Boy",
-    "role": "operative",
+    "role": "Operative",
     "stats": {
       "apl": 2,
       "move": 6,
@@ -44,7 +44,7 @@
   {
     "id": "kommando-burna-boy",
     "name": "Burna Boy",
-    "role": "operative",
+    "role": "Operative",
     "stats": {
       "apl": 2,
       "move": 6,
@@ -60,7 +60,7 @@
     "abilities": [
       {
         "name": "BREACH",
-        "kind": "Movement",
+        "kind": "movement",
         "cost": 1
       }
     ]
