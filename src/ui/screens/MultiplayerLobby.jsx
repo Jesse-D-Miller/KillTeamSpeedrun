@@ -184,7 +184,9 @@ function MultiplayerLobby() {
     if (!hasBothPlayers) return;
     const slug = (uiState.me.name || "player").toLowerCase().replace(/\s+/g, "-");
     setHasNavigated(true);
-    navigate(`/${slug}/army-selector`);
+    navigate(`/${slug}/army-selector`, {
+      state: { slot: uiState.slot },
+    });
   }, [uiState.phase, uiState.players, uiState.me.name, hasNavigated, navigate]);
 
   const sendLocalEvent = (event) => {

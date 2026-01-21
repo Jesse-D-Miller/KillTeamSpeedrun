@@ -283,10 +283,15 @@ function GameOverlay({ initialUnits }) {
 
 function ArmyOverlayRoute() {
   const location = useLocation();
-  const armyKeyA = location.state?.armyKeyA || location.state?.armyKey;
-  const armyKeyB = location.state?.armyKeyB || location.state?.armyKey;
-  const selectedUnitIdsA = location.state?.selectedUnitIdsA;
-  const selectedUnitIdsB = location.state?.selectedUnitIdsB;
+  const slot = location.state?.slot;
+  const armyKey = location.state?.armyKey;
+  const armyKeyA = location.state?.armyKeyA || (slot === "A" ? armyKey : undefined) || armyKey;
+  const armyKeyB = location.state?.armyKeyB || (slot === "B" ? armyKey : undefined) || armyKey;
+  const selectedUnitIds = location.state?.selectedUnitIds;
+  const selectedUnitIdsA =
+    location.state?.selectedUnitIdsA || (slot === "A" ? selectedUnitIds : undefined);
+  const selectedUnitIdsB =
+    location.state?.selectedUnitIdsB || (slot === "B" ? selectedUnitIds : undefined);
 
   const teamA = armies.find((army) => army.key === armyKeyA) || armies[0];
   const teamB = armies.find((army) => army.key === armyKeyB) || teamA;

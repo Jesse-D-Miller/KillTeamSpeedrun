@@ -16,24 +16,30 @@ function UnitSelector() {
 	const { username } = useParams();
 	const navigate = useNavigate();
 	const location = useLocation();
+	const armyKey = location.state?.armyKey;
+	const slot = location.state?.slot;
 	const armyKeyA = location.state?.armyKeyA;
 	const armyKeyB = location.state?.armyKeyB;
+	const isSingleSelect = Boolean(armyKey);
 
 	const armyUnitsA = useMemo(() => {
+		const key = isSingleSelect ? armyKey : armyKeyA;
+		if (!key) return [];
 		const entry = Object.entries(killteamModules).find(([path]) =>
-			path.includes(`${armyKeyA}.json`),
+			path.includes(`${key}.json`),
 		);
 		if (!entry) return [];
 		return normalizeKillteamData(entry[1]);
-	}, [armyKeyA]);
+	}, [armyKey, armyKeyA, isSingleSelect]);
 
 	const armyUnitsB = useMemo(() => {
+		if (isSingleSelect || !armyKeyB) return [];
 		const entry = Object.entries(killteamModules).find(([path]) =>
 			path.includes(`${armyKeyB}.json`),
 		);
 		if (!entry) return [];
 		return normalizeKillteamData(entry[1]);
-	}, [armyKeyB]);
+	}, [armyKeyB, isSingleSelect]);
 
 	const [activeTeam, setActiveTeam] = useState("alpha");
 	const [selectedUnitIdsA, setSelectedUnitIdsA] = useState(
@@ -44,7 +50,7 @@ function UnitSelector() {
 	);
 
 	const toggleUnit = (unitId) => {
-		if (activeTeam === "alpha") {
+		if (isSingleSelect || activeTeam === "alpha") {
 			setSelectedUnitIdsA((prev) =>
 				prev.includes(unitId)
 					? prev.filter((id) => id !== unitId)
@@ -59,6 +65,18 @@ function UnitSelector() {
 		}
 	};
 
+	const activeUnits = isSingleSelect
+		? armyUnitsA
+		: activeTeam === "alpha"
+			? armyUnitsA
+			: armyUnitsB;
+
+	const selectedIds = isSingleSelect
+		? selectedUnitIdsA
+		: activeTeam === "alpha"
+			? selectedUnitIdsA
+			: selectedUnitIdsB;
+
 	return (
 		<div className="unit-selector">
 			<div className="unit-selector__panel">
@@ -67,27 +85,27 @@ function UnitSelector() {
 					Player: <span className="unit-selector__name">{username}</span>
 				</p>
 
-				<div className="unit-selector__tabs">
-					<button
-						type="button"
-						className={`unit-selector__tab ${activeTeam === "alpha" ? "unit-selector__tab--active" : ""}`}
-						onClick={() => setActiveTeam("alpha")}
-					>
-						Team A
-					</button>
-					<button
-						type="button"
-						className={`unit-selector__tab ${activeTeam === "beta" ? "unit-selector__tab--active" : ""}`}
-						onClick={() => setActiveTeam("beta")}
-					>
-						Team B
-					</button>
-				</div>
+				{!isSingleSelect && (
+					<div className="unit-selector__tabs">
+						<button
+							type="button"
+							className={`unit-selector__tab ${activeTeam === "alpha" ? "unit-selector__tab--active" : ""}`}
+							onClick={() => setActiveTeam("alpha")}
+						>
+							Team A
+						</button>
+						<button
+							type="button"
+							className={`unit-selector__tab ${activeTeam === "beta" ? "unit-selector__tab--active" : ""}`}
+							onClick={() => setActiveTeam("beta")}
+						>
+							Team B
+						</button>
+					</div>
+				)}
 
 				<div className="unit-selector__grid">
-					{(activeTeam === "alpha" ? armyUnitsA : armyUnitsB).map((unit) => {
-						const selectedIds =
-							activeTeam === "alpha" ? selectedUnitIdsA : selectedUnitIdsB;
+					{activeUnits.map((unit) => {
 						const isSelected = selectedIds.includes(unit.id);
 						return (
 							<button
@@ -108,15 +126,25 @@ function UnitSelector() {
 					<button
 						className="unit-selector__next"
 						type="button"
-						disabled={selectedUnitIdsA.length === 0 || selectedUnitIdsB.length === 0}
+						disabled={
+							isSingleSelect
+								? selectedUnitIdsA.length === 0
+								: selectedUnitIdsA.length === 0 || selectedUnitIdsB.length === 0
+						}
 						onClick={() =>
 							navigate(`/${username}/army`, {
-								state: {
-									armyKeyA,
-									armyKeyB,
-									selectedUnitIdsA,
-									selectedUnitIdsB,
-								},
+								state: isSingleSelect
+									? {
+											armyKey,
+											selectedUnitIds: selectedUnitIdsA,
+											slot,
+										}
+									: {
+											armyKeyA,
+											armyKeyB,
+											selectedUnitIdsA,
+											selectedUnitIdsB,
+										},
 							})
 						}
 					>
