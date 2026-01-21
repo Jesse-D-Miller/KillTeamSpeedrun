@@ -5,8 +5,11 @@ function UnitCard({ unit, dispatch }) {
 
   const isInjured = state.woundsCurrent < stats.woundsMax / 2;
 
-  const woundsPct =
-    stats.woundsMax === 0 ? 0 : (state.woundsCurrent / stats.woundsMax) * 100;
+  const woundsPct = Math.round(
+  stats.woundsMax === 0 ? 0 : (state.woundsCurrent / stats.woundsMax) * 100
+);
+const safeWoundsPct = Math.max(0, Math.min(100, woundsPct));
+
 
   return (
     <article className={`kt-card ${isInjured ? "kt-card--injured" : ""}`}>
@@ -47,7 +50,7 @@ function UnitCard({ unit, dispatch }) {
         </div>
 
         <div className="wounds__bar">
-          <div className="wounds__fill" style={{ width: `${woundsPct}%` }} />
+          <div className="wounds__fill" style={{ width: `${safeWoundsPct}%` }} />
         </div>
       </div>
 
