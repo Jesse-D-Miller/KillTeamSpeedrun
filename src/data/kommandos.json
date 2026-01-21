@@ -1,0 +1,68 @@
+[
+  {
+    "id": "kommando-boss-nob",
+    "name": "Boss Nob",
+    "role": "Leader",
+    "stats": {
+      "apl": 3,
+      "move": 6,
+      "save": 5,
+      "woundsMax": 14
+    },
+    "state": {
+      "woundsCurrent": 14,
+      "injured": false,
+      "order": "conceal",
+      "effects": []
+    },
+    "abilities": [
+      {
+        "name": "GET IT DUN!",
+        "kind": "support",
+        "cost": 1
+      }
+    ]
+  },
+  {
+    "id": "kommando-boy",
+    "name": "Boy",
+    "role": "operative",
+    "stats": {
+      "apl": 2,
+      "move": 6,
+      "save": 5,
+      "woundsMax": 10
+    },
+    "state": {
+      "woundsCurrent": 10,
+      "injured": false,
+      "order": "conceal",
+      "effects": []
+    },
+    "abilities": []
+  },
+  {
+    "id": "kommando-burna-boy",
+    "name": "Burna Boy",
+    "role": "operative",
+    "stats": {
+      "apl": 2,
+      "move": 6,
+      "save": 5,
+      "woundsMax": 10
+    },
+    "state": {
+      "woundsCurrent": 10,
+      "injured": false,
+      "order": "conceal",
+      "effects": []
+    },
+    "abilities": [
+      {
+        "name": "BREACH",
+        "kind": "Movement",
+        "cost": 1
+      }
+    ]
+  }
+]
