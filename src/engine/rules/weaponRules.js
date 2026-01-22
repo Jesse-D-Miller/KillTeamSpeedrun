@@ -7,6 +7,100 @@ const normalizeRuleId = (id) =>
 const rollD6 = () => Math.floor(Math.random() * 6) + 1;
 
 export const RULES = {
+  blast: {
+    id: "blast",
+    hooks: {
+      ON_DECLARE_ATTACK: (ctx, rule) => {
+        const primaryTargetId = ctx?.inputs?.primaryTargetId;
+        if (!primaryTargetId) return;
+
+        const secondaryTargetIds = Array.isArray(ctx?.inputs?.secondaryTargetIds)
+          ? ctx.inputs.secondaryTargetIds.filter(Boolean)
+          : [];
+
+        const uniqSecondaries = [];
+        const seen = new Set([primaryTargetId]);
+        for (const id of secondaryTargetIds) {
+          if (seen.has(id)) continue;
+          seen.add(id);
+          uniqSecondaries.push(id);
+        }
+
+        ctx.modifiers = ctx.modifiers || {};
+        ctx.modifiers.primaryBlast = ctx.modifiers.primaryBlast || {
+          targetId: primaryTargetId,
+          cover: ctx?.modifiers?.targetInCover ?? ctx?.targetInCover ?? null,
+          obscured: ctx?.modifiers?.targetObscured ?? ctx?.targetObscured ?? null,
+        };
+
+        ctx.attackQueue = [
+          {
+            targetId: primaryTargetId,
+            isBlastSecondary: false,
+            inheritFromPrimary: false,
+          },
+          ...uniqSecondaries.map((id) => ({
+            targetId: id,
+            isBlastSecondary: true,
+            inheritFromPrimary: true,
+          })),
+        ];
+
+        ctx.log.push({
+          type: "RULE_BLAST_DECLARE",
+          detail: {
+            x: rule?.value ?? null,
+            primaryTargetId,
+            secondaryTargetIds: uniqSecondaries,
+            queueSize: ctx.attackQueue.length,
+          },
+        });
+      },
+      ON_BEGIN_ATTACK_SEQUENCE: (ctx) => {
+        const item = ctx?.currentAttackItem;
+        if (!item) return;
+
+        ctx.modifiers = ctx.modifiers || {};
+        ctx.modifiers.ignoreConcealForTargeting = !!item.isBlastSecondary;
+
+        if (item.inheritFromPrimary) {
+          const snap = ctx?.modifiers?.primaryBlast;
+          if (snap) {
+            if (snap.cover !== null && snap.cover !== undefined) {
+              ctx.modifiers.targetInCover = snap.cover;
+            }
+            if (snap.obscured !== null && snap.obscured !== undefined) {
+              ctx.modifiers.targetObscured = snap.obscured;
+            }
+          }
+
+          ctx.log.push({
+            type: "RULE_BLAST_INHERIT",
+            detail: {
+              targetId: item.targetId,
+              inherited: ctx?.modifiers?.primaryBlast ?? null,
+            },
+          });
+        }
+      },
+      ON_SNAPSHOT_PRIMARY_TARGET_STATE: (ctx) => {
+        const item = ctx?.currentAttackItem;
+        if (!item || item.isBlastSecondary) return;
+
+        ctx.modifiers = ctx.modifiers || {};
+        ctx.modifiers.primaryBlast = {
+          targetId: item.targetId,
+          cover: ctx?.modifiers?.targetInCover ?? ctx?.targetInCover ?? null,
+          obscured: ctx?.modifiers?.targetObscured ?? ctx?.targetObscured ?? null,
+        };
+
+        ctx.log.push({
+          type: "RULE_BLAST_PRIMARY_SNAPSHOT",
+          detail: { ...ctx.modifiers.primaryBlast },
+        });
+      },
+    },
+  },
   balanced: {
     id: "balanced",
     hooks: {

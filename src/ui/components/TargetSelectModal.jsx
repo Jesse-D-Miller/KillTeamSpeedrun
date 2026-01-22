@@ -4,12 +4,18 @@ function TargetSelectModal({
   open,
   attacker,
   targets,
-  selectedTargetId,
-  onSelectTarget,
+  primaryTargetId,
+  secondaryTargetIds,
+  onSelectPrimary,
+  onToggleSecondary,
   onConfirm,
   onClose,
+  allowSecondarySelection,
 }) {
   if (!open) return null;
+
+  const secondarySet = new Set(secondaryTargetIds || []);
+  const findTargetName = (id) => targets.find((unit) => unit.id === id)?.name || "Unknown";
 
   return (
     <div className="kt-modal">
@@ -34,10 +40,26 @@ function TargetSelectModal({
               className="kt-modal__btn kt-modal__btn--primary"
               type="button"
               onClick={onConfirm}
-              disabled={!selectedTargetId}
+              disabled={!primaryTargetId}
             >
               Shoot
             </button>
+            {allowSecondarySelection && (
+              <div className="kt-modal__sidebar-empty">
+                <div><strong>PRIMARY TARGET:</strong></div>
+                <div>{primaryTargetId ? findTargetName(primaryTargetId) : "None"}</div>
+                <div style={{ marginTop: 8 }}><strong>BLAST TARGET(S):</strong></div>
+                {secondaryTargetIds && secondaryTargetIds.length > 0 ? (
+                  <div>
+                    {secondaryTargetIds.map((id) => (
+                      <div key={id}>{findTargetName(id)}</div>
+                    ))}
+                  </div>
+                ) : (
+                  <div>None</div>
+                )}
+              </div>
+            )}
           </aside>
           <div className="kt-modal__content">
             <div className="kt-modal__header">
@@ -55,10 +77,26 @@ function TargetSelectModal({
                   <button
                     key={unit.id}
                     className={`kt-modal__tile ${
-                      unit.id === selectedTargetId ? "kt-modal__tile--selected" : ""
+                      unit.id === primaryTargetId
+                        ? "kt-modal__tile--primary"
+                        : secondarySet.has(unit.id)
+                          ? "kt-modal__tile--secondary"
+                          : ""
                     }`}
                     type="button"
-                    onClick={() => onSelectTarget(unit.id)}
+                    onClick={() => {
+                      if (unit.id === primaryTargetId) {
+                        onSelectPrimary?.(null);
+                        return;
+                      }
+                      if (!primaryTargetId) {
+                        onSelectPrimary?.(unit.id);
+                        return;
+                      }
+                      if (allowSecondarySelection) {
+                        onToggleSecondary?.(unit.id);
+                      }
+                    }}
                   >
                     <div className="kt-modal__tile-name">{unit.name}</div>
                     <div className="kt-modal__tile-sub">SV {unit.stats.save}+</div>
@@ -86,7 +124,6 @@ function TargetSelectModal({
                 ))
               )}
             </div>
-
           </div>
         </div>
       </div>

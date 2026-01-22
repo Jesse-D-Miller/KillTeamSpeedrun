@@ -15,7 +15,7 @@ import MultiplayerLobby from "./ui/screens/MultiplayerLobby";
 import { gameReducer, initialCombatState, COMBAT_STAGES } from "./state/gameReducer";
 import { createLogEntry } from "./state/actionCreator";
 import { resolveAttack } from "./engine/rules/resolveAttack";
-import { normalizeWeaponRules } from "./engine/rules/weaponRules";
+import { normalizeWeaponRules, runWeaponRuleHook } from "./engine/rules/weaponRules";
 import { useEffect, useReducer, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { connectWS } from "./lib/multiplayer";
@@ -73,6 +73,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
   const [leftTab, setLeftTab] = useState("units");
   const [shootModalOpen, setShootModalOpen] = useState(false);
   const [selectedTargetId, setSelectedTargetId] = useState(null);
+  const [selectedSecondaryIds, setSelectedSecondaryIds] = useState([]);
+  const autoSelectTargetRef = useRef(false);
   const [allocationModalOpen, setAllocationModalOpen] = useState(false);
   const [pendingAttack, setPendingAttack] = useState(null);
   const [intentGate, setIntentGate] = useState({
@@ -203,6 +205,10 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
     const rules = normalizeWeaponRules(selectedWeapon);
     return rules.some((rule) => rule.id === "balanced");
   })();
+  const hasBlast = (() => {
+    const rules = normalizeWeaponRules(selectedWeapon);
+    return rules.some((rule) => rule.id === "blast");
+  })();
   const getAccurateMax = (weapon) => {
     const rules = normalizeWeaponRules(weapon);
     const rule = rules.find((item) => item.id === "accurate");
@@ -223,10 +229,16 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
 
   useEffect(() => {
     if (!shootModalOpen) return;
-    if (opponentUnits.length > 0 && !selectedTargetId) {
+    if (opponentUnits.length > 0 && !selectedTargetId && !autoSelectTargetRef.current) {
       setSelectedTargetId(opponentUnits[0].id);
+      autoSelectTargetRef.current = true;
     }
   }, [shootModalOpen, opponentUnits, selectedTargetId]);
+  
+  useEffect(() => {
+    if (shootModalOpen) return;
+    autoSelectTargetRef.current = false;
+  }, [shootModalOpen]);
 
   const currentPlayerId = playerSlot || getOrCreatePlayerId();
   const otherPlayerId = playerSlot
@@ -317,6 +329,32 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
     }, 0);
     return () => clearTimeout(timer);
   }, [combatState?.stage]);
+
+  useEffect(() => {
+    if (combatState?.stage !== COMBAT_STAGES.ATTACK_ROLLING) return;
+    const queue = combatState?.attackQueue || [];
+    const currentIndex = combatState?.currentAttackIndex ?? 0;
+    if (!queue[currentIndex]) return;
+
+    const ctx = {
+      weapon: combatState?.weaponProfile,
+      weaponProfile: combatState?.weaponProfile,
+      weaponRules: normalizeWeaponRules(combatState?.weaponProfile),
+      currentAttackItem: queue[currentIndex],
+      targetId: queue[currentIndex]?.targetId,
+      modifiers: { ...(combatState?.modifiers || {}) },
+      inputs: { ...(combatState?.inputs || {}) },
+      log: [],
+    };
+
+    runWeaponRuleHook(ctx, "ON_BEGIN_ATTACK_SEQUENCE");
+
+    if (!queue[currentIndex]?.isBlastSecondary) {
+      runWeaponRuleHook(ctx, "ON_SNAPSHOT_PRIMARY_TARGET_STATE");
+    }
+
+    dispatchCombatEvent("SET_COMBAT_MODIFIERS", { modifiers: ctx.modifiers });
+  }, [combatState?.stage, combatState?.currentAttackIndex]);
 
   const closeIntentGate = () =>
     setIntentGate({ open: false, issues: [], pending: null });
@@ -512,11 +550,40 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
         open={shootModalOpen}
         attacker={selectedUnit}
         targets={opponentUnits}
-        selectedTargetId={selectedTargetId}
-        onSelectTarget={setSelectedTargetId}
-        onClose={() => setShootModalOpen(false)}
+        primaryTargetId={selectedTargetId}
+        secondaryTargetIds={selectedSecondaryIds}
+        allowSecondarySelection={hasBlast}
+        onSelectPrimary={(id) => {
+          setSelectedTargetId(id);
+          setSelectedSecondaryIds([]);
+        }}
+        onToggleSecondary={(id) => {
+          setSelectedSecondaryIds((prev) =>
+            prev.includes(id) ? prev.filter((entry) => entry !== id) : [...prev, id],
+          );
+        }}
+        onClose={() => {
+          setShootModalOpen(false);
+          setSelectedSecondaryIds([]);
+          setSelectedTargetId(null);
+        }}
         onConfirm={() => {
           if (!selectedTargetId) return;
+          const blastInputs = {
+            primaryTargetId: selectedTargetId,
+            secondaryTargetIds: selectedSecondaryIds,
+          };
+          const ctx = {
+            weapon: selectedWeapon,
+            weaponProfile: selectedWeapon,
+            weaponRules: normalizeWeaponRules(selectedWeapon),
+            inputs: blastInputs,
+            modifiers: {},
+            log: [],
+          };
+          runWeaponRuleHook(ctx, "ON_DECLARE_ATTACK");
+          const attackQueue = Array.isArray(ctx.attackQueue) ? ctx.attackQueue : [];
+          const firstTargetId = attackQueue[0]?.targetId ?? selectedTargetId;
           setDefenderId(selectedTargetId);
           logEntry({
             type: "SHOOT_DECLARED",
@@ -530,18 +597,22 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
             attackerId: currentPlayerId,
             defenderId: otherPlayerId,
             attackingOperativeId: selectedUnit?.id || null,
-            defendingOperativeId: selectedTargetId,
+            defendingOperativeId: firstTargetId,
             weaponId: selectedWeapon?.name || null,
             weaponProfile: selectedWeapon || null,
+            attackQueue,
+            inputs: blastInputs,
           });
           setShootModalOpen(false);
+          setSelectedSecondaryIds([]);
+          setSelectedTargetId(null);
         }}
       />
 
       <DiceInputModal
         open={attackModalOpen}
-        attacker={attacker}
-        defender={defender}
+        attacker={attackingOperative}
+        defender={defendingOperative}
         weaponProfile={combatState?.weaponProfile || selectedWeapon}
         attackDiceCount={selectedWeapon?.atk ?? 0}
         defenseDiceCount={3}
@@ -630,7 +701,13 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
             });
 
             dispatchCombatEvent("RESOLVE_COMBAT");
-            dispatchCombatEvent("CLEAR_COMBAT_STATE");
+            const queue = combatState?.attackQueue || [];
+            const idx = combatState?.currentAttackIndex ?? 0;
+            if (queue.length > 0 && idx < queue.length - 1) {
+              dispatchCombatEvent("ADVANCE_ATTACK_QUEUE");
+            } else {
+              dispatchCombatEvent("CLEAR_COMBAT_STATE");
+            }
             return;
           }
 

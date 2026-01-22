@@ -24,8 +24,14 @@ export const initialCombatState = {
 	defenseLocked: false,
 	blocksResolved: false,
 	blocks: null,
+	attackQueue: [],
+	currentAttackIndex: 0,
+	currentAttackItem: null,
+	modifiers: {},
 	inputs: {
 		accurateSpent: 0,
+		primaryTargetId: null,
+		secondaryTargetIds: [],
 		balancedClick: false,
 		balancedUsed: false,
 	},
@@ -116,8 +122,18 @@ export function gameReducer(state, action) {
 					defenseLocked: false,
 					blocksResolved: false,
 					blocks: null,
+					attackQueue: Array.isArray(action.payload?.attackQueue)
+						? action.payload.attackQueue
+						: [],
+					currentAttackIndex: 0,
+					currentAttackItem: Array.isArray(action.payload?.attackQueue)
+						? action.payload.attackQueue[0] ?? null
+						: null,
+					modifiers: {},
 					inputs: {
 						accurateSpent: 0,
+						primaryTargetId: action.payload?.inputs?.primaryTargetId ?? null,
+						secondaryTargetIds: action.payload?.inputs?.secondaryTargetIds ?? [],
 						balancedClick: false,
 						balancedUsed: false,
 					},
@@ -154,6 +170,53 @@ export function gameReducer(state, action) {
 						inputs: {
 							...(state.combatState?.inputs || {}),
 							...inputs,
+						},
+					},
+				};
+			}
+
+			case "SET_COMBAT_MODIFIERS": {
+				const { modifiers } = action.payload || {};
+				if (!modifiers || typeof modifiers !== "object") return state;
+				return {
+					...state,
+					combatState: {
+						...state.combatState,
+						modifiers: {
+							...(state.combatState?.modifiers || {}),
+							...modifiers,
+						},
+					},
+				};
+			}
+
+			case "ADVANCE_ATTACK_QUEUE": {
+				const queue = state.combatState?.attackQueue || [];
+				const nextIndex = Number(state.combatState?.currentAttackIndex ?? 0) + 1;
+				if (!queue[nextIndex]) return state;
+				return {
+					...state,
+					combatState: {
+						...state.combatState,
+						stage: COMBAT_STAGES.ATTACK_ROLLING,
+						attackRoll: [],
+						attackLocked: false,
+						defenseRoll: [],
+						defenseLocked: false,
+						blocksResolved: false,
+						blocks: null,
+						currentAttackIndex: nextIndex,
+						currentAttackItem: queue[nextIndex] ?? null,
+						defendingOperativeId: queue[nextIndex]?.targetId ?? state.combatState?.defendingOperativeId,
+						inputs: {
+							...(state.combatState?.inputs || {}),
+							accurateSpent: 0,
+							balancedClick: false,
+							balancedUsed: false,
+						},
+						modifiers: {
+							...(state.combatState?.modifiers || {}),
+							ignoreConcealForTargeting: false,
 						},
 					},
 				};

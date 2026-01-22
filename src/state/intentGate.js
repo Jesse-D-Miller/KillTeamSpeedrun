@@ -138,6 +138,8 @@ export const validateGameIntent = (state, event) => {
     case "LOCK_ATTACK_ROLL":
     case "LOCK_DEFENSE_ROLL":
     case "SET_COMBAT_STAGE":
+    case "SET_COMBAT_MODIFIERS":
+    case "ADVANCE_ATTACK_QUEUE":
       break;
 
     case "SET_BLOCKS_RESULT":
