@@ -18,6 +18,7 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { connectWS } from "./lib/multiplayer";
 import { getOrCreatePlayerId } from "./lib/playerIdentity";
+import { validateGameIntent } from "./state/intentGate";
 
 const killteamModules = import.meta.glob("./data/killteams/*.json", {
   eager: true,
@@ -66,6 +67,11 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
   const [diceModalOpen, setDiceModalOpen] = useState(false);
   const [allocationModalOpen, setAllocationModalOpen] = useState(false);
   const [pendingAttack, setPendingAttack] = useState(null);
+  const [intentGate, setIntentGate] = useState({
+    open: false,
+    issues: [],
+    pending: null,
+  });
 
   const logEntry = ({ type, summary, meta }) => {
     const entry = createLogEntry({
@@ -75,7 +81,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
       undo: state.game,
       redo: state.game,
     });
-    dispatch({ type: "LOG_PUSH", payload: entry });
+    dispatchIntent({ type: "LOG_PUSH", payload: entry });
   };
 
   const [selectedUnitId, setSelectedUnitId] = useState(
@@ -119,6 +125,25 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
       setSelectedTargetId(opponentUnits[0].id);
     }
   }, [shootModalOpen, opponentUnits, selectedTargetId]);
+
+  const showIssues = (result, event) =>
+    setIntentGate({
+      open: true,
+      issues: result.issues,
+      pending: event,
+    });
+
+  const dispatchIntent = (event, options = {}) => {
+    const result = validateGameIntent(state, event);
+    if (result.ok || options.override) {
+      dispatch(event);
+      return;
+    }
+    showIssues(result, event);
+  };
+
+  const closeIntentGate = () =>
+    setIntentGate({ open: false, issues: [], pending: null });
 
   const sendMultiplayerEvent = (kind, payload = {}) => {
     if (!gameCode || !playerSlot) return;
@@ -237,8 +262,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
             <LogsWindow
               entries={state.log.entries}
               cursor={state.log.cursor}
-              onUndo={() => dispatch({ type: "UNDO" })}
-              onRedo={() => dispatch({ type: "REDO" })}
+              onUndo={() => dispatchIntent({ type: "UNDO" })}
+              onRedo={() => dispatchIntent({ type: "REDO" })}
             />
           )}
         </aside>
@@ -256,7 +281,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
                 <UnitCard
                   key={selectedUnit.id}
                   unit={selectedUnit}
-                  dispatch={dispatch}
+                  dispatch={dispatchIntent}
                   onLog={logEntry}
                 />
                 <Actions
@@ -359,7 +384,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
           const savesUsed = defenseHits + defenseCrits;
 
           if (defender?.id) {
-            dispatch({
+            dispatchIntent({
               type: "APPLY_DAMAGE",
               payload: { targetUnitId: defender.id, damage: totalDamage },
             });
@@ -390,6 +415,46 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
           setPendingAttack(null);
         }}
       />
+
+      {intentGate.open && (
+        <div className="kt-intentgate">
+          <div className="kt-intentgate__panel">
+            <h3>Action blocked</h3>
+            <ul>
+              {intentGate.issues.map((issue, index) => (
+                <li key={`${issue.message}-${index}`}>
+                  <strong>{issue.message}</strong>
+                  {issue.unitId && <span> (unit: {issue.unitId})</span>}
+                  {issue.targetUnitId && (
+                    <span> (target: {issue.targetUnitId})</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <div className="kt-intentgate__actions">
+              <button
+                type="button"
+                className="btn"
+                onClick={closeIntentGate}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => {
+                  if (intentGate.pending) {
+                    dispatchIntent(intentGate.pending, { override: true });
+                  }
+                  closeIntentGate();
+                }}
+              >
+                Override
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

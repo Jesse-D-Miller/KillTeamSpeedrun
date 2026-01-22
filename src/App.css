@@ -109,6 +109,44 @@ body,
   color: rgba(255, 255, 255, 0.8);
 }
 
+.kt-intentgate {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 5, 9, 0.75);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+}
+
+.kt-intentgate__panel {
+  width: min(520px, 90vw);
+  background: rgba(12, 12, 14, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  display: grid;
+  gap: 12px;
+}
+
+.kt-intentgate__panel h3 {
+  margin: 0;
+}
+
+.kt-intentgate__panel ul {
+  margin: 0;
+  padding-left: 18px;
+  color: rgba(255, 255, 255, 0.9);
+  display: grid;
+  gap: 6px;
+}
+
+.kt-intentgate__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 @media (max-width: 900px) {
   .kt-shell {
     grid-template-columns: 1fr;
