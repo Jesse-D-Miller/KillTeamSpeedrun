@@ -7,13 +7,15 @@ import TopBar from "./ui/components/TopBar";
 import TargetSelectModal from "./ui/components/TargetSelectModal";
 import DiceInputModal from "./ui/components/DiceInputModal";
 import DefenseAllocationModal from "./ui/components/DefenseAllocationModal";
+import DefenseRollModal from "./ui/components/DefenseRollModal";
 import Login from "./ui/screens/Login";
 import ArmySelector from "./ui/screens/ArmySelector";
 import UnitSelector from "./ui/screens/UnitSelector";
 import MultiplayerLobby from "./ui/screens/MultiplayerLobby";
-import { gameReducer } from "./state/gameReducer";
+import { gameReducer, initialCombatState, COMBAT_STAGES } from "./state/gameReducer";
 import { createLogEntry } from "./state/actionCreator";
 import { resolveAttack } from "./engine/rules/resolveAttack";
+import { normalizeWeaponRules } from "./engine/rules/weaponRules";
 import { useEffect, useReducer, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { connectWS } from "./lib/multiplayer";
@@ -35,7 +37,7 @@ function normalizeKillteamData(moduleData) {
   return [];
 }
 
-function normalizeWeaponRules(wr) {
+function normalizeWeaponRulesList(wr) {
   if (!wr || wr === "-") return [];
   return Array.isArray(wr) ? wr : [wr];
 }
@@ -60,16 +62,17 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
       entries: [],
       cursor: 0,
     },
+    combatState: initialCombatState,
   });
   const socketRef = useRef(null);
   const seenLogIdsRef = useRef(new Set());
   const seenDamageIdsRef = useRef(new Set());
+  const seenCombatIdsRef = useRef(new Set());
   const [attackerId, setAttackerId] = useState(null);
   const [defenderId, setDefenderId] = useState(null);
   const [leftTab, setLeftTab] = useState("units");
   const [shootModalOpen, setShootModalOpen] = useState(false);
   const [selectedTargetId, setSelectedTargetId] = useState(null);
-  const [diceModalOpen, setDiceModalOpen] = useState(false);
   const [allocationModalOpen, setAllocationModalOpen] = useState(false);
   const [pendingAttack, setPendingAttack] = useState(null);
   const [intentGate, setIntentGate] = useState({
@@ -87,6 +90,78 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
       redo: state.game,
     });
     dispatchIntent({ type: "LOG_PUSH", payload: entry });
+  };
+
+  const formatDiceList = (dice = []) => dice.join(", ");
+
+  const logRollSequence = ({ attackBefore, defenseDice, ceaseless }) => {
+    const localPlayerId = getOrCreatePlayerId();
+    const attackRoller = playerSlot || localPlayerId;
+    const defenseRoller = playerSlot
+      ? playerSlot === "A"
+        ? "B"
+        : "A"
+      : "opponent";
+
+    logEntry({
+      type: "ATTACK_DICE",
+      summary: `${attackRoller} ATTACK: ${formatDiceList(attackBefore)}`,
+      meta: {
+        playerId: localPlayerId,
+        roller: attackRoller,
+        attackerId: selectedUnit?.id,
+        weaponName: selectedWeapon?.name,
+        dice: attackBefore,
+      },
+    });
+
+    if (ceaseless?.rerolled?.length) {
+      logEntry({
+        type: "CEASELESS_REROLL",
+        summary: `${attackRoller} CEASELESS: ${formatDiceList(ceaseless.after)} (${ceaseless.rerolled.length} die rerolled)`,
+        meta: {
+          playerId: localPlayerId,
+          roller: attackRoller,
+          attackerId: selectedUnit?.id,
+          weaponName: selectedWeapon?.name,
+          before: ceaseless.before,
+          after: ceaseless.after,
+          rerolled: ceaseless.rerolled,
+          value: ceaseless.value,
+        },
+      });
+    }
+
+    logEntry({
+      type: "DEFENSE_DICE",
+      summary: `${defenseRoller} DEFENSE: ${formatDiceList(defenseDice)}`,
+      meta: {
+        playerId: localPlayerId,
+        roller: defenseRoller,
+        defenderId: selectedTargetId,
+        dice: defenseDice,
+      },
+    });
+  };
+
+  const logDefenseRoll = (dice) => {
+    if (!Array.isArray(dice) || dice.length === 0) return;
+    const localPlayerId = getOrCreatePlayerId();
+    const defenseRoller = playerSlot
+      ? playerSlot === "A"
+        ? "B"
+        : "A"
+      : "opponent";
+    logEntry({
+      type: "DEFENSE_DICE",
+      summary: `${defenseRoller} DEFENSE: ${formatDiceList(dice)}`,
+      meta: {
+        playerId: localPlayerId,
+        roller: defenseRoller,
+        defenderId: combatState?.defendingOperativeId,
+        dice,
+      },
+    });
   };
 
   const [selectedUnitId, setSelectedUnitId] = useState(
@@ -112,6 +187,16 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
   const selectedWeapon =
     selectedUnit?.weapons?.find((w) => w.name === selectedWeaponName) ||
     selectedUnit?.weapons?.[0];
+  const attackCritThreshold = (() => {
+    const rules = normalizeWeaponRules(selectedWeapon);
+    const lethalRule = rules.find((rule) => rule.id === "lethal");
+    const value = Number(lethalRule?.value);
+    return Number.isFinite(value) ? value : 6;
+  })();
+  const hasCeaseless = (() => {
+    const rules = normalizeWeaponRules(selectedWeapon);
+    return rules.some((rule) => rule.id === "ceaseless");
+  })();
   const canShoot = selectedWeapon?.mode === "ranged";
   const cp = 0;
   const vp = 0;
@@ -131,6 +216,60 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
     }
   }, [shootModalOpen, opponentUnits, selectedTargetId]);
 
+  const currentPlayerId = playerSlot || getOrCreatePlayerId();
+  const otherPlayerId = playerSlot
+    ? playerSlot === "A"
+      ? "B"
+      : "A"
+    : null;
+  const combatState = state.combatState;
+  const attackModalOpen =
+    [
+      COMBAT_STAGES.ATTACK_ROLLING,
+      COMBAT_STAGES.ATTACK_LOCKED,
+      COMBAT_STAGES.DEFENSE_ROLLING,
+      COMBAT_STAGES.BLOCKS_RESOLVING,
+      COMBAT_STAGES.READY_TO_RESOLVE_DAMAGE,
+      COMBAT_STAGES.DONE,
+    ].includes(combatState?.stage) &&
+    combatState?.attackerId === currentPlayerId;
+  const defenseModalOpen =
+    [
+      COMBAT_STAGES.ATTACK_ROLLING,
+      COMBAT_STAGES.ATTACK_LOCKED,
+      COMBAT_STAGES.DEFENSE_ROLLING,
+      COMBAT_STAGES.READY_TO_RESOLVE_DAMAGE,
+      COMBAT_STAGES.DONE,
+    ].includes(combatState?.stage) &&
+    combatState?.defenderId === currentPlayerId;
+  const blocksModalOpen =
+    combatState?.stage === COMBAT_STAGES.BLOCKS_RESOLVING &&
+    combatState?.defenderId === currentPlayerId;
+
+  const attackingOperative = state.game.find(
+    (unit) => unit.id === combatState?.attackingOperativeId,
+  );
+  const defendingOperative = state.game.find(
+    (unit) => unit.id === combatState?.defendingOperativeId,
+  );
+
+  const combatSummary = (() => {
+    if (!combatState?.blocks) return null;
+    const weapon = combatState?.weaponProfile;
+    const remainingHits = combatState.blocks?.remainingHits ?? 0;
+    const remainingCrits = combatState.blocks?.remainingCrits ?? 0;
+    const [normalDmg, critDmg] = weapon?.dmg?.split("/").map(Number) ?? [0, 0];
+    const safeNormal = Number.isFinite(normalDmg) ? normalDmg : 0;
+    const safeCrit = Number.isFinite(critDmg) ? critDmg : 0;
+    const totalDamage = remainingHits * safeNormal + remainingCrits * safeCrit;
+    return {
+      hits: remainingHits,
+      crits: remainingCrits,
+      damage: totalDamage,
+      weaponName: weapon?.name,
+    };
+  })();
+
   const showIssues = (result, event) =>
     setIntentGate({
       open: true,
@@ -146,6 +285,26 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
     }
     showIssues(result, event);
   };
+
+  useEffect(() => {
+    if (combatState?.stage !== COMBAT_STAGES.ATTACK_LOCKED) return;
+    const timer = setTimeout(() => {
+      dispatchCombatEvent("SET_COMBAT_STAGE", {
+        stage: COMBAT_STAGES.DEFENSE_ROLLING,
+      });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [combatState?.stage]);
+
+  useEffect(() => {
+    if (combatState?.stage !== COMBAT_STAGES.DEFENSE_LOCKED) return;
+    const timer = setTimeout(() => {
+      dispatchCombatEvent("SET_COMBAT_STAGE", {
+        stage: COMBAT_STAGES.BLOCKS_RESOLVING,
+      });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [combatState?.stage]);
 
   const closeIntentGate = () =>
     setIntentGate({ open: false, issues: [], pending: null });
@@ -167,6 +326,16 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
       socketRef.current.send(
         JSON.stringify({ type: "EVENT", code: gameCode, slot: playerSlot, event }),
       );
+    }
+
+    return event;
+  };
+
+  const dispatchCombatEvent = (type, payload = {}) => {
+    dispatchIntent({ type, payload });
+    const event = sendMultiplayerEvent("COMBAT_EVENT", { type, payload });
+    if (event?.id) {
+      seenCombatIdsRef.current.add(event.id);
     }
   };
 
@@ -191,6 +360,15 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
     });
   };
 
+  const applyRemoteCombatEvent = (event) => {
+    if (!event || event.kind !== "COMBAT_EVENT") return;
+    if (!event.id || seenCombatIdsRef.current.has(event.id)) return;
+    const { type, payload } = event.payload || {};
+    if (!type) return;
+    seenCombatIdsRef.current.add(event.id);
+    dispatch({ type, payload });
+  };
+
   useEffect(() => {
     if (!gameCode || !playerSlot) return undefined;
 
@@ -202,12 +380,14 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
           message.eventLog.forEach((event) => {
             applyRemoteLogEvent(event);
             applyRemoteDamageEvent(event);
+            applyRemoteCombatEvent(event);
           });
           return;
         }
         if (message.type === "EVENT" && message.event) {
           applyRemoteLogEvent(message.event);
           applyRemoteDamageEvent(message.event);
+          applyRemoteCombatEvent(message.event);
         }
       },
     });
@@ -334,19 +514,105 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
               defenderId: selectedTargetId,
             },
           });
+          dispatchCombatEvent("START_RANGED_ATTACK", {
+            attackerId: currentPlayerId,
+            defenderId: otherPlayerId,
+            attackingOperativeId: selectedUnit?.id || null,
+            defendingOperativeId: selectedTargetId,
+            weaponId: selectedWeapon?.name || null,
+            weaponProfile: selectedWeapon || null,
+          });
           setShootModalOpen(false);
-          setDiceModalOpen(true);
         }}
       />
 
       <DiceInputModal
-        open={diceModalOpen}
+        open={attackModalOpen}
         attacker={attacker}
         defender={defender}
         attackDiceCount={selectedWeapon?.atk ?? 0}
         defenseDiceCount={3}
-        onClose={() => setDiceModalOpen(false)}
-        onConfirm={({ attackDice, defenseDice }) => {
+        attackHitThreshold={selectedWeapon?.hit ?? 6}
+        hasCeaseless={hasCeaseless}
+        combatStage={combatState?.stage}
+        combatAttackRoll={combatState?.attackRoll}
+        combatDefenseRoll={combatState?.defenseRoll}
+        combatSummary={combatSummary}
+        onSetCombatAttackRoll={(roll) => {
+          dispatchCombatEvent("SET_ATTACK_ROLL", { roll });
+          logRollSequence({
+            attackBefore: roll,
+            defenseDice: [],
+            ceaseless: null,
+          });
+        }}
+        onLockAttack={() => {
+          dispatchCombatEvent("LOCK_ATTACK_ROLL");
+        }}
+        readOnly={combatState?.stage !== COMBAT_STAGES.ATTACK_ROLLING}
+        statusMessage={
+          combatState?.stage === COMBAT_STAGES.ATTACK_LOCKED
+            ? "Attack locked in. Waiting for defense..."
+            : combatState?.stage === COMBAT_STAGES.DEFENSE_ROLLING
+              ? "Defense rolling..."
+              : combatState?.stage === COMBAT_STAGES.BLOCKS_RESOLVING
+                ? "Defender is assigning blocks..."
+              : combatState?.stage === COMBAT_STAGES.READY_TO_RESOLVE_DAMAGE
+                ? "Ready to resolve damage."
+                : combatState?.stage === COMBAT_STAGES.DONE
+                  ? "Combat resolved."
+                  : null
+        }
+        onAutoRoll={({ attackBefore, defenseDice, ceaseless }) => {
+          logRollSequence({ attackBefore, defenseDice, ceaseless });
+        }}
+        onClose={() => {
+          dispatchCombatEvent("CLEAR_COMBAT_STATE");
+        }}
+        onConfirm={({ attackDice, defenseDice, ceaseless, autoLogged }) => {
+          if (combatState?.stage === COMBAT_STAGES.READY_TO_RESOLVE_DAMAGE) {
+            const weapon = combatState?.weaponProfile;
+            const attackerUnit = attackingOperative;
+            const defenderUnit = defendingOperative;
+            const blocks = combatState?.blocks;
+            const remainingHits = blocks?.remainingHits ?? 0;
+            const remainingCrits = blocks?.remainingCrits ?? 0;
+            const [normalDmg, critDmg] =
+              weapon?.dmg?.split("/").map(Number) ?? [0, 0];
+            const safeNormalDmg = Number.isFinite(normalDmg) ? normalDmg : 0;
+            const safeCritDmg = Number.isFinite(critDmg) ? critDmg : 0;
+            const totalDamage =
+              remainingHits * safeNormalDmg + remainingCrits * safeCritDmg;
+
+            if (defenderUnit?.id) {
+              dispatchIntent({
+                type: "APPLY_DAMAGE",
+                payload: { targetUnitId: defenderUnit.id, damage: totalDamage },
+              });
+              sendMultiplayerEvent("DAMAGE_APPLIED", {
+                targetUnitId: defenderUnit.id,
+                damage: totalDamage,
+              });
+            }
+
+            logEntry({
+              type: "ATTACK_RESOLVED",
+              summary: `${attackerUnit?.name || "Attacker"}: ${weapon?.name || "Weapon"} vs ${defenderUnit?.name || "defender"} — dmg ${totalDamage}`,
+              meta: {
+                attackerId: attackerUnit?.id,
+                defenderId: defenderUnit?.id,
+                weaponName: weapon?.name,
+                remainingHits,
+                remainingCrits,
+                damage: totalDamage,
+              },
+            });
+
+            dispatchCombatEvent("RESOLVE_COMBAT");
+            dispatchCombatEvent("CLEAR_COMBAT_STATE");
+            return;
+          }
+
           setPendingAttack({
             attacker,
             defender,
@@ -354,25 +620,83 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
             attackDice,
             defenseDice,
           });
-          setDiceModalOpen(false);
+
+          if (!autoLogged) {
+            logRollSequence({
+              attackBefore: ceaseless?.before ?? attackDice,
+              defenseDice,
+              ceaseless,
+            });
+          }
+
           setAllocationModalOpen(true);
         }}
       />
 
-      <DefenseAllocationModal
-        open={allocationModalOpen}
-        attacker={pendingAttack?.attacker}
-        defender={pendingAttack?.defender}
-        weapon={pendingAttack?.weapon}
-        attackDice={pendingAttack?.attackDice ?? []}
-        defenseDice={pendingAttack?.defenseDice ?? []}
-        hitThreshold={pendingAttack?.weapon?.hit ?? 6}
-        saveThreshold={pendingAttack?.defender?.stats?.save ?? 6}
+      <DefenseRollModal
+        open={defenseModalOpen}
+        stage={combatState?.stage}
+        attacker={attackingOperative}
+        defender={defendingOperative}
+        attackRoll={combatState?.attackRoll}
+        combatSummary={combatSummary}
+        defenseDiceCount={3}
         onClose={() => {
+          dispatchCombatEvent("CLEAR_COMBAT_STATE");
+        }}
+        readOnly={combatState?.stage !== COMBAT_STAGES.DEFENSE_ROLLING}
+        statusMessage={
+          combatState?.stage === COMBAT_STAGES.ATTACK_ROLLING
+            ? "Waiting for attacker to lock in…"
+            : combatState?.stage === COMBAT_STAGES.ATTACK_LOCKED
+              ? "Attacker locked in. Preparing defense roll…"
+              : combatState?.stage === COMBAT_STAGES.DEFENSE_ROLLING
+                ? "Roll defense dice."
+                : combatState?.stage === COMBAT_STAGES.READY_TO_RESOLVE_DAMAGE
+                  ? "Waiting for attacker to resolve…"
+                  : combatState?.stage === COMBAT_STAGES.DONE
+                    ? "Combat resolved."
+                    : null
+        }
+        onSetDefenseRoll={(roll) => {
+          dispatchCombatEvent("SET_DEFENSE_ROLL", { roll });
+          logDefenseRoll(roll);
+        }}
+        onLockDefense={() => {
+          dispatchCombatEvent("LOCK_DEFENSE_ROLL");
+        }}
+      />
+
+      <DefenseAllocationModal
+        open={blocksModalOpen || allocationModalOpen}
+        attacker={attackingOperative || pendingAttack?.attacker}
+        defender={defendingOperative || pendingAttack?.defender}
+        weapon={combatState?.weaponProfile || pendingAttack?.weapon}
+        attackDice={combatState?.attackRoll ?? pendingAttack?.attackDice ?? []}
+        defenseDice={combatState?.defenseRoll ?? pendingAttack?.defenseDice ?? []}
+        hitThreshold={(combatState?.weaponProfile || pendingAttack?.weapon)?.hit ?? 6}
+        saveThreshold={(defendingOperative || pendingAttack?.defender)?.stats?.save ?? 6}
+        attackCritThreshold={attackCritThreshold}
+        onClose={() => {
+          if (blocksModalOpen) {
+            dispatchCombatEvent("CLEAR_COMBAT_STATE");
+            return;
+          }
           setAllocationModalOpen(false);
           setPendingAttack(null);
         }}
         onConfirm={({ remainingHits, remainingCrits, defenseEntries, attackEntries }) => {
+          if (blocksModalOpen) {
+            dispatchCombatEvent("SET_BLOCKS_RESULT", {
+              blocks: {
+                remainingHits,
+                remainingCrits,
+                defenseEntries,
+                attackEntries,
+              },
+            });
+            return;
+          }
           const weapon = pendingAttack?.weapon;
           const attacker = pendingAttack?.attacker;
           const defender = pendingAttack?.defender;
@@ -513,7 +837,7 @@ function ArmyOverlayRoute() {
       weapons:
         unit.weapons?.map((weapon) => ({
           ...weapon,
-          wr: normalizeWeaponRules(weapon.wr),
+          wr: normalizeWeaponRulesList(weapon.wr),
         })) ?? [],
       rules: unit.rules?.map((rule) => ({ ...rule })) ?? [],
       abilities: unit.abilities?.map((ability) => ({ ...ability })) ?? [],

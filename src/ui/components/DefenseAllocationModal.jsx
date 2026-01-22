@@ -1,13 +1,15 @@
 import { useMemo, useState } from "react";
 import "./DefenseAllocationModal.css";
 
-function classifyDice(dice, threshold) {
+function classifyDice(dice, threshold, critThreshold = 6) {
   return dice.map((value, index) => {
     const numeric = Number(value);
     if (!Number.isFinite(numeric)) {
       return { id: index, value, type: "miss" };
     }
-    if (numeric === 6) return { id: index, value: numeric, type: "crit" };
+    if (numeric >= critThreshold) {
+      return { id: index, value: numeric, type: "crit" };
+    }
     if (numeric >= threshold) return { id: index, value: numeric, type: "hit" };
     return { id: index, value: numeric, type: "miss" };
   });
@@ -42,15 +44,16 @@ function DefenseAllocationModal({
   defenseDice,
   hitThreshold,
   saveThreshold,
+  attackCritThreshold,
   onClose,
   onConfirm,
 }) {
   const attackEntries = useMemo(
-    () => classifyDice(attackDice, hitThreshold),
-    [attackDice, hitThreshold],
+    () => classifyDice(attackDice, hitThreshold, attackCritThreshold ?? 6),
+    [attackDice, hitThreshold, attackCritThreshold],
   );
   const defenseEntries = useMemo(
-    () => classifyDice(defenseDice, saveThreshold),
+    () => classifyDice(defenseDice, saveThreshold, 6),
     [defenseDice, saveThreshold],
   );
 

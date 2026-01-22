@@ -77,6 +77,45 @@ export const validateGameIntent = (state, event) => {
       break;
     }
 
+    case "START_RANGED_ATTACK": {
+      const { attackingOperativeId, defendingOperativeId } = event.payload || {};
+      if (attackingOperativeId && !hasUnit(state, attackingOperativeId)) {
+        pushIssue(issues, "Attacking unit not found.", {
+          unitId: attackingOperativeId,
+        });
+      }
+      if (defendingOperativeId && !hasUnit(state, defendingOperativeId)) {
+        pushIssue(issues, "Defending unit not found.", {
+          unitId: defendingOperativeId,
+        });
+      }
+      break;
+    }
+
+    case "SET_ATTACK_ROLL": {
+      const { roll } = event.payload || {};
+      if (!Array.isArray(roll)) pushIssue(issues, "Attack roll must be an array.");
+      break;
+    }
+
+    case "SET_DEFENSE_ROLL": {
+      const { roll } = event.payload || {};
+      if (!Array.isArray(roll)) pushIssue(issues, "Defense roll must be an array.");
+      break;
+    }
+
+    case "LOCK_ATTACK_ROLL":
+    case "LOCK_DEFENSE_ROLL":
+    case "SET_COMBAT_STAGE":
+      break;
+
+    case "SET_BLOCKS_RESULT":
+      break;
+
+    case "RESOLVE_COMBAT":
+    case "CLEAR_COMBAT_STATE":
+      break;
+
     default:
       pushIssue(issues, `Unknown event type: ${event.type}`);
       break;

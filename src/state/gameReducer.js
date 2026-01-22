@@ -1,5 +1,31 @@
 import { createLogEntry } from "./actionCreator";
 
+export const COMBAT_STAGES = {
+	ATTACK_ROLLING: "ATTACK_ROLLING",
+	ATTACK_LOCKED: "ATTACK_LOCKED",
+	DEFENSE_ROLLING: "DEFENSE_ROLLING",
+	DEFENSE_LOCKED: "DEFENSE_LOCKED",
+	BLOCKS_RESOLVING: "BLOCKS_RESOLVING",
+	READY_TO_RESOLVE_DAMAGE: "READY_TO_RESOLVE_DAMAGE",
+	DONE: "DONE",
+};
+
+export const initialCombatState = {
+	attackerId: null,
+	defenderId: null,
+	attackingOperativeId: null,
+	defendingOperativeId: null,
+	weaponId: null,
+	weaponProfile: null,
+	stage: COMBAT_STAGES.ATTACK_ROLLING,
+	attackRoll: [],
+	attackLocked: false,
+	defenseRoll: [],
+	defenseLocked: false,
+	blocksResolved: false,
+	blocks: null,
+};
+
 function clamp(n, min, max) {
 	return Math.max(min, Math.min(max, n));
 }
@@ -58,6 +84,140 @@ function applyDamageToState(state, id, amount) {
 
 export function gameReducer(state, action) {
 	switch (action.type) {
+		case "START_RANGED_ATTACK": {
+			const {
+				attackerId,
+				defenderId,
+				attackingOperativeId,
+				defendingOperativeId,
+				weaponId,
+				weaponProfile,
+			} = action.payload || {};
+
+			return {
+				...state,
+				combatState: {
+					...initialCombatState,
+					attackerId: attackerId ?? null,
+					defenderId: defenderId ?? null,
+					attackingOperativeId: attackingOperativeId ?? null,
+					defendingOperativeId: defendingOperativeId ?? null,
+					weaponId: weaponId ?? null,
+					weaponProfile: weaponProfile ?? null,
+					stage: COMBAT_STAGES.ATTACK_ROLLING,
+					attackRoll: [],
+					attackLocked: false,
+					defenseRoll: [],
+					defenseLocked: false,
+					blocksResolved: false,
+					blocks: null,
+				},
+			};
+		}
+
+			case "SET_ATTACK_ROLL": {
+				const { roll } = action.payload || {};
+				if (!Array.isArray(roll)) return state;
+				if (state.combatState?.stage !== COMBAT_STAGES.ATTACK_ROLLING) return state;
+				if (state.combatState?.attackLocked) return state;
+				return {
+					...state,
+					combatState: {
+						...state.combatState,
+						attackRoll: roll,
+						attackLocked: false,
+					},
+				};
+			}
+
+			case "LOCK_ATTACK_ROLL": {
+				if (state.combatState?.stage !== COMBAT_STAGES.ATTACK_ROLLING) return state;
+				if (state.combatState?.attackLocked) return state;
+				return {
+					...state,
+					combatState: {
+						...state.combatState,
+						attackLocked: true,
+						stage: COMBAT_STAGES.ATTACK_LOCKED,
+					},
+				};
+			}
+
+			case "SET_DEFENSE_ROLL": {
+				const { roll } = action.payload || {};
+				if (!Array.isArray(roll)) return state;
+				if (state.combatState?.stage !== COMBAT_STAGES.DEFENSE_ROLLING) return state;
+				if (state.combatState?.defenseLocked) return state;
+				return {
+					...state,
+					combatState: {
+						...state.combatState,
+						defenseRoll: roll,
+						defenseLocked: false,
+					},
+				};
+			}
+
+			case "LOCK_DEFENSE_ROLL": {
+				if (state.combatState?.stage !== COMBAT_STAGES.DEFENSE_ROLLING) return state;
+				if (state.combatState?.defenseLocked) return state;
+				return {
+					...state,
+					combatState: {
+						...state.combatState,
+						defenseLocked: true,
+						stage: COMBAT_STAGES.DEFENSE_LOCKED,
+					},
+				};
+			}
+
+			case "SET_BLOCKS_RESULT": {
+				const { blocks } = action.payload || {};
+				if (state.combatState?.stage !== COMBAT_STAGES.BLOCKS_RESOLVING) return state;
+				return {
+					...state,
+					combatState: {
+						...state.combatState,
+						blocks: blocks ?? null,
+						blocksResolved: true,
+						attackRoll: [],
+						defenseRoll: [],
+						stage: COMBAT_STAGES.READY_TO_RESOLVE_DAMAGE,
+					},
+				};
+			}
+
+			case "RESOLVE_COMBAT": {
+				if (state.combatState?.stage !== COMBAT_STAGES.READY_TO_RESOLVE_DAMAGE) {
+					return state;
+				}
+				return {
+					...state,
+					combatState: {
+						...state.combatState,
+						stage: COMBAT_STAGES.DONE,
+					},
+				};
+			}
+
+			case "CLEAR_COMBAT_STATE": {
+				return {
+					...state,
+					combatState: initialCombatState,
+				};
+			}
+
+			case "SET_COMBAT_STAGE": {
+				const { stage } = action.payload || {};
+				if (!Object.values(COMBAT_STAGES).includes(stage)) return state;
+				return {
+					...state,
+					combatState: {
+						...state.combatState,
+						stage,
+					},
+				};
+			}
 		case "UNDO": {
 			if (state.log.cursor <= 0) return state;
 			const nextCursor = state.log.cursor - 1;
