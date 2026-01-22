@@ -27,6 +27,9 @@ function makeCtx({
   weapon = { atk: 4, hit: 4 },
   wr = [],
   attackDice = [],
+  defenseDice = [],
+  coverBlocks = [],
+  eligibleBlocks = [],
   inputs = {},
   modifiers = {},
   log = [],
@@ -35,6 +38,9 @@ function makeCtx({
     weapon,
     weaponRules: wr,
     attackDice,
+    defenseDice,
+    coverBlocks,
+    eligibleBlocks,
     inputs,
     modifiers,
     log,
@@ -123,7 +129,7 @@ describe("weapon rules engine", () => {
         });
         runWeaponRuleHook(ctx, "ON_ROLL_ATTACK");
         // Should reroll 2s (largest group)
-        expect(ctx.attackDice.map((d) => d.value.slice ? d.value : d.value)).to.deep.equal([6, 2, 5, 1, 1, 3, 4, 5]);
+        expect(ctx.attackDice.map((d) => d.value)).to.deep.equal([6, 2, 5, 1, 1, 3, 4, 5]);
         expect(countTagged(ctx.attackDice, "rerolled")).to.equal(3);
       } finally {
         restore();
@@ -395,6 +401,217 @@ describe("weapon rules engine", () => {
       } finally {
         restore();
       }
+    });
+  });
+
+  describe("Brutal", () => {
+    it("blocks only with crits", () => {
+      // Given: Weapon has brutal, defender has normal and crit successes, attacker has retained successes
+      const ctx = makeCtx({
+        weapon: { atk: 3, hit: 4 },
+        wr: [{ id: "brutal" }],
+        attackDice: [
+          { value: 5, tags: ["retained"] },
+          { value: 6, tags: ["retained"] },
+        ],
+        defenseDice: [
+          { value: 5, tags: ["success"] }, // normal success
+          { value: 6, tags: ["crit"] },    // crit success
+        ],
+      });
+      // When: resolve blocks (where brutal applies)
+      runWeaponRuleHook(ctx, "ON_RESOLVE_BLOCKS");
+      // Then: only crits are eligible to block
+      expect(ctx.eligibleBlocks.length).to.equal(1);
+      expect(ctx.eligibleBlocks[0].value).to.equal(6);
+      expect(ctx.eligibleBlocks[0].tags).to.include("crit");
+    });
+
+    it("no crits means no blocks", () => {
+      // Given: Weapon has brutal, defender has only normal successes, attacker has retained successes
+      const ctx = makeCtx({
+        weapon: { atk: 2, hit: 4 },
+        wr: [{ id: "brutal" }],
+        attackDice: [
+          { value: 5, tags: ["retained"] },
+          { value: 6, tags: ["retained"] },
+        ],
+        defenseDice: [
+          { value: 5, tags: ["success"] }, // normal success
+          { value: 5, tags: ["success"] }, // normal success
+        ],
+      });
+      // When: resolve blocks
+      runWeaponRuleHook(ctx, "ON_RESOLVE_BLOCKS");
+      // Then: no eligible blocks
+      expect(ctx.eligibleBlocks).to.deep.equal([]);
+      // Attacker's retained dice remain unchanged
+      expect(ctx.attackDice.filter(d => d.tags.includes("retained"))).to.have.length(2);
+    });
+
+    it("crits still work normally", () => {
+      // Given: Weapon has brutal, defender has at least one crit, attacker has hits/crits
+      const ctx = makeCtx({
+        weapon: { atk: 3, hit: 4 },
+        wr: [{ id: "brutal" }],
+        attackDice: [
+          { value: 5, tags: ["retained"] }, // normal hit
+          { value: 6, tags: ["retained", "crit"] }, // crit
+        ],
+        defenseDice: [
+          { value: 6, tags: ["crit"] }, // crit success
+        ],
+      });
+      // When: resolve blocks
+      runWeaponRuleHook(ctx, "ON_RESOLVE_BLOCKS");
+      // Then: crit block is eligible and can block a hit or crit as per normal rules
+      // (Assume engine allows crit to block crit or hit)
+      expect(ctx.eligibleBlocks).to.deep.equal([
+        { value: 6, tags: ["crit"] }
+      ]);
+      // Optionally, check that attack dice are still present (not canceled yet)
+      expect(ctx.attackDice.filter(d => d.tags.includes("retained"))).to.have.length(2);
+    });
+
+    it("Brutal applies only to the defender", () => {
+      // Given: Weapon has brutal, defender has only normal successes
+      const ctx = makeCtx({
+        weapon: { atk: 2, hit: 4 },
+        wr: [{ id: "brutal" }],
+        attackDice: [
+          { value: 5, tags: ["retained"] }, // normal hit
+          { value: 6, tags: ["retained", "crit"] }, // crit
+        ],
+        defenseDice: [
+          { value: 5, tags: ["success"] }, // normal success
+        ],
+      });
+      // When: resolve blocks
+      runWeaponRuleHook(ctx, "ON_RESOLVE_BLOCKS");
+      // Then: defender's eligible blocks is empty
+      expect(ctx.eligibleBlocks).to.deep.equal([]);
+      // Attacker's dice are unchanged (no accidental filtering)
+      expect(ctx.attackDice).to.deep.equal([
+        { value: 5, tags: ["retained"] },
+        { value: 6, tags: ["retained", "crit"] }
+      ]);
+    });
+
+    it("Brutal is scoped to this attack only", () => {
+      // First attack: with brutal
+      const ctx1 = makeCtx({
+        weapon: { atk: 2, hit: 4 },
+        wr: [{ id: "brutal" }],
+        attackDice: [
+          { value: 5, tags: ["retained"] },
+          { value: 6, tags: ["retained", "crit"] },
+        ],
+        defenseDice: [
+          { value: 5, tags: ["success"] }, // normal success
+          { value: 6, tags: ["crit"] },    // crit success
+        ],
+      });
+      runWeaponRuleHook(ctx1, "ON_RESOLVE_BLOCKS");
+      // Only crit block allowed
+      expect(ctx1.eligibleBlocks).to.deep.equal([
+        { value: 6, tags: ["crit"] }
+      ]);
+
+      // Second attack: WITHOUT brutal
+      const ctx2 = makeCtx({
+        weapon: { atk: 2, hit: 4 },
+        wr: [], // no brutal
+        attackDice: [
+          { value: 5, tags: ["retained"] },
+          { value: 6, tags: ["retained", "crit"] },
+        ],
+        // Pretend your core engine already built eligible blocks
+        eligibleBlocks: [
+          { value: 5, tags: ["success"] },
+          { value: 6, tags: ["crit"] },
+        ],
+      });
+
+      runWeaponRuleHook(ctx2, "ON_RESOLVE_BLOCKS");
+
+      // No brutal => engine should not change eligibleBlocks
+      expect(ctx2.eligibleBlocks).to.deep.equal([
+        { value: 5, tags: ["success"] },
+        { value: 6, tags: ["crit"] },
+      ]);
+    });
+
+    it("Brutal + Ceaseless does not interfere", () => {
+      // Given: Weapon has brutal and ceaseless, defender has normal and crit, attacker has misses
+      const ctx = makeCtx({
+        weapon: { atk: 4, hit: 4 },
+        wr: [{ id: "brutal" }, { id: "ceaseless" }],
+        attackDice: [
+          { value: 1, tags: [] }, // miss (should be rerolled by ceaseless)
+          { value: 2, tags: [] }, // miss (should be rerolled by ceaseless)
+          { value: 5, tags: ["retained"] }, // hit
+          { value: 6, tags: ["retained", "crit"] }, // crit
+        ],
+        defenseDice: [
+          { value: 5, tags: ["success"] }, // normal success
+          { value: 6, tags: ["crit"] },    // crit success
+        ],
+      });
+      // When: reroll misses (ceaseless), then resolve blocks (brutal)
+      runWeaponRuleHook(ctx, "ON_ROLL_ATTACK");
+      runWeaponRuleHook(ctx, "ON_RESOLVE_BLOCKS");
+      // Then: ceaseless rerolled misses (simulate rerolled values)
+      // (We can't check reroll result without stubbing, but can check tags)
+      expect(ctx.attackDice.filter(d => d.tags.includes("rerolled")).length).to.be.at.least(1);
+      // Brutal: only crit block allowed
+      expect(ctx.eligibleBlocks).to.deep.equal([
+        { value: 6, tags: ["crit"] }
+      ]);
+    });
+
+    it("Cover saves are NOT blocked by Brutal (if cover is not a 'block die')", () => {
+      // Given: Weapon has brutal, defender is in cover (cover grants auto-retain), no defense crits
+      const ctx = makeCtx({
+        weapon: { atk: 2, hit: 4 },
+        wr: [{ id: "brutal" }],
+        attackDice: [
+          { value: 5, tags: ["retained"] },
+          { value: 6, tags: ["retained", "crit"] },
+        ],
+        defenseDice: [
+          { value: 5, tags: ["success"] }, // normal success
+        ],
+        coverBlocks: [{ source: "cover" }],
+      });
+      // When: resolve blocks (cover applies, then brutal)
+      runWeaponRuleHook(ctx, "ON_RESOLVE_BLOCKS");
+      // Then: cover effect still applies (simulate as a separate eligible block)
+      // Normal defense die is not eligible, but cover is
+      expect(ctx.eligibleBlocks).to.deep.equal([{ source: "cover" }]);
+    });
+
+    it("Brutal logs what it changed", () => {
+      // Given: Weapon has brutal, defender has normal and crit successes
+      const ctx = makeCtx({
+        weapon: { atk: 3, hit: 4 },
+        wr: [{ id: "brutal" }],
+        attackDice: [
+          { value: 5, tags: ["retained"] },
+          { value: 6, tags: ["retained"] },
+        ],
+        defenseDice: [
+          { value: 5, tags: ["success"] }, // normal success
+          { value: 6, tags: ["crit"] },    // crit success
+        ],
+      });
+      // When: resolve blocks (where brutal applies)
+      runWeaponRuleHook(ctx, "ON_RESOLVE_BLOCKS");
+      // Then: log entry exists
+      const logEntry = ctx.log.find(l => l.type === "RULE_BRUTAL");
+      expect(logEntry).to.exist;
+      expect(logEntry.detail).to.include.keys(["removedNormalBlocks", "remainingCritBlocks"]);
+      expect(logEntry.detail.removedNormalBlocks).to.equal(1);
+      expect(logEntry.detail.remainingCritBlocks).to.equal(1);
     });
   });
 });

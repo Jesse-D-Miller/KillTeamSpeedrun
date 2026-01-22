@@ -40,6 +40,7 @@ function DefenseAllocationModal({
   attacker,
   defender,
   weapon,
+  weaponRules = [],
   attackDice,
   defenseDice,
   hitThreshold,
@@ -48,10 +49,33 @@ function DefenseAllocationModal({
   onClose,
   onConfirm,
 }) {
+  // NOTE: weaponRules prop is currently coming through as [] in your app.
+  // Make Brutal detection robust by deriving from weapon.wr/weapon.rules as a fallback.
+  const normalizeRuleId = (id) =>
+    String(id || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, "-");
+
+  const brutalActive = useMemo(() => {
+    const list =
+      Array.isArray(weaponRules) && weaponRules.length > 0
+        ? weaponRules
+        : weapon?.wr ?? weapon?.rules ?? [];
+
+    const arr = Array.isArray(list) ? list : [list];
+
+    return arr.some((r) => {
+      const id = typeof r === "string" ? r : r?.id;
+      return normalizeRuleId(id) === "brutal";
+    });
+  }, [weaponRules, weapon]);
+
   const attackEntries = useMemo(
     () => classifyDice(attackDice, hitThreshold, attackCritThreshold ?? 6),
     [attackDice, hitThreshold, attackCritThreshold],
   );
+
   const defenseEntries = useMemo(
     () => classifyDice(defenseDice, saveThreshold, 6),
     [defenseDice, saveThreshold],
@@ -103,6 +127,9 @@ function DefenseAllocationModal({
     if (!defense || defense.type === "miss") return false;
     if (!attack || attack.type === "miss") return false;
 
+    // 🔥 BRUTAL: only crits can be used to block
+    if (brutalActive && defense.type !== "crit") return false;
+
     const counts = allocationCounts[attack.id] || { crits: 0, hits: 0 };
 
     if (attack.type === "hit") {
@@ -143,7 +170,9 @@ function DefenseAllocationModal({
   };
 
   const successfulDefenseIds = defenseEntries
-    .filter((entry) => entry.type === "hit" || entry.type === "crit")
+    .filter((entry) =>
+      brutalActive ? entry.type === "crit" : entry.type === "hit" || entry.type === "crit"
+    )
     .map((entry) => entry.id);
 
   const computeRemaining = () => {
@@ -209,6 +238,11 @@ function DefenseAllocationModal({
               <div className="kt-modal__sidebar-empty">
                 Assign defense dice to block hits.
               </div>
+              {brutalActive && (
+                <div className="kt-modal__notice">
+                  Brutal: only CRITS can block.
+                </div>
+              )}
             </div>
             <div className="kt-modal__sidebar-footer">
               <button
@@ -298,6 +332,7 @@ function DefenseAllocationModal({
                     const isSelected = selectedDefenseId === defense.id;
                     const allocatedAttackId = allocations[defense.id];
                     const isAllocated = allocatedAttackId != null;
+                    const disabledByBrutal = brutalActive && defense.type === "hit" && !isAllocated;
 
                     return (
                       <button
@@ -305,14 +340,17 @@ function DefenseAllocationModal({
                         type="button"
                         className={`allocation__die allocation__die--${defense.type} ${
                           isSelected ? "allocation__die--selected" : ""
-                        } ${isAllocated ? "allocation__die--allocated" : ""}`}
-                        draggable={defense.type !== "miss" && !isAllocated}
+                        } ${isAllocated ? "allocation__die--allocated" : ""} ${
+                          disabledByBrutal ? "allocation__die--disabled" : ""
+                        }`}
+                        draggable={defense.type !== "miss" && !isAllocated && !disabledByBrutal}
                         onDragStart={() => {
-                          if (defense.type === "miss" || isAllocated) return;
+                          if (defense.type === "miss" || isAllocated || disabledByBrutal) return;
                           setDraggedDefenseId(defense.id);
                         }}
                         onDragEnd={() => setDraggedDefenseId(null)}
                         onClick={() => {
+                          if (disabledByBrutal) return;
                           if (isAllocated) {
                             removeAllocation(defense.id);
                             return;

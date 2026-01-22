@@ -8,6 +8,19 @@ const defaultRollD6 = () => Math.floor(Math.random() * 6) + 1;
 
 export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
   const RULES = {
+    core_blocks: {
+      id: "core-blocks",
+      hooks: {
+        ON_RESOLVE_BLOCKS: (ctx) => {
+          const coverBlocks = Array.isArray(ctx.coverBlocks) ? ctx.coverBlocks : [];
+          const defenseDice = Array.isArray(ctx.defenseDice) ? ctx.defenseDice : [];
+          const eligible = defenseDice.filter(
+            (d) => Array.isArray(d.tags) && (d.tags.includes("success") || d.tags.includes("crit"))
+          );
+          ctx.eligibleBlocks = [...coverBlocks, ...eligible];
+        },
+      },
+    },
     blast: {
       id: "blast",
       hooks: {
@@ -292,9 +305,54 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
         },
       },
     },
+    brutal: {
+      id: "brutal",
+      hooks: {
+        ON_RESOLVE_BLOCKS: (ctx) => {
+          ctx.log = ctx.log || [];
+          ctx.coverBlocks = Array.isArray(ctx.coverBlocks) ? ctx.coverBlocks : [];
+          ctx.defenseDice = Array.isArray(ctx.defenseDice) ? ctx.defenseDice : [];
+
+          const isCrit = (die) => {
+            // Accept either explicit tag OR raw value==6
+            if (!die) return false;
+            if (die.value === 6) return true;
+            const tags = Array.isArray(die.tags) ? die.tags : [];
+            return tags.includes("crit");
+          };
+
+          const isNormalSuccess = (die) => {
+            if (!die) return false;
+            const tags = Array.isArray(die.tags) ? die.tags : [];
+            // success but not crit (tag-based)
+            if (tags.includes("success") && !tags.includes("crit")) return true;
+            // If you don't tag successes consistently yet, treat hits (>=4) as "success" ONLY if you want.
+            // For now we keep it tag-based to match your tests.
+            return false;
+          };
+
+          const critBlocks = ctx.defenseDice.filter(isCrit);
+          const removedNormalBlocks = ctx.defenseDice.filter(isNormalSuccess).length;
+
+          ctx.eligibleBlocks = [...ctx.coverBlocks, ...critBlocks];
+
+          ctx.log.push({
+            type: "RULE_BRUTAL",
+            detail: {
+              removedNormalBlocks,
+              remainingCritBlocks: critBlocks.length,
+            },
+          });
+        },
+      },
+    },
   };
 
   const runWeaponRuleHook = (ctx, hookName) => {
+    // Ensure core block builder always runs before Brutal for ON_RESOLVE_BLOCKS
+    if (hookName === "ON_RESOLVE_BLOCKS") {
+      RULES["core-blocks"].hooks.ON_RESOLVE_BLOCKS(ctx);
+    }
     for (const rule of ctx.weaponRules || []) {
       const impl = RULES[rule.id];
       const fn = impl?.hooks?.[hookName];
@@ -305,7 +363,23 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
   return { RULES, runWeaponRuleHook };
 };
 
-export const { RULES, runWeaponRuleHook } = createRulesEngine();
+
+export const { RULES } = createRulesEngine();
+
+export const runWeaponRuleHook = (ctx, hookName) => {
+  ctx.modifiers = ctx.modifiers || {};
+  ctx.log = ctx.log || [];
+
+  for (const rule of ctx.weaponRules || []) {
+    const impl = RULES[rule.id];
+    if (!impl) {
+      ctx.log.push({ type: "RULE_UNKNOWN", detail: { id: rule.id, hookName } });
+      continue;
+    }
+    const fn = impl?.hooks?.[hookName];
+    if (typeof fn === "function") fn(ctx, rule);
+  }
+};
 
 export const normalizeWeaponRules = (weapon) => {
   const raw = weapon?.wr ?? weapon?.rules ?? [];

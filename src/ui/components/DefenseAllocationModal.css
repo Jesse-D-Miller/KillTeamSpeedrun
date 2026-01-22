@@ -1,3 +1,7 @@
+.allocation__die--disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
 .allocation {
   display: grid;
   gap: 16px;
