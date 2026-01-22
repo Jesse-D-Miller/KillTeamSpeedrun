@@ -2,7 +2,11 @@
 import { expect } from "chai";
 
 // Adjust this import path to wherever your rules file is:
-import { RULES, runWeaponRuleHook, normalizeWeaponRules } from "../src/engine/rules/weaponRules.js";
+import {
+  RULES,
+  runWeaponRuleHook,
+  normalizeWeaponRules,
+} from "../src/engine/rules/weaponRules.js";
 
 /**
  * Deterministic dice roller for tests.
@@ -129,7 +133,9 @@ describe("weapon rules engine", () => {
         });
         runWeaponRuleHook(ctx, "ON_ROLL_ATTACK");
         // Should reroll 2s (largest group)
-        expect(ctx.attackDice.map((d) => d.value)).to.deep.equal([6, 2, 5, 1, 1, 3, 4, 5]);
+        expect(ctx.attackDice.map((d) => d.value)).to.deep.equal([
+          6, 2, 5, 1, 1, 3, 4, 5,
+        ]);
         expect(countTagged(ctx.attackDice, "rerolled")).to.equal(3);
       } finally {
         restore();
@@ -156,7 +162,9 @@ describe("weapon rules engine", () => {
         });
         runWeaponRuleHook(ctx, "ON_ROLL_ATTACK");
         // Should reroll 1s (lowest value among tied largest groups)
-        expect(ctx.attackDice.map((d) => d.value)).to.deep.equal([4, 5, 2, 2, 3, 4, 5, 6]);
+        expect(ctx.attackDice.map((d) => d.value)).to.deep.equal([
+          4, 5, 2, 2, 3, 4, 5, 6,
+        ]);
         expect(countTagged(ctx.attackDice, "rerolled")).to.equal(2);
       } finally {
         restore();
@@ -166,12 +174,7 @@ describe("weapon rules engine", () => {
     it("does nothing if no misses", () => {
       const ctx = makeCtx({
         weapon: { atk: 4, hit: 4 },
-        attackDice: [
-          { value: 4 },
-          { value: 5 },
-          { value: 6 },
-          { value: 6 },
-        ],
+        attackDice: [{ value: 4 }, { value: 5 }, { value: 6 }, { value: 6 }],
         wr: [{ id: "ceaseless" }],
       });
       runWeaponRuleHook(ctx, "ON_ROLL_ATTACK");
@@ -393,7 +396,9 @@ describe("weapon rules engine", () => {
         });
         runWeaponRuleHook(ctx, "ON_ROLL_ATTACK");
         // Ceaseless: reroll 1s (lowest value among tied largest groups)
-        expect(ctx.attackDice.map((d) => d.value)).to.deep.equal([6, 5, 2, 2, 3, 4]);
+        expect(ctx.attackDice.map((d) => d.value)).to.deep.equal([
+          6, 5, 2, 2, 3, 4,
+        ]);
         // Lethal: sets threshold
         expect(ctx.modifiers.lethalThreshold).to.equal(5);
         expect(ctx.log.some((l) => l.type === "RULE_CEASELESS")).to.equal(true);
@@ -401,6 +406,176 @@ describe("weapon rules engine", () => {
       } finally {
         restore();
       }
+    });
+  });
+
+  describe("Devastating X", () => {
+    it("sanity: devastating rule is registered", () => {
+      expect(RULES.devastating).to.exist;
+      expect(RULES.devastating.hooks).to.have.property("ON_LOCK_IN_ATTACK");
+    });
+
+    it("immediately inflicts X damage per retained crit when attack is locked in", () => {
+      const ctx = makeCtx({
+        weapon: { atk: 4, hit: 4 },
+        wr: [{ id: "devastating", value: 3 }],
+        inputs: { attackLockedIn: true },
+        attackDice: [
+          { value: 6, tags: ["retained", "crit"] }, // crit retained
+          { value: 6, tags: ["retained", "crit"] }, // crit retained
+          { value: 5, tags: ["retained"] }, // hit retained (should not count)
+          { value: 2, tags: [] }, // miss
+        ],
+      });
+
+      // Target state for tests (engine should read/write this)
+      ctx.target = { id: "t1", woundsCurrent: 10, woundsMax: 10 };
+
+      // Keep a snapshot to ensure successes aren’t discarded/changed
+      const beforeDice = ctx.attackDice.map((d) => ({
+        ...d,
+        tags: [...(d.tags || [])],
+      }));
+
+      runWeaponRuleHook(ctx, "ON_LOCK_IN_ATTACK");
+
+      // 2 retained crits * 3 = 6 damage
+      expect(ctx.target.woundsCurrent).to.equal(4);
+
+      // Dice unchanged (devastating does not discard successes)
+      expect(ctx.attackDice).to.deep.equal(beforeDice);
+
+      // Log entry exists
+      const logEntry = ctx.log.find((l) => l.type === "RULE_DEVASTATING");
+      expect(logEntry).to.exist;
+      expect(logEntry.detail).to.include({
+        x: 3,
+        retainedCrits: 2,
+        damage: 6,
+        woundsBefore: 10,
+        woundsAfter: 4,
+      });
+    });
+
+    it("counts ONLY retained crits (not unretained crits, not hits)", () => {
+      const ctx = makeCtx({
+        weapon: { atk: 4, hit: 4 },
+        wr: [{ id: "devastating", value: 3 }],
+        inputs: { attackLockedIn: true },
+        attackDice: [
+          { value: 6, tags: ["retained", "crit"] }, // counts
+          { value: 6, tags: ["crit"] }, // NOT retained, should not count
+          { value: 5, tags: ["retained"] }, // hit retained, should not count
+          { value: 4, tags: ["retained"] }, // hit retained, should not count
+        ],
+      });
+
+      ctx.target = { id: "t1", woundsCurrent: 10, woundsMax: 10 };
+
+      runWeaponRuleHook(ctx, "ON_LOCK_IN_ATTACK");
+
+      // Only 1 retained crit => 3 damage
+      expect(ctx.target.woundsCurrent).to.equal(7);
+
+      const logEntry = ctx.log.find((l) => l.type === "RULE_DEVASTATING");
+      expect(logEntry).to.exist;
+      expect(logEntry.detail.retainedCrits).to.equal(1);
+      expect(logEntry.detail.damage).to.equal(3);
+    });
+
+    it("does nothing if there are no retained crits", () => {
+      const ctx = makeCtx({
+        weapon: { atk: 4, hit: 4 },
+        wr: [{ id: "devastating", value: 2 }],
+        inputs: { attackLockedIn: true },
+        attackDice: [
+          { value: 6, tags: ["crit"] }, // crit but NOT retained
+          { value: 5, tags: ["retained"] }, // hit retained
+          { value: 4, tags: [] }, // hit (depending on hit threshold) but not tagged retained/crit
+        ],
+      });
+
+      ctx.target = { id: "t1", woundsCurrent: 10, woundsMax: 10 };
+
+      runWeaponRuleHook(ctx, "ON_LOCK_IN_ATTACK");
+
+      expect(ctx.target.woundsCurrent).to.equal(10);
+
+      // Either no log entry, or a log entry with 0 damage.
+      // This asserts the safe version: if an entry exists, damage must be 0.
+      const logEntry = ctx.log.find((l) => l.type === "RULE_DEVASTATING");
+      if (logEntry) {
+        expect(logEntry.detail.damage).to.equal(0);
+      }
+    });
+
+    it("can kill the target immediately and ends combat early", () => {
+      const ctx = makeCtx({
+        weapon: { atk: 4, hit: 4 },
+        wr: [{ id: "devastating", value: 3 }],
+        inputs: { attackLockedIn: true },
+        attackDice: [
+          { value: 6, tags: ["retained", "crit"] }, // 2 retained crits => 6 dmg
+          { value: 6, tags: ["retained", "crit"] },
+        ],
+      });
+
+      ctx.target = { id: "t1", woundsCurrent: 5, woundsMax: 10 };
+
+      runWeaponRuleHook(ctx, "ON_LOCK_IN_ATTACK");
+
+      // Clamp at 0
+      expect(ctx.target.woundsCurrent).to.equal(0);
+
+      // Engine should mark combat ended and target killed in a consistent place
+      // (We standardize on ctx.modifiers flags for tests)
+      expect(ctx.modifiers.combatEnded).to.equal(true);
+      expect(ctx.modifiers.targetKilled).to.equal(true);
+
+      const logEntry = ctx.log.find((l) => l.type === "RULE_DEVASTATING");
+      expect(logEntry).to.exist;
+      expect(logEntry.detail.killed).to.equal(true);
+    });
+
+    it("does not apply twice if the lock-in hook is run again (scoped to this attack)", () => {
+      const ctx = makeCtx({
+        weapon: { atk: 4, hit: 4 },
+        wr: [{ id: "devastating", value: 2 }],
+        inputs: { attackLockedIn: true },
+        attackDice: [{ value: 6, tags: ["retained", "crit"] }], // 1 retained crit => 2 dmg
+        modifiers: {},
+      });
+
+      ctx.target = { id: "t1", woundsCurrent: 10, woundsMax: 10 };
+
+      runWeaponRuleHook(ctx, "ON_LOCK_IN_ATTACK");
+      expect(ctx.target.woundsCurrent).to.equal(8);
+
+      // Run again (should not double-dip)
+      runWeaponRuleHook(ctx, "ON_LOCK_IN_ATTACK");
+      expect(ctx.target.woundsCurrent).to.equal(8);
+
+      expect(ctx.modifiers.devastatingApplied).to.equal(true);
+
+      const entries = ctx.log.filter((l) => l.type === "RULE_DEVASTATING");
+      expect(entries.length).to.equal(1);
+    });
+
+    it("does nothing if attack is not locked in (guarded by input flag)", () => {
+      const ctx = makeCtx({
+        weapon: { atk: 4, hit: 4 },
+        wr: [{ id: "devastating", value: 3 }],
+        inputs: { attackLockedIn: false }, // not locked in
+        attackDice: [{ value: 6, tags: ["retained", "crit"] }],
+      });
+
+      ctx.target = { id: "t1", woundsCurrent: 10, woundsMax: 10 };
+
+      runWeaponRuleHook(ctx, "ON_LOCK_IN_ATTACK");
+      expect(ctx.target.woundsCurrent).to.equal(10);
+
+      const logEntry = ctx.log.find((l) => l.type === "RULE_DEVASTATING");
+      expect(logEntry).to.not.exist;
     });
   });
 
@@ -416,7 +591,7 @@ describe("weapon rules engine", () => {
         ],
         defenseDice: [
           { value: 5, tags: ["success"] }, // normal success
-          { value: 6, tags: ["crit"] },    // crit success
+          { value: 6, tags: ["crit"] }, // crit success
         ],
       });
       // When: resolve blocks (where brutal applies)
@@ -446,7 +621,9 @@ describe("weapon rules engine", () => {
       // Then: no eligible blocks
       expect(ctx.eligibleBlocks).to.deep.equal([]);
       // Attacker's retained dice remain unchanged
-      expect(ctx.attackDice.filter(d => d.tags.includes("retained"))).to.have.length(2);
+      expect(
+        ctx.attackDice.filter((d) => d.tags.includes("retained")),
+      ).to.have.length(2);
     });
 
     it("crits still work normally", () => {
@@ -466,11 +643,11 @@ describe("weapon rules engine", () => {
       runWeaponRuleHook(ctx, "ON_RESOLVE_BLOCKS");
       // Then: crit block is eligible and can block a hit or crit as per normal rules
       // (Assume engine allows crit to block crit or hit)
-      expect(ctx.eligibleBlocks).to.deep.equal([
-        { value: 6, tags: ["crit"] }
-      ]);
+      expect(ctx.eligibleBlocks).to.deep.equal([{ value: 6, tags: ["crit"] }]);
       // Optionally, check that attack dice are still present (not canceled yet)
-      expect(ctx.attackDice.filter(d => d.tags.includes("retained"))).to.have.length(2);
+      expect(
+        ctx.attackDice.filter((d) => d.tags.includes("retained")),
+      ).to.have.length(2);
     });
 
     it("Brutal applies only to the defender", () => {
@@ -493,7 +670,7 @@ describe("weapon rules engine", () => {
       // Attacker's dice are unchanged (no accidental filtering)
       expect(ctx.attackDice).to.deep.equal([
         { value: 5, tags: ["retained"] },
-        { value: 6, tags: ["retained", "crit"] }
+        { value: 6, tags: ["retained", "crit"] },
       ]);
     });
 
@@ -508,14 +685,12 @@ describe("weapon rules engine", () => {
         ],
         defenseDice: [
           { value: 5, tags: ["success"] }, // normal success
-          { value: 6, tags: ["crit"] },    // crit success
+          { value: 6, tags: ["crit"] }, // crit success
         ],
       });
       runWeaponRuleHook(ctx1, "ON_RESOLVE_BLOCKS");
       // Only crit block allowed
-      expect(ctx1.eligibleBlocks).to.deep.equal([
-        { value: 6, tags: ["crit"] }
-      ]);
+      expect(ctx1.eligibleBlocks).to.deep.equal([{ value: 6, tags: ["crit"] }]);
 
       // Second attack: WITHOUT brutal
       const ctx2 = makeCtx({
@@ -554,7 +729,7 @@ describe("weapon rules engine", () => {
         ],
         defenseDice: [
           { value: 5, tags: ["success"] }, // normal success
-          { value: 6, tags: ["crit"] },    // crit success
+          { value: 6, tags: ["crit"] }, // crit success
         ],
       });
       // When: reroll misses (ceaseless), then resolve blocks (brutal)
@@ -562,11 +737,11 @@ describe("weapon rules engine", () => {
       runWeaponRuleHook(ctx, "ON_RESOLVE_BLOCKS");
       // Then: ceaseless rerolled misses (simulate rerolled values)
       // (We can't check reroll result without stubbing, but can check tags)
-      expect(ctx.attackDice.filter(d => d.tags.includes("rerolled")).length).to.be.at.least(1);
+      expect(
+        ctx.attackDice.filter((d) => d.tags.includes("rerolled")).length,
+      ).to.be.at.least(1);
       // Brutal: only crit block allowed
-      expect(ctx.eligibleBlocks).to.deep.equal([
-        { value: 6, tags: ["crit"] }
-      ]);
+      expect(ctx.eligibleBlocks).to.deep.equal([{ value: 6, tags: ["crit"] }]);
     });
 
     it("Cover saves are NOT blocked by Brutal (if cover is not a 'block die')", () => {
@@ -601,15 +776,18 @@ describe("weapon rules engine", () => {
         ],
         defenseDice: [
           { value: 5, tags: ["success"] }, // normal success
-          { value: 6, tags: ["crit"] },    // crit success
+          { value: 6, tags: ["crit"] }, // crit success
         ],
       });
       // When: resolve blocks (where brutal applies)
       runWeaponRuleHook(ctx, "ON_RESOLVE_BLOCKS");
       // Then: log entry exists
-      const logEntry = ctx.log.find(l => l.type === "RULE_BRUTAL");
+      const logEntry = ctx.log.find((l) => l.type === "RULE_BRUTAL");
       expect(logEntry).to.exist;
-      expect(logEntry.detail).to.include.keys(["removedNormalBlocks", "remainingCritBlocks"]);
+      expect(logEntry.detail).to.include.keys([
+        "removedNormalBlocks",
+        "remainingCritBlocks",
+      ]);
       expect(logEntry.detail.removedNormalBlocks).to.equal(1);
       expect(logEntry.detail.remainingCritBlocks).to.equal(1);
     });

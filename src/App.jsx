@@ -12,10 +12,17 @@ import Login from "./ui/screens/Login";
 import ArmySelector from "./ui/screens/ArmySelector";
 import UnitSelector from "./ui/screens/UnitSelector";
 import MultiplayerLobby from "./ui/screens/MultiplayerLobby";
-import { gameReducer, initialCombatState, COMBAT_STAGES } from "./state/gameReducer";
+import {
+  gameReducer,
+  initialCombatState,
+  COMBAT_STAGES,
+} from "./state/gameReducer";
 import { createLogEntry } from "./state/actionCreator";
 import { resolveAttack } from "./engine/rules/resolveAttack";
-import { normalizeWeaponRules, runWeaponRuleHook } from "./engine/rules/weaponRules";
+import {
+  normalizeWeaponRules,
+  runWeaponRuleHook,
+} from "./engine/rules/weaponRules";
 import { useEffect, useReducer, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { connectWS } from "./lib/multiplayer";
@@ -177,12 +184,9 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
   const myTeamId = playerSlot === "B" ? "beta" : "alpha";
   const myTeamUnits = myTeamId === "alpha" ? teamAUnits : teamBUnits;
   const selectedUnit =
-    myTeamUnits.find((u) => u.id === selectedUnitId) ??
-    myTeamUnits[0] ??
-    null;
+    myTeamUnits.find((u) => u.id === selectedUnitId) ?? myTeamUnits[0] ?? null;
   const attackerTeamId = selectedUnit?.teamId || myTeamId;
-  const opponentUnits =
-    attackerTeamId === "alpha" ? teamBUnits : teamAUnits;
+  const opponentUnits = attackerTeamId === "alpha" ? teamBUnits : teamAUnits;
 
   const selectedWeaponName =
     selectedUnit?.state?.selectedWeapon || selectedUnit?.weapons?.[0]?.name;
@@ -229,23 +233,23 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
 
   useEffect(() => {
     if (!shootModalOpen) return;
-    if (opponentUnits.length > 0 && !selectedTargetId && !autoSelectTargetRef.current) {
+    if (
+      opponentUnits.length > 0 &&
+      !selectedTargetId &&
+      !autoSelectTargetRef.current
+    ) {
       setSelectedTargetId(opponentUnits[0].id);
       autoSelectTargetRef.current = true;
     }
   }, [shootModalOpen, opponentUnits, selectedTargetId]);
-  
+
   useEffect(() => {
     if (shootModalOpen) return;
     autoSelectTargetRef.current = false;
   }, [shootModalOpen]);
 
   const currentPlayerId = playerSlot || getOrCreatePlayerId();
-  const otherPlayerId = playerSlot
-    ? playerSlot === "A"
-      ? "B"
-      : "A"
-    : null;
+  const otherPlayerId = playerSlot ? (playerSlot === "A" ? "B" : "A") : null;
   const combatState = state.combatState;
   const attackModalOpen =
     [
@@ -374,7 +378,12 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
 
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(
-        JSON.stringify({ type: "EVENT", code: gameCode, slot: playerSlot, event }),
+        JSON.stringify({
+          type: "EVENT",
+          code: gameCode,
+          slot: playerSlot,
+          event,
+        }),
       );
     }
 
@@ -503,12 +512,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
           )}
         </aside>
         <div className="kt-main">
-          <TopBar
-            cp={cp}
-            vp={vp}
-            turningPoint={turningPoint}
-            phase={phase}
-          />
+          <TopBar cp={cp} vp={vp} turningPoint={turningPoint} phase={phase} />
 
           <main className="kt-detail">
             {selectedUnit ? (
@@ -559,7 +563,9 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
         }}
         onToggleSecondary={(id) => {
           setSelectedSecondaryIds((prev) =>
-            prev.includes(id) ? prev.filter((entry) => entry !== id) : [...prev, id],
+            prev.includes(id)
+              ? prev.filter((entry) => entry !== id)
+              : [...prev, id],
           );
         }}
         onClose={() => {
@@ -582,7 +588,9 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
             log: [],
           };
           runWeaponRuleHook(ctx, "ON_DECLARE_ATTACK");
-          const attackQueue = Array.isArray(ctx.attackQueue) ? ctx.attackQueue : [];
+          const attackQueue = Array.isArray(ctx.attackQueue)
+            ? ctx.attackQueue
+            : [];
           const firstTargetId = attackQueue[0]?.targetId ?? selectedTargetId;
           setDefenderId(selectedTargetId);
           logEntry({
@@ -638,8 +646,68 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
         onSetCombatInputs={(inputs) => {
           dispatchCombatEvent("SET_COMBAT_INPUTS", { inputs });
         }}
-        onLockAttack={() => {
-          dispatchCombatEvent("LOCK_ATTACK_ROLL");
+        onLockAttack={(payload) => {
+          // payload comes from DiceInputModal handleLockInAttackClick
+          // { targetId, woundsCurrent, woundsMax, combatEnded, killed, log, modifiers }
+
+          const defenderUnit = defendingOperative;
+
+          // 1) Apply Devastating damage immediately (if present)
+          const dmg = Number(payload?.modifiers?.devastatingDamage ?? 0);
+          if (defenderUnit?.id && dmg > 0) {
+            const oldHealth = Number(defenderUnit?.state?.woundsCurrent);
+            const fallbackOldHealth = Number(payload?.woundsCurrent ?? 0) + dmg;
+            const safeOldHealth = Number.isFinite(oldHealth)
+              ? oldHealth
+              : fallbackOldHealth;
+            const newHealth = Number.isFinite(Number(payload?.woundsCurrent))
+              ? Number(payload?.woundsCurrent)
+              : Math.max(0, safeOldHealth - dmg);
+
+            dispatchIntent({
+              type: "APPLY_DAMAGE",
+              payload: { targetUnitId: defenderUnit.id, damage: dmg },
+            });
+
+            sendMultiplayerEvent("DAMAGE_APPLIED", {
+              targetUnitId: defenderUnit.id,
+              damage: dmg,
+            });
+
+            logEntry({
+              type: "DEVASTATING_APPLIED",
+              summary: `DEVASTATING: ${defenderUnit?.name || "Defender"} took ${dmg} dmg (${safeOldHealth} -> ${newHealth})`,
+              meta: {
+                attackerId: attackingOperative?.id,
+                defenderId: defenderUnit?.id,
+                weaponName: selectedWeapon?.name,
+                damage: dmg,
+                woundsBefore: safeOldHealth,
+                woundsAfter: newHealth,
+                ruleLog: payload?.log ?? [],
+              },
+            });
+          }
+
+          // 2) If Devastating killed the target, end combat immediately
+          if (payload?.killed || payload?.combatEnded) {
+            dispatchCombatEvent("RESOLVE_COMBAT");
+
+            const queue = combatState?.attackQueue || [];
+            const idx = combatState?.currentAttackIndex ?? 0;
+            if (queue.length > 0 && idx < queue.length - 1) {
+              dispatchCombatEvent("ADVANCE_ATTACK_QUEUE");
+            } else {
+              dispatchCombatEvent("CLEAR_COMBAT_STATE");
+            }
+            return;
+          }
+
+          // 3) Otherwise proceed as normal: lock attack and wait for defense
+          dispatchCombatEvent("LOCK_ATTACK_ROLL", {
+            ruleLog: payload?.log ?? [],
+            modifiers: payload?.modifiers ?? {},
+          });
         }}
         readOnly={combatState?.stage !== COMBAT_STAGES.ATTACK_ROLLING}
         statusMessage={
@@ -649,11 +717,11 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
               ? "Defense rolling..."
               : combatState?.stage === COMBAT_STAGES.BLOCKS_RESOLVING
                 ? "Defender is assigning blocks..."
-              : combatState?.stage === COMBAT_STAGES.READY_TO_RESOLVE_DAMAGE
-                ? "Ready to resolve damage."
-                : combatState?.stage === COMBAT_STAGES.DONE
-                  ? "Combat resolved."
-                  : null
+                : combatState?.stage === COMBAT_STAGES.READY_TO_RESOLVE_DAMAGE
+                  ? "Ready to resolve damage."
+                  : combatState?.stage === COMBAT_STAGES.DONE
+                    ? "Combat resolved."
+                    : null
         }
         onAutoRoll={({ attackBefore, defenseDice, ceaseless }) => {
           logRollSequence({ attackBefore, defenseDice, ceaseless });
@@ -669,8 +737,9 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
             const blocks = combatState?.blocks;
             const remainingHits = blocks?.remainingHits ?? 0;
             const remainingCrits = blocks?.remainingCrits ?? 0;
-            const [normalDmg, critDmg] =
-              weapon?.dmg?.split("/").map(Number) ?? [0, 0];
+            const [normalDmg, critDmg] = weapon?.dmg
+              ?.split("/")
+              .map(Number) ?? [0, 0];
             const safeNormalDmg = Number.isFinite(normalDmg) ? normalDmg : 0;
             const safeCritDmg = Number.isFinite(critDmg) ? critDmg : 0;
             const totalDamage =
@@ -771,9 +840,15 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
         defender={defendingOperative || pendingAttack?.defender}
         weapon={combatState?.weaponProfile || pendingAttack?.weapon}
         attackDice={combatState?.attackRoll ?? pendingAttack?.attackDice ?? []}
-        defenseDice={combatState?.defenseRoll ?? pendingAttack?.defenseDice ?? []}
-        hitThreshold={(combatState?.weaponProfile || pendingAttack?.weapon)?.hit ?? 6}
-        saveThreshold={(defendingOperative || pendingAttack?.defender)?.stats?.save ?? 6}
+        defenseDice={
+          combatState?.defenseRoll ?? pendingAttack?.defenseDice ?? []
+        }
+        hitThreshold={
+          (combatState?.weaponProfile || pendingAttack?.weapon)?.hit ?? 6
+        }
+        saveThreshold={
+          (defendingOperative || pendingAttack?.defender)?.stats?.save ?? 6
+        }
         attackCritThreshold={getAttackCritThreshold(
           combatState?.weaponProfile || pendingAttack?.weapon || selectedWeapon,
         )}
@@ -785,7 +860,12 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
           setAllocationModalOpen(false);
           setPendingAttack(null);
         }}
-        onConfirm={({ remainingHits, remainingCrits, defenseEntries, attackEntries }) => {
+        onConfirm={({
+          remainingHits,
+          remainingCrits,
+          defenseEntries,
+          attackEntries,
+        }) => {
           if (blocksModalOpen) {
             dispatchCombatEvent("SET_BLOCKS_RESULT", {
               blocks: {
@@ -800,16 +880,21 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
           const weapon = pendingAttack?.weapon;
           const attacker = pendingAttack?.attacker;
           const defender = pendingAttack?.defender;
-          const [normalDmg, critDmg] =
-            weapon?.dmg?.split("/").map(Number) ?? [0, 0];
+          const [normalDmg, critDmg] = weapon?.dmg?.split("/").map(Number) ?? [
+            0, 0,
+          ];
           const safeNormalDmg = Number.isFinite(normalDmg) ? normalDmg : 0;
           const safeCritDmg = Number.isFinite(critDmg) ? critDmg : 0;
           const totalDamage =
             remainingHits * safeNormalDmg + remainingCrits * safeCritDmg;
           const hits = attackEntries.filter((d) => d.type === "hit").length;
           const crits = attackEntries.filter((d) => d.type === "crit").length;
-          const defenseHits = defenseEntries.filter((d) => d.type === "hit").length;
-          const defenseCrits = defenseEntries.filter((d) => d.type === "crit").length;
+          const defenseHits = defenseEntries.filter(
+            (d) => d.type === "hit",
+          ).length;
+          const defenseCrits = defenseEntries.filter(
+            (d) => d.type === "crit",
+          ).length;
           const savesUsed = defenseHits + defenseCrits;
 
           if (defender?.id) {
@@ -861,11 +946,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
               ))}
             </ul>
             <div className="kt-intentgate__actions">
-              <button
-                type="button"
-                className="btn"
-                onClick={closeIntentGate}
-              >
+              <button type="button" className="btn" onClick={closeIntentGate}>
                 Cancel
               </button>
               <button
@@ -911,9 +992,11 @@ function ArmyOverlayRoute() {
     armyKey;
   const selectedUnitIds = location.state?.selectedUnitIds;
   const selectedUnitIdsA =
-    location.state?.selectedUnitIdsA || (slot === "A" ? selectedUnitIds : undefined);
+    location.state?.selectedUnitIdsA ||
+    (slot === "A" ? selectedUnitIds : undefined);
   const selectedUnitIdsB =
-    location.state?.selectedUnitIdsB || (slot === "B" ? selectedUnitIds : undefined);
+    location.state?.selectedUnitIdsB ||
+    (slot === "B" ? selectedUnitIds : undefined);
 
   const teamA = armies.find((army) => army.key === armyKeyA) || armies[0];
   const teamB = armies.find((army) => army.key === armyKeyB) || teamA;

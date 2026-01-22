@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { normalizeWeaponRules, runWeaponRuleHook } from "../../engine/rules/weaponRules";
+import {
+  normalizeWeaponRules,
+  runWeaponRuleHook,
+} from "../../engine/rules/weaponRules";
 import "./DiceInputModal.css";
 
 function buildInitialDice(count) {
@@ -31,15 +34,33 @@ function DiceInputModal({
   weaponProfile,
   hasBalanced,
 }) {
-  const [attackDice, setAttackDice] = useState(() => buildInitialDice(attackDiceCount));
-  const [defenseDice, setDefenseDice] = useState(() => buildInitialDice(defenseDiceCount));
+  const [attackDice, setAttackDice] = useState(() =>
+    buildInitialDice(attackDiceCount),
+  );
+  const [defenseDice, setDefenseDice] = useState(() =>
+    buildInitialDice(defenseDiceCount),
+  );
   const [ceaselessApplied, setCeaselessApplied] = useState(false);
   const [accurateSpent, setAccurateSpent] = useState(
-    Math.max(0, Math.min(Number(accurateMax || 0), Number(combatInputs?.accurateSpent ?? 0))),
+    Math.max(
+      0,
+      Math.min(
+        Number(accurateMax || 0),
+        Number(combatInputs?.accurateSpent ?? 0),
+      ),
+    ),
   );
-  const [balancedUsed, setBalancedUsed] = useState(Boolean(combatInputs?.balancedUsed));
+  const [balancedUsed, setBalancedUsed] = useState(
+    Boolean(combatInputs?.balancedUsed),
+  );
   const autoLoggedRef = useRef(false);
   const lastCeaselessRef = useRef(null);
+
+  // ✅ Normalize rules once, and reuse everywhere (Balanced, Brutal UI, Devastating, etc)
+  const weaponRules = useMemo(
+    () => normalizeWeaponRules(weaponProfile),
+    [weaponProfile],
+  );
 
   const rollDiceNumbers = (count) =>
     Array.from({ length: count }, () => 1 + Math.floor(Math.random() * 6));
@@ -115,9 +136,11 @@ function DiceInputModal({
       return acc;
     }, {});
 
-    return Object.entries(counts)
-      .map(([value, count]) => ({ value: Number(value), count }))
-      .sort((a, b) => (b.count - a.count) || (a.value - b.value))[0]?.value ?? null;
+    return (
+      Object.entries(counts)
+        .map(([value, count]) => ({ value: Number(value), count }))
+        .sort((a, b) => b.count - a.count || a.value - b.value)[0]?.value ?? null
+    );
   };
 
   const applyCeaseless = (dice, value) =>
@@ -182,9 +205,10 @@ function DiceInputModal({
 
   const handleCeaselessClick = () => {
     if (readOnly || !hasCeaseless || ceaselessApplied) return;
-    const currentAttack = Array.isArray(combatAttackRoll) && combatAttackRoll.length > 0
-      ? combatAttackRoll
-      : parseDice(attackDice);
+    const currentAttack =
+      Array.isArray(combatAttackRoll) && combatAttackRoll.length > 0
+        ? combatAttackRoll
+        : parseDice(attackDice);
     if (currentAttack.length === 0) return;
 
     const threshold = Number(attackHitThreshold);
@@ -270,15 +294,13 @@ function DiceInputModal({
     if (readOnly || !hasBalanced || balancedUsed) return;
     if (!Array.isArray(combatAttackRoll) || combatAttackRoll.length === 0) return;
 
-    const lethalRule = normalizeWeaponRules(weaponProfile).find(
-      (rule) => rule.id === "lethal",
-    );
+    const lethalRule = weaponRules.find((rule) => rule.id === "lethal");
     const lethalValue = Number(lethalRule?.value);
 
     const ctx = {
       weapon: weaponProfile,
       weaponProfile,
-      weaponRules: normalizeWeaponRules(weaponProfile),
+      weaponRules,
       attackDice: combatAttackRoll.map((value) => ({
         value: Number(value),
         kept: true,
@@ -329,6 +351,93 @@ function DiceInputModal({
     0,
     Number(attackDiceCount || 0) - Math.max(0, Number(accurateSpent || 0)),
   );
+
+  // ✅ NEW: lock-in handler that procs Devastating (and any future lock-in rules)
+  const handleLockInAttackClick = () => {
+    if (readOnly) return;
+
+    const attackValues = Array.isArray(combatAttackRoll)
+      ? combatAttackRoll
+      : parseDice(attackDice);
+
+    // still allow parent to handle “lock-in” even if no dice (it can show error)
+    const hit = Number(attackHitThreshold);
+    const lethalRule = weaponRules.find((r) => r.id === "lethal");
+    const lethalValue = Number(lethalRule?.value);
+
+    // Crit threshold priority:
+    // - Lethal X if present
+    // - else default 6 (your tests/engine default)
+    const critThreshold =
+      Number.isFinite(lethalValue) && lethalValue >= 2 && lethalValue <= 6
+        ? lethalValue
+        : 6;
+
+    // Tag dice so Devastating can count retained crits.
+    // Assumption (matches your current flow): at lock-in, all successes are retained.
+    const attackDiceForCtx = attackValues
+      .map((v) => Number(v))
+      .filter((v) => Number.isFinite(v) && v >= 1 && v <= 6)
+      .map((v) => {
+        const tags = [];
+        if (Number.isFinite(hit) && v >= hit) tags.push("success", "retained");
+        if (v >= critThreshold) tags.push("crit");
+        return { value: v, tags };
+      });
+
+    const ctx = {
+      weapon: weaponProfile,
+      weaponProfile,
+      weaponRules,
+      attackDice: attackDiceForCtx,
+      modifiers: {
+        // if your Devastating rule uses lethal threshold, this is available
+        lethalThreshold: critThreshold,
+      },
+      inputs: {
+        attackLockedIn: true,
+      },
+      log: [],
+      // Target wounds are needed for “can kill immediately” behavior
+      target: {
+        id: defender?.id ?? null,
+        woundsCurrent: Number(defender?.state?.woundsCurrent ?? 0),
+        woundsMax: Number(defender?.stats?.woundsMax ?? 0),
+      },
+    };
+
+    // 🔥 THIS is where Devastating (and future lock-in rules) proc
+    runWeaponRuleHook(ctx, "ON_LOCK_IN_ATTACK");
+
+    // Persist details so parent can apply state changes
+    const ruleLogEntry = ctx.log.find((entry) => entry.type === "RULE_DEVASTATING");
+    const devastatingDamage = Number(ruleLogEntry?.detail?.damage ?? 0);
+
+    const devastatingPayload = {
+      targetId: ctx.target.id,
+      woundsCurrent: ctx.target.woundsCurrent,
+      woundsMax: ctx.target.woundsMax,
+      // if your rule sets these, great; if not, parent can ignore
+      combatEnded: Boolean(ctx.modifiers?.combatEnded),
+      killed: Boolean(ctx.modifiers?.targetKilled || ctx.modifiers?.combatEnded),
+      // helpful for logging/UX
+      log: ctx.log,
+      modifiers: {
+        ...ctx.modifiers,
+        devastatingDamage,
+      },
+    };
+
+    // Also store in combatInputs so you can show status in UI if you want
+    onSetCombatInputs?.({
+      ...combatInputs,
+      lockInApplied: true,
+      devastating: devastatingPayload,
+    });
+
+    // Call parent “lock attack” (won’t break if parent ignores the argument)
+    onLockAttack?.(devastatingPayload);
+  };
 
   return (
     <div className="kt-modal">
@@ -418,9 +527,7 @@ function DiceInputModal({
                   className="kt-modal__btn kt-modal__btn--primary"
                   type="button"
                   disabled={combatStage !== "ATTACK_ROLLING"}
-                  onClick={() => {
-                    onLockAttack?.();
-                  }}
+                  onClick={handleLockInAttackClick}
                 >
                   Lock In Attack
                 </button>

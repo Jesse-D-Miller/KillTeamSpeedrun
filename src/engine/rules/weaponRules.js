@@ -8,19 +8,6 @@ const defaultRollD6 = () => Math.floor(Math.random() * 6) + 1;
 
 export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
   const RULES = {
-    core_blocks: {
-      id: "core-blocks",
-      hooks: {
-        ON_RESOLVE_BLOCKS: (ctx) => {
-          const coverBlocks = Array.isArray(ctx.coverBlocks) ? ctx.coverBlocks : [];
-          const defenseDice = Array.isArray(ctx.defenseDice) ? ctx.defenseDice : [];
-          const eligible = defenseDice.filter(
-            (d) => Array.isArray(d.tags) && (d.tags.includes("success") || d.tags.includes("crit"))
-          );
-          ctx.eligibleBlocks = [...coverBlocks, ...eligible];
-        },
-      },
-    },
     blast: {
       id: "blast",
       hooks: {
@@ -268,7 +255,7 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
 
           const ceaselessValue = Object.entries(counts)
             .map(([value, count]) => ({ value: Number(value), count }))
-            .sort((a, b) => (b.count - a.count) || (a.value - b.value))[0]?.value;
+            .sort((a, b) => b.count - a.count || a.value - b.value)[0]?.value;
 
           if (!Number.isFinite(ceaselessValue)) return;
 
@@ -305,41 +292,129 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
         },
       },
     },
+
+    devastating: {
+      id: "devastating",
+      hooks: {
+        ON_LOCK_IN_ATTACK: (ctx, rule) => {
+          // Only proc when lock-in happens
+          if (!ctx?.inputs?.attackLockedIn) return;
+
+          ctx.modifiers = ctx.modifiers || {};
+
+          // Prevent double-proc
+          if (ctx.modifiers.devastatingApplied) return;
+
+          const xRaw = Number(rule?.value);
+          const x = Number.isFinite(xRaw) ? xRaw : 0;
+          if (x <= 0) return;
+
+          const attackDice = Array.isArray(ctx.attackDice)
+            ? ctx.attackDice
+            : [];
+
+          // Count retained crits by tags
+          const retainedCrits = attackDice.filter((die) => {
+            const tags = Array.isArray(die?.tags) ? die.tags : [];
+            return tags.includes("retained") && tags.includes("crit");
+          }).length;
+
+          if (retainedCrits <= 0) return;
+
+          // Tests use ctx.target.woundsCurrent
+          const target = ctx.target;
+          if (!target || !Number.isFinite(Number(target.woundsCurrent))) return;
+
+          const woundsBefore = Number(target.woundsCurrent);
+          const damage = retainedCrits * x;
+          const woundsAfter = Math.max(0, woundsBefore - damage);
+
+          target.woundsCurrent = woundsAfter;
+
+          ctx.modifiers.devastatingApplied = true;
+
+          const killed = woundsAfter === 0;
+          if (killed) {
+            ctx.modifiers.combatEnded = true;
+            ctx.modifiers.targetKilled = true;
+          }
+
+          ctx.log = ctx.log || [];
+          ctx.log.push({
+            type: "RULE_DEVASTATING",
+            detail: {
+              x,
+              retainedCrits,
+              damage,
+              woundsBefore,
+              woundsAfter,
+              killed,
+            },
+          });
+        },
+      },
+    },
+
     brutal: {
       id: "brutal",
       hooks: {
         ON_RESOLVE_BLOCKS: (ctx) => {
+          const coverBlocks = Array.isArray(ctx.coverBlocks)
+            ? ctx.coverBlocks
+            : [];
+
+          const critBlocks = (ctx.defenseDice || []).filter(
+            (die) => Array.isArray(die.tags) && die.tags.includes("crit"),
+          );
+          const normalBlocks = (ctx.defenseDice || []).filter(
+            (die) =>
+              Array.isArray(die.tags) &&
+              die.tags.includes("success") &&
+              !die.tags.includes("crit"),
+          );
+
+          ctx.eligibleBlocks = [...coverBlocks, ...critBlocks];
+
           ctx.log = ctx.log || [];
-          ctx.coverBlocks = Array.isArray(ctx.coverBlocks) ? ctx.coverBlocks : [];
-          ctx.defenseDice = Array.isArray(ctx.defenseDice) ? ctx.defenseDice : [];
-
-          const isCrit = (die) => {
-            // Accept either explicit tag OR raw value==6
-            if (!die) return false;
-            if (die.value === 6) return true;
-            const tags = Array.isArray(die.tags) ? die.tags : [];
-            return tags.includes("crit");
-          };
-
-          const isNormalSuccess = (die) => {
-            if (!die) return false;
-            const tags = Array.isArray(die.tags) ? die.tags : [];
-            // success but not crit (tag-based)
-            if (tags.includes("success") && !tags.includes("crit")) return true;
-            // If you don't tag successes consistently yet, treat hits (>=4) as "success" ONLY if you want.
-            // For now we keep it tag-based to match your tests.
-            return false;
-          };
-
-          const critBlocks = ctx.defenseDice.filter(isCrit);
-          const removedNormalBlocks = ctx.defenseDice.filter(isNormalSuccess).length;
-
-          ctx.eligibleBlocks = [...ctx.coverBlocks, ...critBlocks];
-
           ctx.log.push({
             type: "RULE_BRUTAL",
             detail: {
-              removedNormalBlocks,
+              removedNormalBlocks: normalBlocks.length,
+              remainingCritBlocks: critBlocks.length,
+            },
+          });
+        },
+      },
+    },
+
+    brutal: {
+      id: "brutal",
+      hooks: {
+        ON_RESOLVE_BLOCKS: (ctx) => {
+          // If cover is modeled as a separate eligible block, preserve it
+          const coverBlocks = Array.isArray(ctx.coverBlocks)
+            ? ctx.coverBlocks
+            : [];
+
+          // Only allow crits from defenseDice as eligible blocks (robust crit check)
+          const critBlocks = (ctx.defenseDice || []).filter(
+            (die) => Array.isArray(die.tags) && die.tags.includes("crit"),
+          );
+          const normalBlocks = (ctx.defenseDice || []).filter(
+            (die) =>
+              Array.isArray(die.tags) &&
+              die.tags.includes("success") &&
+              !die.tags.includes("crit"),
+          );
+
+          ctx.eligibleBlocks = [...coverBlocks, ...critBlocks];
+
+          // Log what changed
+          ctx.log = ctx.log || [];
+          ctx.log.push({
+            type: "RULE_BRUTAL",
+            detail: {
+              removedNormalBlocks: normalBlocks.length,
               remainingCritBlocks: critBlocks.length,
             },
           });
@@ -349,10 +424,6 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
   };
 
   const runWeaponRuleHook = (ctx, hookName) => {
-    // Ensure core block builder always runs before Brutal for ON_RESOLVE_BLOCKS
-    if (hookName === "ON_RESOLVE_BLOCKS") {
-      RULES["core-blocks"].hooks.ON_RESOLVE_BLOCKS(ctx);
-    }
     for (const rule of ctx.weaponRules || []) {
       const impl = RULES[rule.id];
       const fn = impl?.hooks?.[hookName];
@@ -363,23 +434,7 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
   return { RULES, runWeaponRuleHook };
 };
 
-
-export const { RULES } = createRulesEngine();
-
-export const runWeaponRuleHook = (ctx, hookName) => {
-  ctx.modifiers = ctx.modifiers || {};
-  ctx.log = ctx.log || [];
-
-  for (const rule of ctx.weaponRules || []) {
-    const impl = RULES[rule.id];
-    if (!impl) {
-      ctx.log.push({ type: "RULE_UNKNOWN", detail: { id: rule.id, hookName } });
-      continue;
-    }
-    const fn = impl?.hooks?.[hookName];
-    if (typeof fn === "function") fn(ctx, rule);
-  }
-};
+export const { RULES, runWeaponRuleHook } = createRulesEngine();
 
 export const normalizeWeaponRules = (weapon) => {
   const raw = weapon?.wr ?? weapon?.rules ?? [];
@@ -394,4 +449,3 @@ export const normalizeWeaponRules = (weapon) => {
     }))
     .filter((rule) => rule.id.length > 0);
 };
-
