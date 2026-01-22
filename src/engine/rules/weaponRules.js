@@ -238,15 +238,37 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
       id: "ceaseless",
       hooks: {
         ON_ROLL_ATTACK: (ctx) => {
+          const hit = Number(
+            ctx?.weapon?.hit ?? ctx?.weaponProfile?.hit ?? ctx?.hit,
+          );
+          if (!Number.isFinite(hit) || hit < 2 || hit > 6) return;
+
+          const misses = ctx.attackDice
+            .map((die) => die.value)
+            .filter((value) => value < hit);
+          if (misses.length === 0) return;
+
+          const counts = misses.reduce((acc, value) => {
+            acc[value] = (acc[value] || 0) + 1;
+            return acc;
+          }, {});
+
+          const ceaselessValue = Object.entries(counts)
+            .map(([value, count]) => ({ value: Number(value), count }))
+            .sort((a, b) => (b.count - a.count) || (a.value - b.value))[0]?.value;
+
+          if (!Number.isFinite(ceaselessValue)) return;
+
           const before = ctx.attackDice.map((die) => ({ ...die }));
           const next = ctx.attackDice.map((die) => {
-            if (die.value !== 1) return die;
+            if (die.value !== ceaselessValue) return die;
             return {
               ...die,
               value: rollD6(),
               tags: [...(die.tags || []), "rerolled"],
             };
           });
+
           ctx.attackDice = next;
           ctx.log.push({
             type: "RULE_CEASELESS",
