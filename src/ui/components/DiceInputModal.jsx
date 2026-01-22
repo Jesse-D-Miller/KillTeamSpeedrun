@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { normalizeWeaponRules, runWeaponRuleHook } from "../../engine/rules/weaponRules";
 import "./DiceInputModal.css";
 
 function buildInitialDice(count) {
@@ -27,6 +28,8 @@ function DiceInputModal({
   onAutoRoll,
   onClose,
   onConfirm,
+  weaponProfile,
+  hasBalanced,
 }) {
   const [attackDice, setAttackDice] = useState(() => buildInitialDice(attackDiceCount));
   const [defenseDice, setDefenseDice] = useState(() => buildInitialDice(defenseDiceCount));
@@ -34,6 +37,7 @@ function DiceInputModal({
   const [accurateSpent, setAccurateSpent] = useState(
     Math.max(0, Math.min(Number(accurateMax || 0), Number(combatInputs?.accurateSpent ?? 0))),
   );
+  const [balancedUsed, setBalancedUsed] = useState(Boolean(combatInputs?.balancedUsed));
   const autoLoggedRef = useRef(false);
   const lastCeaselessRef = useRef(null);
 
@@ -239,6 +243,8 @@ function DiceInputModal({
         lastCeaselessRef.current = null;
         setAccurateSpent(0);
         onSetCombatInputs?.({ accurateSpent: 0 });
+        setBalancedUsed(false);
+        onSetCombatInputs?.({ balancedClick: false, balancedUsed: false });
       }
     }
   }, [combatStage, combatAttackRoll, attackDiceCount]);
@@ -253,6 +259,52 @@ function DiceInputModal({
     const next = Math.max(0, Math.min(max, Math.floor(incoming)));
     if (next !== accurateSpent) setAccurateSpent(next);
   }, [accurateMax, combatInputs?.accurateSpent]);
+
+  useEffect(() => {
+    if (typeof combatInputs?.balancedUsed === "boolean") {
+      setBalancedUsed(combatInputs.balancedUsed);
+    }
+  }, [combatInputs?.balancedUsed]);
+
+  const handleBalancedClick = () => {
+    if (readOnly || !hasBalanced || balancedUsed) return;
+    if (!Array.isArray(combatAttackRoll) || combatAttackRoll.length === 0) return;
+
+    const lethalRule = normalizeWeaponRules(weaponProfile).find(
+      (rule) => rule.id === "lethal",
+    );
+    const lethalValue = Number(lethalRule?.value);
+
+    const ctx = {
+      weapon: weaponProfile,
+      weaponProfile,
+      weaponRules: normalizeWeaponRules(weaponProfile),
+      attackDice: combatAttackRoll.map((value) => ({
+        value: Number(value),
+        kept: true,
+        tags: [],
+      })),
+      modifiers: {
+        lethalThreshold: Number.isFinite(lethalValue) ? lethalValue : null,
+        balancedUsed: false,
+      },
+      inputs: {
+        balancedClick: true,
+      },
+      log: [],
+    };
+
+    runWeaponRuleHook(ctx, "ON_BALANCED");
+
+    const nextRoll = ctx.attackDice.map((die) => die.value);
+    onSetCombatAttackRoll?.(nextRoll, {
+      accurateSpent,
+      balancedClick: true,
+      balancedUsed: Boolean(ctx.modifiers?.balancedUsed),
+    });
+    setBalancedUsed(Boolean(ctx.modifiers?.balancedUsed));
+    onSetCombatInputs?.({ balancedClick: true, balancedUsed: true });
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -320,9 +372,19 @@ function DiceInputModal({
                   className="kt-modal__btn kt-modal__btn--primary"
                   type="button"
                   onClick={handleAccurateClick}
-                  disabled={readOnly || accurateSpent >= Number(accurateMax)}
+                  disabled={readOnly || hasAttackRoll || accurateSpent >= Number(accurateMax)}
                 >
                   Accurate {accurateSpent}/{accurateMax}
+                </button>
+              )}
+              {hasBalanced && (
+                <button
+                  className="kt-modal__btn kt-modal__btn--primary"
+                  type="button"
+                  onClick={handleBalancedClick}
+                  disabled={readOnly || !hasAttackRoll || balancedUsed}
+                >
+                  Balanced
                 </button>
               )}
               {hasCeaseless && (

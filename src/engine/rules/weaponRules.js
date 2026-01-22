@@ -7,6 +7,74 @@ const normalizeRuleId = (id) =>
 const rollD6 = () => Math.floor(Math.random() * 6) + 1;
 
 export const RULES = {
+  balanced: {
+    id: "balanced",
+    hooks: {
+      ON_BALANCED: (ctx) => {
+        if (!ctx?.inputs?.balancedClick) return;
+        if (ctx?.modifiers?.balancedUsed) return;
+
+        const hit = Number(ctx?.weapon?.hit ?? ctx?.weaponProfile?.hit ?? ctx?.hit);
+        if (!Number.isFinite(hit) || hit < 2 || hit > 6) return;
+
+        const critThresholdRaw = Number(ctx?.modifiers?.lethalThreshold);
+        const critThreshold =
+          Number.isFinite(critThresholdRaw) && critThresholdRaw >= 2 && critThresholdRaw <= 6
+            ? critThresholdRaw
+            : 6;
+
+        const classify = (v) => {
+          if (v >= critThreshold) return "crit";
+          if (v >= hit) return "hit";
+          return "miss";
+        };
+
+        const pickLowestIndex = (wantedType) => {
+          let picked = -1;
+          for (let i = 0; i < ctx.attackDice.length; i++) {
+            const die = ctx.attackDice[i];
+            const tags = die.tags || [];
+            if (tags.includes("rerolled")) continue;
+            if (classify(die.value) !== wantedType) continue;
+
+            if (picked === -1 || die.value < ctx.attackDice[picked].value) {
+              picked = i;
+            }
+          }
+          return picked;
+        };
+
+        let idx = pickLowestIndex("miss");
+        if (idx === -1) idx = pickLowestIndex("hit");
+        if (idx === -1) idx = pickLowestIndex("crit");
+        if (idx === -1) return;
+
+        const before = ctx.attackDice.map((die) => ({ ...die }));
+
+        const next = ctx.attackDice.map((die, i) => {
+          if (i !== idx) return die;
+          return {
+            ...die,
+            value: rollD6(),
+            tags: [...(die.tags || []), "rerolled", "balanced"],
+          };
+        });
+
+        ctx.attackDice = next;
+        ctx.modifiers.balancedUsed = true;
+
+        ctx.log.push({
+          type: "RULE_BALANCED",
+          detail: {
+            rerolledIndex: idx,
+            pickedFrom: classify(before[idx].value),
+            before,
+            after: next,
+          },
+        });
+      },
+    },
+  },
   accurate: {
     id: "accurate",
     hooks: {

@@ -199,6 +199,10 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
     const rules = normalizeWeaponRules(selectedWeapon);
     return rules.some((rule) => rule.id === "ceaseless");
   })();
+  const hasBalanced = (() => {
+    const rules = normalizeWeaponRules(selectedWeapon);
+    return rules.some((rule) => rule.id === "balanced");
+  })();
   const getAccurateMax = (weapon) => {
     const rules = normalizeWeaponRules(weapon);
     const rule = rules.find((item) => item.id === "accurate");
@@ -538,10 +542,12 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
         open={attackModalOpen}
         attacker={attacker}
         defender={defender}
+        weaponProfile={combatState?.weaponProfile || selectedWeapon}
         attackDiceCount={selectedWeapon?.atk ?? 0}
         defenseDiceCount={3}
         attackHitThreshold={selectedWeapon?.hit ?? 6}
         hasCeaseless={hasCeaseless}
+        hasBalanced={hasBalanced}
         accurateMax={getAccurateMax(
           combatState?.weaponProfile || selectedWeapon,
         )}

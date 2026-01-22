@@ -26,6 +26,8 @@ export const initialCombatState = {
 	blocks: null,
 	inputs: {
 		accurateSpent: 0,
+		balancedClick: false,
+		balancedUsed: false,
 	},
 };
 
@@ -116,6 +118,8 @@ export function gameReducer(state, action) {
 					blocks: null,
 					inputs: {
 						accurateSpent: 0,
+						balancedClick: false,
+						balancedUsed: false,
 					},
 				},
 			};

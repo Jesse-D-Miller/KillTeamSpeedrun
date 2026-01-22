@@ -100,6 +100,12 @@ export const validateGameIntent = (state, event) => {
         if (spent != null && (!Number.isFinite(spent) || spent < 0)) {
           pushIssue(issues, "Accurate spent must be a non-negative number.");
         }
+        if (inputs.balancedClick != null && typeof inputs.balancedClick !== "boolean") {
+          pushIssue(issues, "Balanced click must be a boolean.");
+        }
+        if (inputs.balancedUsed != null && typeof inputs.balancedUsed !== "boolean") {
+          pushIssue(issues, "Balanced used must be a boolean.");
+        }
       }
       break;
     }
@@ -113,6 +119,12 @@ export const validateGameIntent = (state, event) => {
       const spent = inputs.accurateSpent;
       if (spent != null && (!Number.isFinite(spent) || spent < 0)) {
         pushIssue(issues, "Accurate spent must be a non-negative number.");
+      }
+      if (inputs.balancedClick != null && typeof inputs.balancedClick !== "boolean") {
+        pushIssue(issues, "Balanced click must be a boolean.");
+      }
+      if (inputs.balancedUsed != null && typeof inputs.balancedUsed !== "boolean") {
+        pushIssue(issues, "Balanced used must be a boolean.");
       }
       break;
     }

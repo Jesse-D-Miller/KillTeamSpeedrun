@@ -128,7 +128,7 @@
         "atk": 4,
         "hit": 4,
         "dmg": "3/4",
-        "wr": [{"id": "range", "value": 8}, {"id": "accurate", "value": 2}]
+        "wr": [{"id": "range", "value": 8}, {"id": "accurate", "value": 2}, {"id": "balanced"}]
       },
       {
         "name": "Choppa",
