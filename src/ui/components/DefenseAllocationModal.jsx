@@ -146,10 +146,6 @@ function DefenseAllocationModal({
     .filter((entry) => entry.type === "hit" || entry.type === "crit")
     .map((entry) => entry.id);
 
-  const allDefenseAllocated = successfulDefenseIds.every(
-    (id) => allocations[id] != null,
-  );
-
   const computeRemaining = () => {
     let remainingHits = 0;
     let remainingCrits = 0;
@@ -194,11 +190,34 @@ function DefenseAllocationModal({
         }}
       />
       <div className="kt-modal__panel">
+        <button
+          className="kt-modal__close"
+          type="button"
+          onClick={() => {
+            reset();
+            onClose();
+          }}
+          aria-label="Close"
+          title="Close"
+        >
+          ×
+        </button>
         <div className="kt-modal__layout">
           <aside className="kt-modal__sidebar">
-            <div className="kt-modal__sidebar-title">Actions</div>
-            <div className="kt-modal__sidebar-empty">
-              Assign defense dice to block hits.
+            <div className="kt-modal__sidebar-group">
+              <div className="kt-modal__sidebar-title">Actions</div>
+              <div className="kt-modal__sidebar-empty">
+                Assign defense dice to block hits.
+              </div>
+            </div>
+            <div className="kt-modal__sidebar-footer">
+              <button
+                className="kt-modal__btn kt-modal__btn--primary"
+                type="button"
+                onClick={handleConfirm}
+              >
+                Resolve
+              </button>
             </div>
           </aside>
           <div className="kt-modal__content">
@@ -321,26 +340,6 @@ function DefenseAllocationModal({
               </div>
             </div>
 
-            <div className="kt-modal__actions">
-              <button
-                className="kt-modal__btn"
-                type="button"
-                onClick={() => {
-                  reset();
-                  onClose();
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                className="kt-modal__btn kt-modal__btn--primary"
-                type="button"
-                onClick={handleConfirm}
-                disabled={!allDefenseAllocated}
-              >
-                Resolve
-              </button>
-            </div>
           </div>
         </div>
       </div>

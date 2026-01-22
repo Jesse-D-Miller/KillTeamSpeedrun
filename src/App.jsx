@@ -187,12 +187,14 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
   const selectedWeapon =
     selectedUnit?.weapons?.find((w) => w.name === selectedWeaponName) ||
     selectedUnit?.weapons?.[0];
-  const attackCritThreshold = (() => {
-    const rules = normalizeWeaponRules(selectedWeapon);
+  const getAttackCritThreshold = (weapon) => {
+    const rules = normalizeWeaponRules(weapon);
     const lethalRule = rules.find((rule) => rule.id === "lethal");
     const value = Number(lethalRule?.value);
     return Number.isFinite(value) ? value : 6;
-  })();
+  };
+
+  const attackCritThreshold = getAttackCritThreshold(selectedWeapon);
   const hasCeaseless = (() => {
     const rules = normalizeWeaponRules(selectedWeapon);
     return rules.some((rule) => rule.id === "ceaseless");
@@ -676,7 +678,9 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
         defenseDice={combatState?.defenseRoll ?? pendingAttack?.defenseDice ?? []}
         hitThreshold={(combatState?.weaponProfile || pendingAttack?.weapon)?.hit ?? 6}
         saveThreshold={(defendingOperative || pendingAttack?.defender)?.stats?.save ?? 6}
-        attackCritThreshold={attackCritThreshold}
+        attackCritThreshold={getAttackCritThreshold(
+          combatState?.weaponProfile || pendingAttack?.weapon || selectedWeapon,
+        )}
         onClose={() => {
           if (blocksModalOpen) {
             dispatchCombatEvent("CLEAR_COMBAT_STATE");
