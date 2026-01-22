@@ -1,4 +1,4 @@
-const PHASE_ORDER = ["strategy", "firefight", "end"];
+const PHASE_ORDER = ["SETUP", "STRATEGY", "FIREFIGHT", "END_TP", "GAME_OVER"];
 
 const generateId = () => {
   if (typeof crypto !== "undefined" && crypto.randomUUID) {
@@ -49,14 +49,15 @@ const resetEndOfTurnEffects = (operative) => ({
     ...operative.state,
     effects: [],
     tokens: Array.isArray(operative.state?.tokens)
-      ? operative.state.tokens.filter((token) => token?.expires?.when !== "endOfRound")
+      ? operative.state.tokens.filter((token) => token?.expires?.when !== "END_TP")
       : [],
   },
 });
 
 const updateDerivedForTokenToggle = (operative, tokenKey, hasToken) => {
   if (!tokenKey) return operative;
-  const blockedCounteract = tokenKey === "guard" && hasToken;
+  const normalizedKey = String(tokenKey).toLowerCase();
+  const blockedCounteract = normalizedKey === "guard" && hasToken;
   return {
     ...operative,
     state: {
@@ -83,6 +84,11 @@ const applyWoundsOverride = (operative, woundsCurrent) => {
       injured,
       incapacitated,
       removed: incapacitated ? true : operative.state?.removed ?? false,
+      ready: incapacitated ? false : operative.state?.ready ?? true,
+      expended: incapacitated ? true : operative.state?.expended ?? false,
+      tokens: incapacitated
+        ? (operative.state?.tokens || []).filter((token) => token?.expires?.when !== "NEVER")
+        : operative.state?.tokens,
       activation: {
         ...operative.state?.activation,
         activatedThisRound: incapacitated
@@ -209,6 +215,7 @@ const resetOperativeForStart = (operative) => {
     state: {
       ...operative.state,
       woundsCurrent: woundsMax,
+      order: "conceal",
       tokens: [],
       effects: [],
       ready: true,
@@ -226,7 +233,7 @@ const resetTeamForStart = (team) => ({
   ...team,
   resources: {
     ...(team.resources || {}),
-    cp: 0,
+    cp: 2,
   },
   operatives: team.operatives.map(resetOperativeForStart),
 });
@@ -271,13 +278,24 @@ export const initialSession = ({
   ployState = {
     activeByPlayerId: {},
   },
+  counteract = {
+    open: false,
+    eligiblePlayerId: null,
+    selectedOperativeId: null,
+    moveBudgetInches: 2,
+    moveSpentInches: 0,
+    usedOperativeIdsThisTP: [],
+    state: "NONE",
+  },
   active = {
     turn: 1,
     round: 1,
-    phase: "strategy",
-    initiativePlayerId: players[0]?.id || "",
-    activePlayerId: players[0]?.id || "",
+    turningPoint: 1,
+    phase: "SETUP",
+    initiativePlayerId: null,
+    activePlayerId: null,
     started: false,
+    activationSubstep: "NONE",
     activation: {
       operativeId: null,
       aplSpent: 0,
@@ -295,6 +313,7 @@ export const initialSession = ({
     currentAttack,
     perTurn,
     ployState,
+    counteract,
     active,
     eventLog: [],
   };
@@ -304,6 +323,7 @@ export const applyEvent = (session, event) => {
   if (event?.type === "START_GAME") {
     const { teamA, teamB, missionConfig } = event.payload || {};
     if (session.active?.started) return session;
+    if (session.active?.phase !== "SETUP") return session;
     if (!isValidTeam(teamA) || !isValidTeam(teamB)) return session;
 
     const nextSession = appendEvent(session, event);
@@ -321,7 +341,10 @@ export const applyEvent = (session, event) => {
       missionConfig,
       active: {
         ...nextSession.active,
-        phase: "strategy",
+        turningPoint: 1,
+        phase: "SETUP",
+        initiativePlayerId: null,
+        activationSubstep: "NONE",
         round: 1,
         turn: 1,
         started: true,
@@ -340,7 +363,13 @@ export const applyEvent = (session, event) => {
 
   switch (type) {
     case "END_TURN": {
+      if (nextSession.active.phase !== "FIREFIGHT") return nextSession;
       if (nextSession.active.activation?.operativeId) return nextSession;
+
+      const anyReady = Object.values(nextSession.teamsById).some((team) =>
+        team.operatives.some((op) => op.state?.ready === true),
+      );
+      if (anyReady) return nextSession;
 
       const allExpended = Object.values(nextSession.teamsById).every((team) =>
         team.operatives.every((op) => op.state?.expended === true),
@@ -365,10 +394,20 @@ export const applyEvent = (session, event) => {
         ployState: {
           activeByPlayerId: {},
         },
+        counteract: {
+          open: false,
+          eligiblePlayerId: null,
+          selectedOperativeId: null,
+          moveBudgetInches: 2,
+          moveSpentInches: 0,
+          usedOperativeIdsThisTP: nextSession.counteract?.usedOperativeIdsThisTP || [],
+          state: "NONE",
+        },
         active: {
           ...nextSession.active,
-          phase: "end",
+          phase: "END_TP",
           counteractForPlayerId: null,
+          activationSubstep: "NONE",
           activation: {
             ...nextSession.active.activation,
             operativeId: null,
@@ -381,13 +420,16 @@ export const applyEvent = (session, event) => {
     case "START_TURN": {
       if (!nextSession.active?.started) return nextSession;
 
-      const requestedRound = payload?.turningPointNumber;
-      const shouldIncrement = nextSession.active.phase === "end";
-      const nextRound = Number.isFinite(requestedRound)
-        ? requestedRound
-        : shouldIncrement
-          ? nextSession.active.round + 1
-          : Math.max(1, nextSession.active.round || 1);
+      const phase = nextSession.active.phase;
+      if (phase !== "SETUP" && phase !== "END_TP") return nextSession;
+
+      const requestedRound = payload?.turningPoint;
+      const shouldIncrement = phase === "END_TP";
+      const expectedRound = shouldIncrement
+        ? (nextSession.active.turningPoint || nextSession.active.round) + 1
+        : 1;
+      const nextRound = Number.isFinite(requestedRound) ? requestedRound : expectedRound;
+      if (nextRound !== expectedRound) return nextSession;
 
       const initiativePlayerId = nextSession.active.initiativePlayerId;
 
@@ -441,15 +483,33 @@ export const applyEvent = (session, event) => {
         ...nextSession,
         teamsById: nextTeamsById,
         perTurn,
+        counteract: {
+          open: false,
+          eligiblePlayerId: null,
+          selectedOperativeId: null,
+          moveBudgetInches: 2,
+          moveSpentInches: 0,
+          usedOperativeIdsThisTP: [],
+          state: "NONE",
+        },
         active: {
           ...nextSession.active,
-          phase: "strategy",
+          phase: "STRATEGY",
+          turningPoint: nextRound,
           round: nextRound,
+          activePlayerId: null,
+          counteractForPlayerId: null,
+          activationSubstep: "NONE",
+          activation: {
+            ...nextSession.active.activation,
+            operativeId: null,
+            aplSpent: 0,
+          },
         },
       };
     }
     case "SET_INITIATIVE": {
-      if (nextSession.active.phase !== "strategy") return nextSession;
+      if (nextSession.active.phase !== "STRATEGY") return nextSession;
       const { initiativePlayerId } = payload || {};
       if (!initiativePlayerId || !getPlayerById(nextSession, initiativePlayerId)) {
         return nextSession;
@@ -467,11 +527,172 @@ export const applyEvent = (session, event) => {
       };
     }
 
+    case "START_FIREFIGHT": {
+      if (nextSession.active.phase !== "STRATEGY") return nextSession;
+      if (!nextSession.active.initiativePlayerId) return nextSession;
+
+      return {
+        ...nextSession,
+        active: {
+          ...nextSession.active,
+          phase: "FIREFIGHT",
+          activePlayerId: nextSession.active.initiativePlayerId,
+          counteractForPlayerId: null,
+          activationSubstep: "NONE",
+        },
+      };
+    }
+
+    case "OPEN_COUNTERACT_WINDOW": {
+      const { eligiblePlayerId } = payload || {};
+      if (!eligiblePlayerId) return nextSession;
+      if (nextSession.active.phase !== "FIREFIGHT") return nextSession;
+      if (nextSession.active.activation?.operativeId) return nextSession;
+
+      const expectedPlayerId = nextSession.active.activePlayerId || getExpectedActivePlayerId(nextSession);
+      if (expectedPlayerId && expectedPlayerId !== eligiblePlayerId) return nextSession;
+
+      const opponentPlayerId = getOtherPlayerId(nextSession, eligiblePlayerId);
+      const eligibleReady = countReadyOperativesForPlayer(nextSession, eligiblePlayerId);
+      const opponentReady = opponentPlayerId
+        ? countReadyOperativesForPlayer(nextSession, opponentPlayerId)
+        : 0;
+
+      if (eligibleReady > 0) return nextSession;
+      if (opponentReady <= 0) return nextSession;
+
+      return {
+        ...nextSession,
+        counteract: {
+          open: true,
+          eligiblePlayerId,
+          selectedOperativeId: null,
+          moveBudgetInches: 2,
+          moveSpentInches: 0,
+          usedOperativeIdsThisTP: nextSession.counteract?.usedOperativeIdsThisTP || [],
+          state: "SELECT_OPERATIVE",
+        },
+      };
+    }
+
+    case "DECLARE_COUNTERACT_ACTION": {
+      const { playerId, operativeId, action } = payload || {};
+      if (!playerId || !operativeId || !action?.type) return nextSession;
+      if (nextSession.active.phase !== "FIREFIGHT") return nextSession;
+      if (!nextSession.counteract?.open) return nextSession;
+      if (nextSession.counteract.state !== "PERFORM_ACTION") return nextSession;
+      if (nextSession.counteract.eligiblePlayerId !== playerId) return nextSession;
+      if (nextSession.counteract.selectedOperativeId !== operativeId) return nextSession;
+
+      const found = findOperative(nextSession, operativeId);
+      if (!found) return nextSession;
+      if (found.operative.state?.woundsCurrent <= 0) return nextSession;
+
+      const actionType = String(action.type).toUpperCase();
+      if (actionType === "GUARD") return nextSession;
+      if (action?.apCost && action.apCost !== 1) return nextSession;
+      if (actionType === "SHOOT" && found.operative.state?.order === "conceal") {
+        return nextSession;
+      }
+
+      const resetMove = actionType === "MOVE" || actionType === "DASH";
+
+      return {
+        ...nextSession,
+        counteract: {
+          ...nextSession.counteract,
+          pendingAction: action,
+          moveSpentInches: resetMove ? 0 : nextSession.counteract.moveSpentInches,
+        },
+      };
+    }
+
+    case "RESOLVE_COUNTERACT_ACTION": {
+      const { playerId, operativeId, resolution } = payload || {};
+      if (!playerId || !operativeId) return nextSession;
+      if (nextSession.active.phase !== "FIREFIGHT") return nextSession;
+      if (!nextSession.counteract?.open) return nextSession;
+      if (nextSession.counteract.eligiblePlayerId !== playerId) return nextSession;
+      if (nextSession.counteract.selectedOperativeId !== operativeId) return nextSession;
+      if (!nextSession.counteract.pendingAction) return nextSession;
+
+      const found = findOperative(nextSession, operativeId);
+      if (!found) return nextSession;
+      if (found.operative.state?.woundsCurrent <= 0) return nextSession;
+
+      const moveDelta = Number(resolution?.moveInches || 0);
+      if (moveDelta < 0) return nextSession;
+
+      const nextMoveSpent = nextSession.counteract.moveSpentInches + moveDelta;
+      if (nextMoveSpent > nextSession.counteract.moveBudgetInches) return nextSession;
+
+      const updated = replaceOperative(nextSession, found.team.id, operativeId, (op) => ({
+        ...op,
+        state: {
+          ...op.state,
+          counteractedThisTP: true,
+        },
+      }));
+
+      const opponentPlayerId = getOtherPlayerId(updated, playerId);
+
+      return {
+        ...updated,
+        counteract: {
+          ...updated.counteract,
+          open: false,
+          eligiblePlayerId: null,
+          selectedOperativeId: null,
+          pendingAction: null,
+          moveSpentInches: nextMoveSpent,
+          usedOperativeIdsThisTP: Array.from(
+            new Set([
+              ...(updated.counteract?.usedOperativeIdsThisTP || []),
+              operativeId,
+            ]),
+          ),
+          state: "NONE",
+        },
+        active: {
+          ...updated.active,
+          activePlayerId: opponentPlayerId || updated.active.activePlayerId,
+        },
+      };
+    }
+
+    case "SKIP_COUNTERACT": {
+      const { playerId } = payload || {};
+      if (!playerId) return nextSession;
+      if (nextSession.active.phase !== "FIREFIGHT") return nextSession;
+      if (!nextSession.counteract?.open) return nextSession;
+      if (nextSession.counteract.eligiblePlayerId !== playerId) return nextSession;
+
+      const opponentPlayerId = getOtherPlayerId(nextSession, playerId);
+
+      return {
+        ...nextSession,
+        counteract: {
+          ...nextSession.counteract,
+          open: false,
+          eligiblePlayerId: null,
+          selectedOperativeId: null,
+          pendingAction: null,
+          state: "NONE",
+        },
+        active: {
+          ...nextSession.active,
+          activePlayerId: opponentPlayerId || nextSession.active.activePlayerId,
+        },
+      };
+    }
+
     case "SET_ACTIVE_OPERATIVE": {
       const { operativeId } = payload || {};
       if (!operativeId) return nextSession;
 
-      if (nextSession.active.phase !== "firefight") return nextSession;
+      if (nextSession.active.phase !== "FIREFIGHT") return nextSession;
+
+      if (nextSession.active.activation?.operativeId) return nextSession;
 
       const found = findOperative(nextSession, operativeId);
       if (!found) return nextSession;
@@ -480,7 +701,7 @@ export const applyEvent = (session, event) => {
       const ownerPlayer = getPlayerByTeamId(nextSession, team.id);
       if (!ownerPlayer?.id) return nextSession;
 
-      const expectedPlayerId = getExpectedActivePlayerId(nextSession);
+      const expectedPlayerId = nextSession.active.activePlayerId || getExpectedActivePlayerId(nextSession);
       if (expectedPlayerId && ownerPlayer.id !== expectedPlayerId) return nextSession;
 
       if (operative.state?.ready === false) return nextSession;
@@ -496,6 +717,7 @@ export const applyEvent = (session, event) => {
         active: {
           ...nextSession.active,
           activePlayerId: ownerPlayer.id,
+          activationSubstep: "DETERMINE_ORDER",
           activation: {
             ...nextSession.active.activation,
             operativeId,
@@ -527,8 +749,9 @@ export const applyEvent = (session, event) => {
     case "SET_ORDER": {
       const { operativeId, order } = payload || {};
       if (!operativeId || (order !== "conceal" && order !== "engage")) return nextSession;
+      if (nextSession.active.phase !== "FIREFIGHT") return nextSession;
       if (nextSession.active.activation?.operativeId !== operativeId) return nextSession;
-      if (nextSession.active.activation?.state !== "determine_order") return nextSession;
+      if (nextSession.active.activationSubstep !== "DETERMINE_ORDER") return nextSession;
       const found = findOperative(nextSession, operativeId);
       if (!found) return nextSession;
       if (found.operative.state?.woundsCurrent <= 0) return nextSession;
@@ -542,6 +765,7 @@ export const applyEvent = (session, event) => {
         ...updated,
         active: {
           ...updated.active,
+          activationSubstep: "PERFORM_ACTIONS",
           activation: {
             ...updated.active.activation,
             state: "perform_actions",
@@ -583,9 +807,29 @@ export const applyEvent = (session, event) => {
       if (!operativeId || !Number.isFinite(woundsCurrent)) return nextSession;
       const found = findOperative(nextSession, operativeId);
       if (!found) return nextSession;
-      return replaceOperative(nextSession, found.team.id, operativeId, (op) =>
+      const updated = replaceOperative(nextSession, found.team.id, operativeId, (op) =>
         applyWoundsOverride(op, woundsCurrent),
       );
+
+      const isIncapacitated = woundsCurrent <= 0;
+      if (!isIncapacitated) return updated;
+
+      const isActive = updated.active.activation?.operativeId === operativeId;
+      if (!isActive) return updated;
+
+      return {
+        ...updated,
+        active: {
+          ...updated.active,
+          activationSubstep: "NONE",
+          activation: {
+            ...updated.active.activation,
+            operativeId: null,
+            aplSpent: 0,
+            state: "resolved",
+          },
+        },
+      };
     }
 
     case "SET_INJURED": {
@@ -610,7 +854,8 @@ export const applyEvent = (session, event) => {
       if (attackType !== "shoot" && attackType !== "fight") return nextSession;
 
       if (nextSession.active.activation?.operativeId !== attackerId) return nextSession;
-      if (nextSession.active.phase !== "firefight") return nextSession;
+      if (nextSession.active.phase !== "FIREFIGHT") return nextSession;
+      if (nextSession.active.activationSubstep !== "PERFORM_ACTIONS") return nextSession;
       if (nextSession.currentAttack) return nextSession;
 
       const attackerFound = findOperative(nextSession, attackerId);
@@ -648,19 +893,21 @@ export const applyEvent = (session, event) => {
       return {
         ...updated,
         currentAttack: {
+          attackId: generateId(),
           attackerId,
           defenderId,
           weaponId,
           attackType,
           attackDice: { hits: 0, crits: 0 },
           defenseDice: { saves: 0, critSaves: 0 },
+          state: "AWAIT_ATTACK_ROLLS",
           status: "AWAIT_ATTACK_ROLLS",
         },
       };
     }
 
     case "USE_PLOY": {
-      const { playerId, ployId, timingTag, cost = 1, effectTiming } = payload || {};
+      const { playerId, ployId, timingTag, timing, cost = 1, effectTiming } = payload || {};
       if (!playerId || !ployId) return nextSession;
 
       const team = getTeamByPlayerId(nextSession, playerId);
@@ -670,8 +917,9 @@ export const applyEvent = (session, event) => {
       if (!Number.isFinite(cost) || cost <= 0 || currentCp < cost) return nextSession;
 
       const phase = nextSession.active.phase;
-      if (timingTag === "strategy" && phase !== "strategy") return nextSession;
-      if (timingTag === "firefight" && phase !== "firefight") return nextSession;
+      const timingValue = timingTag || timing || "";
+      if (timingValue === "STRATEGY" && phase !== "STRATEGY") return nextSession;
+      if (timingValue === "FIREFIGHT" && phase !== "FIREFIGHT") return nextSession;
 
       const normalizedPloyId = String(ployId).toLowerCase().replace(/\s+/g, "_");
       const isCommandReroll = normalizedPloyId === "command_reroll";
@@ -709,11 +957,11 @@ export const applyEvent = (session, event) => {
         },
       };
 
-      if (effectTiming === "end_tp" || timingTag === "until_end_tp") {
+      if (effectTiming === "end_tp" || timingValue === "until_end_tp") {
         const existing = nextPloyState.activeByPlayerId[playerId] || [];
         nextPloyState.activeByPlayerId[playerId] = [
           ...existing,
-          { ployId, timingTag, expires: "endOfTurn" },
+          { ployId, timingTag: timingValue, expires: "endOfTurn" },
         ];
       }
 
@@ -787,9 +1035,10 @@ export const applyEvent = (session, event) => {
     }
 
     case "ENTER_ATTACK_ROLLS": {
-      const { hits, crits } = payload || {};
+      const { attackId, hits, crits } = payload || {};
       if (!nextSession.currentAttack) return nextSession;
-      if (nextSession.currentAttack.status !== "AWAIT_ATTACK_ROLLS") return nextSession;
+      if (nextSession.currentAttack.state !== "AWAIT_ATTACK_ROLLS") return nextSession;
+      if (attackId && nextSession.currentAttack.attackId !== attackId) return nextSession;
       if (!Number.isFinite(hits) || !Number.isFinite(crits)) return nextSession;
       if (hits < 0 || crits < 0) return nextSession;
 
@@ -801,15 +1050,17 @@ export const applyEvent = (session, event) => {
             hits,
             crits,
           },
+          state: "AWAIT_DEFENCE_ROLLS",
           status: "AWAIT_DEFENCE_ROLLS",
         },
       };
     }
 
     case "ENTER_DEFENCE_ROLLS": {
-      const { saves, critSaves = 0 } = payload || {};
+      const { attackId, saves, critSaves = 0 } = payload || {};
       if (!nextSession.currentAttack) return nextSession;
-      if (nextSession.currentAttack.status !== "AWAIT_DEFENCE_ROLLS") return nextSession;
+      if (nextSession.currentAttack.state !== "AWAIT_DEFENCE_ROLLS") return nextSession;
+      if (attackId && nextSession.currentAttack.attackId !== attackId) return nextSession;
       if (!Number.isFinite(saves) || !Number.isFinite(critSaves)) return nextSession;
       if (saves < 0 || critSaves < 0) return nextSession;
 
@@ -821,6 +1072,7 @@ export const applyEvent = (session, event) => {
             saves,
             critSaves,
           },
+          state: "READY_TO_RESOLVE",
           status: "READY_TO_RESOLVE",
         },
       };
@@ -828,7 +1080,10 @@ export const applyEvent = (session, event) => {
 
     case "RESOLVE_ATTACK": {
       if (!nextSession.currentAttack) return nextSession;
-      if (nextSession.currentAttack.status !== "READY_TO_RESOLVE") return nextSession;
+      if (nextSession.currentAttack.state !== "READY_TO_RESOLVE") return nextSession;
+
+      const { attackId } = payload || {};
+      if (attackId && nextSession.currentAttack.attackId !== attackId) return nextSession;
 
       const { attackerId, defenderId, weaponId } = nextSession.currentAttack;
       const attackerFound = findOperative(nextSession, attackerId);
@@ -867,12 +1122,11 @@ export const applyEvent = (session, event) => {
         critSaves: 0,
       };
 
-      const { remainingHits, remainingCrits } = resolveDamageAllocation({
-        hits,
-        crits,
-        saves,
-        critSaves,
-      });
+      const remainingCritsAfterCritSaves = Math.max(crits - critSaves, 0);
+      const critSavesLeft = Math.max(critSaves - crits, 0);
+      const remainingHitsAfterCritSaves = Math.max(hits - critSavesLeft, 0);
+      const remainingHits = Math.max(remainingHitsAfterCritSaves - saves, 0);
+      const remainingCrits = remainingCritsAfterCritSaves;
 
       const damageProfile = parseWeaponDamage(weapon);
       const totalDamage =
@@ -926,10 +1180,14 @@ export const applyEvent = (session, event) => {
       const existingTokens = Array.isArray(found.operative.state?.tokens)
         ? found.operative.state.tokens
         : [];
-      const hasToken = existingTokens.some((t) => t.type === tokenKey);
+      const normalizedKey = String(tokenKey);
+      const hasToken = existingTokens.some((t) => t.type === normalizedKey);
       const nextTokens = hasToken
-        ? existingTokens.filter((t) => t.type !== tokenKey)
-        : [...existingTokens, { type: tokenKey, expires: { when: "endOfRound" } }];
+        ? existingTokens.filter((t) => t.type !== normalizedKey)
+        : [
+            ...existingTokens,
+            { type: normalizedKey, expires: { when: "END_TP" } },
+          ];
 
       return replaceOperative(nextSession, found.team.id, operativeId, (op) =>
         updateDerivedForTokenToggle(
@@ -940,7 +1198,7 @@ export const applyEvent = (session, event) => {
               tokens: nextTokens,
             },
           },
-          tokenKey,
+          normalizedKey,
           !hasToken,
         ),
       );
@@ -1006,6 +1264,7 @@ export const applyEvent = (session, event) => {
     }
 
     case "END_ACTIVATION": {
+      if (nextSession.active.phase !== "FIREFIGHT") return nextSession;
       if (nextSession.currentAttack) return nextSession;
       const operativeId = nextSession.active.activation?.operativeId;
       if (!operativeId) return nextSession;
@@ -1043,18 +1302,45 @@ export const applyEvent = (session, event) => {
             ? ownerPlayerId
             : ownerPlayerId;
 
-      const counteractForPlayerId =
-        opponentReady === 0 && ownerReady > 0 && opponentPlayerId
-          ? opponentPlayerId
-          : null;
+      const nextReady = countReadyOperativesForPlayer(updated, nextActivePlayerId);
+      const nextOpponentId = getOtherPlayerId(updated, nextActivePlayerId);
+      const nextOpponentReady = nextOpponentId
+        ? countReadyOperativesForPlayer(updated, nextOpponentId)
+        : 0;
+
+      const eligiblePlayerId =
+        nextReady === 0 && nextOpponentReady > 0 ? nextActivePlayerId : null;
+      const eligibleTeam = eligiblePlayerId
+        ? getTeamByPlayerId(updated, eligiblePlayerId)
+        : null;
+
+      const hasCounteractEligible = eligibleTeam
+        ? eligibleTeam.operatives.some(
+            (op) =>
+              op.state?.expended === true &&
+              op.state?.order === "engage" &&
+              !op.state?.counteractedThisTP &&
+              op.state?.woundsCurrent > 0,
+          )
+        : false;
 
       return {
         ...updated,
+        counteract: {
+          open: Boolean(eligiblePlayerId && hasCounteractEligible),
+          eligiblePlayerId: eligiblePlayerId && hasCounteractEligible ? eligiblePlayerId : null,
+          selectedOperativeId: null,
+          moveBudgetInches: 2,
+          moveSpentInches: 0,
+          usedOperativeIdsThisTP: updated.counteract?.usedOperativeIdsThisTP || [],
+          state: eligiblePlayerId && hasCounteractEligible ? "SELECT_OPERATIVE" : "NONE",
+        },
         active: {
           ...updated.active,
           turn: (updated.active.turn || 1) + 1,
           activePlayerId: nextActivePlayerId,
-          counteractForPlayerId,
+          counteractForPlayerId: eligiblePlayerId && hasCounteractEligible ? eligiblePlayerId : null,
+          activationSubstep: "NONE",
           activation: {
             operativeId: null,
             aplSpent: 0,
@@ -1086,8 +1372,12 @@ export const applyEvent = (session, event) => {
         active: {
           ...nextSession.active,
           round: Number.isFinite(round) ? round : nextSession.active.round + 1,
+          turningPoint: Number.isFinite(round)
+            ? round
+            : (nextSession.active.turningPoint || nextSession.active.round) + 1,
           turn: 1,
-          phase: "strategy",
+          phase: "STRATEGY",
+          activationSubstep: "NONE",
           activation: {
             operativeId: null,
             aplSpent: 0,
