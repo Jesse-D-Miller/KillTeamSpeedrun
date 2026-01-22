@@ -175,6 +175,45 @@ export function gameReducer(state, action) {
 			};
 		}
 
+		case "SET_ORDER_OVERRIDE": {
+			const { id, order } = action.payload;
+			if (!id || (order !== "conceal" && order !== "engage")) return state;
+			const targetUnit = state.game.find((unit) => unit.id === id);
+			if (!targetUnit) return state;
+			const prevOrder = targetUnit.state.order;
+			if (prevOrder === order) return state;
+
+			const nextGame = state.game.map((unit) =>
+				unit.id === id
+					? {
+							...unit,
+							state: {
+								...unit.state,
+								order,
+							},
+						}
+					: unit,
+			);
+
+			const entry = createLogEntry({
+				type: "ORDER_CHANGED",
+				summary: `${targetUnit.name}: order ${prevOrder}→${order}`,
+				meta: {
+					unitId: id,
+					from: prevOrder,
+					to: order,
+				},
+				undo: state.game,
+				redo: nextGame,
+			});
+
+			return {
+				...state,
+				game: nextGame,
+				log: pushLog(state.log, entry),
+			};
+		}
+
 		case "SET_SELECTED_WEAPON": {
 			const { id, weaponName } = action.payload;
 			return {

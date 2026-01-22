@@ -108,22 +108,25 @@ function UnitCard({
         </button>
 
         <div className="kt-card__status">
-          <span
-            className={`pill ${state.order === "conceal" ? "pill--blue" : "pill--orange"}`}
+          <button
+            className={`pill pill--clickable ${
+              state.order === "conceal" ? "pill--blue" : "pill--orange"
+            }`}
+            type="button"
+            onClick={() =>
+              dispatch({
+                type: "SET_ORDER_OVERRIDE",
+                payload: {
+                  id: unit.id,
+                  order: state.order === "conceal" ? "engage" : "conceal",
+                },
+              })
+            }
           >
             {state.order.toUpperCase()}
-          </span>
+          </button>
           {isUnitInjured && <span className="pill pill--red">INJURED</span>}
         </div>
-
-        <button
-          className="btn btn--ghost"
-          onClick={() =>
-            dispatch({ type: "TOGGLE_ORDER", payload: { id: unit.id } })
-          }
-        >
-          Toggle Order
-        </button>
       </section>
 
       {/* Weapons table */}

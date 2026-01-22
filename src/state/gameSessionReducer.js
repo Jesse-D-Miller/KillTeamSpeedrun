@@ -20,6 +20,12 @@ const getOtherPlayerId = (session, playerId) =>
 const getPlayerByTeamId = (session, teamId) =>
   session.players.find((player) => player.selectedTeamId === teamId) || null;
 
+const getTeamByPlayerId = (session, playerId) => {
+  const player = getPlayerById(session, playerId);
+  if (!player?.selectedTeamId) return null;
+  return session.teamsById[player.selectedTeamId] || null;
+};
+
 const getExpectedActivePlayerId = (session) => {
   const order = session.active.activationPriority || [];
   if (order.length === 0) return session.active.activePlayerId || "";
@@ -85,6 +91,54 @@ const applyWoundsOverride = (operative, woundsCurrent) => {
       },
     },
   };
+};
+
+const parseWeaponDamage = (weapon) => {
+  const dmg = weapon?.dmg ?? weapon?.damage;
+  if (typeof dmg === "string") {
+    const [normal, crit] = dmg.split("/").map((value) => Number(value));
+    return {
+      normal: Number.isFinite(normal) ? normal : 0,
+      crit: Number.isFinite(crit) ? crit : 0,
+    };
+  }
+  if (typeof dmg === "number") {
+    return { normal: dmg, crit: dmg };
+  }
+  return { normal: 0, crit: 0 };
+};
+
+const resolveDamageAllocation = ({ hits, crits, saves, critSaves }) => {
+  let remainingHits = hits;
+  let remainingCrits = crits;
+  let remainingSaves = saves;
+  let remainingCritSaves = critSaves;
+
+  // Crit saves cancel crits first.
+  const critsCanceledByCritSaves = Math.min(remainingCrits, remainingCritSaves);
+  remainingCrits -= critsCanceledByCritSaves;
+  remainingCritSaves -= critsCanceledByCritSaves;
+
+  // Regular saves cancel regular hits first.
+  const hitsCanceledBySaves = Math.min(remainingHits, remainingSaves);
+  remainingHits -= hitsCanceledBySaves;
+  remainingSaves -= hitsCanceledBySaves;
+
+  // Remaining crit saves cancel remaining hits.
+  if (remainingCritSaves > 0 && remainingHits > 0) {
+    const hitsCanceledByCritSaves = Math.min(remainingHits, remainingCritSaves);
+    remainingHits -= hitsCanceledByCritSaves;
+    remainingCritSaves -= hitsCanceledByCritSaves;
+  }
+
+  // Remaining saves cancel remaining crits.
+  if (remainingSaves > 0 && remainingCrits > 0) {
+    const critsCanceledBySaves = Math.min(remainingCrits, remainingSaves);
+    remainingCrits -= critsCanceledBySaves;
+    remainingSaves -= critsCanceledBySaves;
+  }
+
+  return { remainingHits, remainingCrits };
 };
 
 const findOperative = (session, operativeId) => {
@@ -214,6 +268,9 @@ export const initialSession = ({
     ployUsedByPlayerId: {},
     gambitsUsedByPlayerId: {},
   },
+  ployState = {
+    activeByPlayerId: {},
+  },
   active = {
     turn: 1,
     round: 1,
@@ -237,6 +294,7 @@ export const initialSession = ({
     lockedTeams,
     currentAttack,
     perTurn,
+    ployState,
     active,
     eventLog: [],
   };
@@ -304,6 +362,9 @@ export const applyEvent = (session, event) => {
       return {
         ...nextSession,
         teamsById: nextTeamsById,
+        ployState: {
+          activeByPlayerId: {},
+        },
         active: {
           ...nextSession.active,
           phase: "end",
@@ -494,24 +555,12 @@ export const applyEvent = (session, event) => {
       if (!operativeId || !Number.isFinite(amount) || amount <= 0) return nextSession;
       const found = findOperative(nextSession, operativeId);
       if (!found) return nextSession;
+      if (found.operative.state?.incapacitated) return nextSession;
+
       return replaceOperative(nextSession, found.team.id, operativeId, (op) => {
-        const nextWounds = clamp(
-          op.state.woundsCurrent - amount,
-          0,
-          op.base.stats.woundsMax,
-        );
-        return {
-          ...op,
-          state: {
-            ...op.state,
-            woundsCurrent: nextWounds,
-            activation: {
-              ...op.state.activation,
-              activatedThisRound:
-                nextWounds <= 0 ? true : op.state.activation.activatedThisRound,
-            },
-          },
-        };
+        const current = op.state?.woundsCurrent ?? 0;
+        const nextWounds = current - amount;
+        return applyWoundsOverride(op, nextWounds);
       });
     }
 
@@ -520,19 +569,12 @@ export const applyEvent = (session, event) => {
       if (!operativeId || !Number.isFinite(amount) || amount <= 0) return nextSession;
       const found = findOperative(nextSession, operativeId);
       if (!found) return nextSession;
+      if (found.operative.state?.incapacitated) return nextSession;
+
       return replaceOperative(nextSession, found.team.id, operativeId, (op) => {
-        const nextWounds = clamp(
-          op.state.woundsCurrent + amount,
-          0,
-          op.base.stats.woundsMax,
-        );
-        return {
-          ...op,
-          state: {
-            ...op.state,
-            woundsCurrent: nextWounds,
-          },
-        };
+        const current = op.state?.woundsCurrent ?? 0;
+        const nextWounds = current + amount;
+        return applyWoundsOverride(op, nextWounds);
       });
     }
 
@@ -544,6 +586,306 @@ export const applyEvent = (session, event) => {
       return replaceOperative(nextSession, found.team.id, operativeId, (op) =>
         applyWoundsOverride(op, woundsCurrent),
       );
+    }
+
+    case "SET_INJURED": {
+      const { operativeId, injured } = payload || {};
+      if (!operativeId || typeof injured !== "boolean") return nextSession;
+      const found = findOperative(nextSession, operativeId);
+      if (!found) return nextSession;
+      if (found.operative.state?.incapacitated) return nextSession;
+
+      return replaceOperative(nextSession, found.team.id, operativeId, (op) => ({
+        ...op,
+        state: {
+          ...op.state,
+          injuredOverride: injured,
+        },
+      }));
+    }
+
+    case "DECLARE_ATTACK": {
+      const { attackerId, defenderId, weaponId, attackType } = payload || {};
+      if (!attackerId || !defenderId || !weaponId) return nextSession;
+      if (attackType !== "shoot" && attackType !== "fight") return nextSession;
+
+      if (nextSession.active.activation?.operativeId !== attackerId) return nextSession;
+      if (nextSession.active.phase !== "firefight") return nextSession;
+      if (nextSession.currentAttack) return nextSession;
+
+      const attackerFound = findOperative(nextSession, attackerId);
+      const defenderFound = findOperative(nextSession, defenderId);
+      if (!attackerFound || !defenderFound) return nextSession;
+
+      const attacker = attackerFound.operative;
+      const defender = defenderFound.operative;
+
+      if (attacker.state?.woundsCurrent <= 0) return nextSession;
+      if (defender.state?.woundsCurrent <= 0) return nextSession;
+
+      if (attackType === "shoot" && attacker.state?.order === "conceal") {
+        return nextSession;
+      }
+
+      const stats = attacker.base?.stats ?? attacker.stats;
+      const aplCurrent = attacker.state?.activation?.aplCurrent ?? stats?.apl ?? 0;
+      if (aplCurrent < 1) return nextSession;
+
+      const weapon = attacker.weapons?.find((w) => w.id === weaponId);
+      if (!weapon) return nextSession;
+
+      const updated = replaceOperative(nextSession, attackerFound.team.id, attackerId, (op) => ({
+        ...op,
+        state: {
+          ...op.state,
+          activation: {
+            ...op.state.activation,
+            aplCurrent: Math.max(0, aplCurrent - 1),
+          },
+        },
+      }));
+
+      return {
+        ...updated,
+        currentAttack: {
+          attackerId,
+          defenderId,
+          weaponId,
+          attackType,
+          attackDice: { hits: 0, crits: 0 },
+          defenseDice: { saves: 0, critSaves: 0 },
+          status: "AWAIT_ATTACK_ROLLS",
+        },
+      };
+    }
+
+    case "USE_PLOY": {
+      const { playerId, ployId, timingTag, cost = 1, effectTiming } = payload || {};
+      if (!playerId || !ployId) return nextSession;
+
+      const team = getTeamByPlayerId(nextSession, playerId);
+      if (!team) return nextSession;
+
+      const currentCp = team.resources?.cp ?? 0;
+      if (!Number.isFinite(cost) || cost <= 0 || currentCp < cost) return nextSession;
+
+      const phase = nextSession.active.phase;
+      if (timingTag === "strategy" && phase !== "strategy") return nextSession;
+      if (timingTag === "firefight" && phase !== "firefight") return nextSession;
+
+      const normalizedPloyId = String(ployId).toLowerCase().replace(/\s+/g, "_");
+      const isCommandReroll = normalizedPloyId === "command_reroll";
+
+      const usedByPlayer = nextSession.perTurn?.ployUsedByPlayerId?.[playerId] || {};
+      if (!isCommandReroll && usedByPlayer[ployId]) return nextSession;
+
+      const nextTeamsById = {
+        ...nextSession.teamsById,
+        [team.id]: {
+          ...team,
+          resources: {
+            ...(team.resources || {}),
+            cp: currentCp - cost,
+          },
+        },
+      };
+
+      const nextPerTurn = {
+        ployUsedByPlayerId: {
+          ...(nextSession.perTurn?.ployUsedByPlayerId || {}),
+          [playerId]: {
+            ...usedByPlayer,
+            ...(isCommandReroll ? {} : { [ployId]: true }),
+          },
+        },
+        gambitsUsedByPlayerId: {
+          ...(nextSession.perTurn?.gambitsUsedByPlayerId || {}),
+        },
+      };
+
+      const nextPloyState = {
+        activeByPlayerId: {
+          ...(nextSession.ployState?.activeByPlayerId || {}),
+        },
+      };
+
+      if (effectTiming === "end_tp" || timingTag === "until_end_tp") {
+        const existing = nextPloyState.activeByPlayerId[playerId] || [];
+        nextPloyState.activeByPlayerId[playerId] = [
+          ...existing,
+          { ployId, timingTag, expires: "endOfTurn" },
+        ];
+      }
+
+      return {
+        ...nextSession,
+        teamsById: nextTeamsById,
+        perTurn: nextPerTurn,
+        ployState: nextPloyState,
+      };
+    }
+
+    case "GAIN_CP": {
+      const { playerId, amount, reason } = payload || {};
+      if (!playerId || !Number.isFinite(amount) || amount <= 0) return nextSession;
+      const team = getTeamByPlayerId(nextSession, playerId);
+      if (!team) return nextSession;
+
+      return {
+        ...nextSession,
+        teamsById: {
+          ...nextSession.teamsById,
+          [team.id]: {
+            ...team,
+            resources: {
+              ...(team.resources || {}),
+              cp: (team.resources?.cp ?? 0) + amount,
+            },
+            notes: {
+              ...(team.notes || {}),
+              lastCpGain: {
+                amount,
+                reason: reason || "",
+                at: nowIso(),
+              },
+            },
+          },
+        },
+      };
+    }
+
+    case "SPEND_CP": {
+      const { playerId, amount, reason } = payload || {};
+      if (!playerId || !Number.isFinite(amount) || amount <= 0) return nextSession;
+      const team = getTeamByPlayerId(nextSession, playerId);
+      if (!team) return nextSession;
+
+      const currentCp = team.resources?.cp ?? 0;
+      if (currentCp < amount) return nextSession;
+
+      return {
+        ...nextSession,
+        teamsById: {
+          ...nextSession.teamsById,
+          [team.id]: {
+            ...team,
+            resources: {
+              ...(team.resources || {}),
+              cp: currentCp - amount,
+            },
+            notes: {
+              ...(team.notes || {}),
+              lastCpSpend: {
+                amount,
+                reason: reason || "",
+                at: nowIso(),
+              },
+            },
+          },
+        },
+      };
+    }
+
+    case "ENTER_ATTACK_ROLLS": {
+      const { hits, crits } = payload || {};
+      if (!nextSession.currentAttack) return nextSession;
+      if (nextSession.currentAttack.status !== "AWAIT_ATTACK_ROLLS") return nextSession;
+      if (!Number.isFinite(hits) || !Number.isFinite(crits)) return nextSession;
+      if (hits < 0 || crits < 0) return nextSession;
+
+      return {
+        ...nextSession,
+        currentAttack: {
+          ...nextSession.currentAttack,
+          attackDice: {
+            hits,
+            crits,
+          },
+          status: "AWAIT_DEFENCE_ROLLS",
+        },
+      };
+    }
+
+    case "ENTER_DEFENCE_ROLLS": {
+      const { saves, critSaves = 0 } = payload || {};
+      if (!nextSession.currentAttack) return nextSession;
+      if (nextSession.currentAttack.status !== "AWAIT_DEFENCE_ROLLS") return nextSession;
+      if (!Number.isFinite(saves) || !Number.isFinite(critSaves)) return nextSession;
+      if (saves < 0 || critSaves < 0) return nextSession;
+
+      return {
+        ...nextSession,
+        currentAttack: {
+          ...nextSession.currentAttack,
+          defenseDice: {
+            saves,
+            critSaves,
+          },
+          status: "READY_TO_RESOLVE",
+        },
+      };
+    }
+
+    case "RESOLVE_ATTACK": {
+      if (!nextSession.currentAttack) return nextSession;
+      if (nextSession.currentAttack.status !== "READY_TO_RESOLVE") return nextSession;
+
+      const { attackerId, defenderId, weaponId } = nextSession.currentAttack;
+      const attackerFound = findOperative(nextSession, attackerId);
+      const defenderFound = findOperative(nextSession, defenderId);
+
+      if (!attackerFound || !defenderFound) {
+        return {
+          ...nextSession,
+          currentAttack: null,
+        };
+      }
+
+      const attacker = attackerFound.operative;
+      const defender = defenderFound.operative;
+      if (!attacker || !defender || defender.state?.woundsCurrent <= 0) {
+        return {
+          ...nextSession,
+          currentAttack: null,
+        };
+      }
+
+      const weapon = attacker.weapons?.find((w) => w.id === weaponId);
+      if (!weapon) {
+        return {
+          ...nextSession,
+          currentAttack: null,
+        };
+      }
+
+      const { hits, crits } = nextSession.currentAttack.attackDice || {
+        hits: 0,
+        crits: 0,
+      };
+      const { saves, critSaves } = nextSession.currentAttack.defenseDice || {
+        saves: 0,
+        critSaves: 0,
+      };
+
+      const { remainingHits, remainingCrits } = resolveDamageAllocation({
+        hits,
+        crits,
+        saves,
+        critSaves,
+      });
+
+      const damageProfile = parseWeaponDamage(weapon);
+      const totalDamage =
+        remainingHits * damageProfile.normal + remainingCrits * damageProfile.crit;
+
+      const updated = replaceOperative(nextSession, defenderFound.team.id, defenderId, (op) =>
+        totalDamage > 0 ? applyWoundsOverride(op, (op.state?.woundsCurrent ?? 0) - totalDamage) : op,
+      );
+
+      return {
+        ...updated,
+        currentAttack: null,
+      };
     }
 
     case "ADD_TOKEN": {

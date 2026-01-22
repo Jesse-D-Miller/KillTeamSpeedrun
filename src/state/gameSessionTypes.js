@@ -28,6 +28,7 @@
  * @property {boolean=} expended
  * @property {boolean=} counteractedThisTP
  * @property {boolean=} blockedCounteract
+ * @property {boolean=} injuredOverride
  * @property {string|null} selectedWeaponId
  * @property {string[]} equipment
  * @property {{ aplCurrent: number, activatedThisRound: boolean }} activation
@@ -75,7 +76,7 @@
  */
 
 /**
- * @typedef {"START_GAME" | "SET_INITIATIVE" | "START_TURN" | "SET_ACTIVE_OPERATIVE" | "END_TURN" | "SET_ORDER" | "APPLY_DAMAGE" | "HEAL" | "SET_WOUNDS" | "ADD_TOKEN" | "REMOVE_TOKEN" | "TOGGLE_TOKEN" | "SELECT_OPERATIVE" | "SELECT_WEAPON" | "SPEND_APL" | "END_ACTIVATION" | "NEXT_PHASE" | "NEXT_ROUND"} GameEventType
+ * @typedef {"START_GAME" | "SET_INITIATIVE" | "START_TURN" | "SET_ACTIVE_OPERATIVE" | "END_TURN" | "SET_ORDER" | "APPLY_DAMAGE" | "HEAL" | "SET_WOUNDS" | "SET_INJURED" | "DECLARE_ATTACK" | "ENTER_ATTACK_ROLLS" | "ENTER_DEFENCE_ROLLS" | "RESOLVE_ATTACK" | "USE_PLOY" | "GAIN_CP" | "SPEND_CP" | "ADD_TOKEN" | "REMOVE_TOKEN" | "TOGGLE_TOKEN" | "SELECT_OPERATIVE" | "SELECT_WEAPON" | "SPEND_APL" | "END_ACTIVATION" | "NEXT_PHASE" | "NEXT_ROUND"} GameEventType
  */
 
 /**
@@ -117,6 +118,7 @@
  * @property {Record<string, Team>} teamsById
  * @property {boolean} lockedTeams
  * @property {{ ployUsedByPlayerId: Record<string, Record<string, boolean>>, gambitsUsedByPlayerId: Record<string, Record<string, boolean>> }=} perTurn
+ * @property {{ activeByPlayerId: Record<string, Array<{ ployId: string, timingTag?: string, expires: "endOfTurn" | "endOfRound" }>> }=} ployState
  * @property {GameActiveState} active
  * @property {Object=} missionConfig
  * @property {Object|null} currentAttack
