@@ -15,65 +15,79 @@ function TargetSelectModal({
     <div className="kt-modal">
       <div className="kt-modal__backdrop" onClick={onClose} />
       <div className="kt-modal__panel">
-        <div className="kt-modal__header">
-          <div className="kt-modal__title">Select Target</div>
-          <div className="kt-modal__subtitle">
-            Attacker: <span>{attacker?.name || "Unknown"}</span>
-          </div>
-        </div>
+        <button
+          className="kt-modal__close"
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          title="Close"
+        >
+          ×
+        </button>
+        <div className="kt-modal__layout">
+          <aside className="kt-modal__sidebar">
+            <div className="kt-modal__sidebar-title">Actions</div>
+            <div className="kt-modal__sidebar-empty">
+              Choose a target to continue.
+            </div>
+            <button
+              className="kt-modal__btn kt-modal__btn--primary"
+              type="button"
+              onClick={onConfirm}
+              disabled={!selectedTargetId}
+            >
+              Shoot
+            </button>
+          </aside>
+          <div className="kt-modal__content">
+            <div className="kt-modal__header">
+              <div className="kt-modal__title">Select Target</div>
+              <div className="kt-modal__subtitle">
+                Attacker: <span>{attacker?.name || "Unknown"}</span>
+              </div>
+            </div>
 
-        <div className="kt-modal__grid">
-          {targets.length === 0 ? (
-            <div className="kt-modal__empty">No valid targets</div>
-          ) : (
-            targets.map((unit) => (
-              <button
-                key={unit.id}
-                className={`kt-modal__tile ${
-                  unit.id === selectedTargetId ? "kt-modal__tile--selected" : ""
-                }`}
-                type="button"
-                onClick={() => onSelectTarget(unit.id)}
-              >
-                <div className="kt-modal__tile-name">{unit.name}</div>
-                <div className="kt-modal__tile-sub">SV {unit.stats.save}+</div>
-                <div className="kt-modal__bar">
-                  <div
-                    className={`kt-modal__bar-fill ${
-                      unit.state.woundsCurrent < unit.stats.woundsMax / 2
-                        ? "kt-modal__bar-fill--injured"
-                        : ""
+            <div className="kt-modal__grid">
+              {targets.length === 0 ? (
+                <div className="kt-modal__empty">No valid targets</div>
+              ) : (
+                targets.map((unit) => (
+                  <button
+                    key={unit.id}
+                    className={`kt-modal__tile ${
+                      unit.id === selectedTargetId ? "kt-modal__tile--selected" : ""
                     }`}
-                    style={{
-                      width: `${Math.max(
-                        0,
-                        Math.min(
-                          100,
-                          unit.stats.woundsMax === 0
-                            ? 0
-                            : (unit.state.woundsCurrent / unit.stats.woundsMax) * 100,
-                        ),
-                      )}%`,
-                    }}
-                  />
-                </div>
-              </button>
-            ))
-          )}
-        </div>
+                    type="button"
+                    onClick={() => onSelectTarget(unit.id)}
+                  >
+                    <div className="kt-modal__tile-name">{unit.name}</div>
+                    <div className="kt-modal__tile-sub">SV {unit.stats.save}+</div>
+                    <div className="kt-modal__bar">
+                      <div
+                        className={`kt-modal__bar-fill ${
+                          unit.state.woundsCurrent < unit.stats.woundsMax / 2
+                            ? "kt-modal__bar-fill--injured"
+                            : ""
+                        }`}
+                        style={{
+                          width: `${Math.max(
+                            0,
+                            Math.min(
+                              100,
+                              unit.stats.woundsMax === 0
+                                ? 0
+                                : (unit.state.woundsCurrent / unit.stats.woundsMax) * 100,
+                            ),
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
 
-        <div className="kt-modal__actions">
-          <button className="kt-modal__btn" type="button" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className="kt-modal__btn kt-modal__btn--primary"
-            type="button"
-            onClick={onConfirm}
-            disabled={!selectedTargetId}
-          >
-            Shoot
-          </button>
+          </div>
         </div>
       </div>
     </div>

@@ -194,144 +194,154 @@ function DefenseAllocationModal({
         }}
       />
       <div className="kt-modal__panel">
-        <div className="kt-modal__header">
-          <div className="kt-modal__title">Allocate Defense Dice</div>
-          <div className="kt-modal__subtitle">
-            {attacker?.name || "Attacker"} — {weapon?.name || "Weapon"} vs {defender?.name || "Defender"}
-          </div>
-        </div>
+        <div className="kt-modal__layout">
+          <aside className="kt-modal__sidebar">
+            <div className="kt-modal__sidebar-title">Actions</div>
+            <div className="kt-modal__sidebar-empty">
+              Assign defense dice to block hits.
+            </div>
+          </aside>
+          <div className="kt-modal__content">
+            <div className="kt-modal__header">
+              <div className="kt-modal__title">Allocate Defense Dice</div>
+              <div className="kt-modal__subtitle">
+                {attacker?.name || "Attacker"} — {weapon?.name || "Weapon"} vs {defender?.name || "Defender"}
+              </div>
+            </div>
 
-        <div className="allocation">
-          <div className="allocation__block">
-            <div className="allocation__label">Attack Dice</div>
-            <div className="allocation__grid">
-              {attackEntries.map((attack) => {
-                const allocationsForAttack = Object.entries(allocations)
-                  .filter(([, attackId]) => Number(attackId) === attack.id)
-                  .map(([defenseId]) => Number(defenseId));
-                const counts = allocationCounts[attack.id] || { crits: 0, hits: 0 };
-                const isNegated =
-                  attack.type === "hit"
-                    ? counts.crits + counts.hits >= 1
-                    : attack.type === "crit"
-                      ? counts.crits >= 1 || counts.hits >= 2
-                      : false;
+            <div className="allocation">
+              <div className="allocation__block">
+                <div className="allocation__label">Attack Dice</div>
+                <div className="allocation__grid">
+                  {attackEntries.map((attack) => {
+                    const allocationsForAttack = Object.entries(allocations)
+                      .filter(([, attackId]) => Number(attackId) === attack.id)
+                      .map(([defenseId]) => Number(defenseId));
+                    const counts = allocationCounts[attack.id] || { crits: 0, hits: 0 };
+                    const isNegated =
+                      attack.type === "hit"
+                        ? counts.crits + counts.hits >= 1
+                        : attack.type === "crit"
+                          ? counts.crits >= 1 || counts.hits >= 2
+                          : false;
 
-                return (
-                  <button
-                    key={attack.id}
-                    type="button"
-                    className={`allocation__die allocation__die--${attack.type} ${
-                      draggedDefenseId != null ? "allocation__die--droppable" : ""
-                    } ${isNegated ? "allocation__die--negated" : ""}`}
-                    onClick={() => handleAttackClick(attack.id)}
-                    onDragOver={(event) => {
-                      event.preventDefault();
-                    }}
-                    onDrop={() => handleDrop(attack.id)}
-                  >
-                    <div className="allocation__pips">
-                      {Array.from({ length: 9 }).map((_, pipIndex) => (
-                        <span
-                          key={pipIndex}
-                          className={`allocation__pip ${
-                            pipIndicesForValue(attack.value).includes(pipIndex)
-                              ? "allocation__pip--on"
-                              : ""
-                          }`}
-                        />
-                      ))}
-                    </div>
-                    {allocationsForAttack.length > 0 && (
-                      <div className="allocation__assigned">
-                        {allocationsForAttack.map((defenseId) => {
-                          const defense = defenseEntries.find((d) => d.id === defenseId);
-                          const tagClass =
-                            defense?.type === "crit"
-                              ? "allocation__assigned-tag allocation__assigned-tag--crit"
-                              : "allocation__assigned-tag";
-                          return (
-                            <span key={defenseId} className={tagClass}>
-                              {defense?.type === "crit" ? "C" : "S"}
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
+                    return (
+                      <button
+                        key={attack.id}
+                        type="button"
+                        className={`allocation__die allocation__die--${attack.type} ${
+                          draggedDefenseId != null ? "allocation__die--droppable" : ""
+                        } ${isNegated ? "allocation__die--negated" : ""}`}
+                        onClick={() => handleAttackClick(attack.id)}
+                        onDragOver={(event) => {
+                          event.preventDefault();
+                        }}
+                        onDrop={() => handleDrop(attack.id)}
+                      >
+                        <div className="allocation__pips">
+                          {Array.from({ length: 9 }).map((_, pipIndex) => (
+                            <span
+                              key={pipIndex}
+                              className={`allocation__pip ${
+                                pipIndicesForValue(attack.value).includes(pipIndex)
+                                  ? "allocation__pip--on"
+                                  : ""
+                              }`}
+                            />
+                          ))}
+                        </div>
+                        {allocationsForAttack.length > 0 && (
+                          <div className="allocation__assigned">
+                            {allocationsForAttack.map((defenseId) => {
+                              const defense = defenseEntries.find((d) => d.id === defenseId);
+                              const tagClass =
+                                defense?.type === "crit"
+                                  ? "allocation__assigned-tag allocation__assigned-tag--crit"
+                                  : "allocation__assigned-tag";
+                              return (
+                                <span key={defenseId} className={tagClass}>
+                                  {defense?.type === "crit" ? "C" : "S"}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="allocation__block">
+                <div className="allocation__label">Defense Dice</div>
+                <div className="allocation__grid">
+                  {defenseEntries.map((defense) => {
+                    const isSelected = selectedDefenseId === defense.id;
+                    const allocatedAttackId = allocations[defense.id];
+                    const isAllocated = allocatedAttackId != null;
+
+                    return (
+                      <button
+                        key={defense.id}
+                        type="button"
+                        className={`allocation__die allocation__die--${defense.type} ${
+                          isSelected ? "allocation__die--selected" : ""
+                        } ${isAllocated ? "allocation__die--allocated" : ""}`}
+                        draggable={defense.type !== "miss" && !isAllocated}
+                        onDragStart={() => {
+                          if (defense.type === "miss" || isAllocated) return;
+                          setDraggedDefenseId(defense.id);
+                        }}
+                        onDragEnd={() => setDraggedDefenseId(null)}
+                        onClick={() => {
+                          if (isAllocated) {
+                            removeAllocation(defense.id);
+                            return;
+                          }
+                          if (defense.type === "miss") return;
+                          setSelectedDefenseId(defense.id);
+                        }}
+                      >
+                        <div className="allocation__pips">
+                          {Array.from({ length: 9 }).map((_, pipIndex) => (
+                            <span
+                              key={pipIndex}
+                              className={`allocation__pip ${
+                                pipIndicesForValue(defense.value).includes(pipIndex)
+                                  ? "allocation__pip--on"
+                                  : ""
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="kt-modal__actions">
+              <button
+                className="kt-modal__btn"
+                type="button"
+                onClick={() => {
+                  reset();
+                  onClose();
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="kt-modal__btn kt-modal__btn--primary"
+                type="button"
+                onClick={handleConfirm}
+                disabled={!allDefenseAllocated}
+              >
+                Resolve
+              </button>
             </div>
           </div>
-
-          <div className="allocation__block">
-            <div className="allocation__label">Defense Dice</div>
-            <div className="allocation__grid">
-              {defenseEntries.map((defense) => {
-                const isSelected = selectedDefenseId === defense.id;
-                const allocatedAttackId = allocations[defense.id];
-                const isAllocated = allocatedAttackId != null;
-
-                return (
-                  <button
-                    key={defense.id}
-                    type="button"
-                    className={`allocation__die allocation__die--${defense.type} ${
-                      isSelected ? "allocation__die--selected" : ""
-                    } ${isAllocated ? "allocation__die--allocated" : ""}`}
-                    draggable={defense.type !== "miss" && !isAllocated}
-                    onDragStart={() => {
-                      if (defense.type === "miss" || isAllocated) return;
-                      setDraggedDefenseId(defense.id);
-                    }}
-                    onDragEnd={() => setDraggedDefenseId(null)}
-                    onClick={() => {
-                      if (isAllocated) {
-                        removeAllocation(defense.id);
-                        return;
-                      }
-                      if (defense.type === "miss") return;
-                      setSelectedDefenseId(defense.id);
-                    }}
-                  >
-                    <div className="allocation__pips">
-                      {Array.from({ length: 9 }).map((_, pipIndex) => (
-                        <span
-                          key={pipIndex}
-                          className={`allocation__pip ${
-                            pipIndicesForValue(defense.value).includes(pipIndex)
-                              ? "allocation__pip--on"
-                              : ""
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        <div className="kt-modal__actions">
-          <button
-            className="kt-modal__btn"
-            type="button"
-            onClick={() => {
-              reset();
-              onClose();
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            className="kt-modal__btn kt-modal__btn--primary"
-            type="button"
-            onClick={handleConfirm}
-            disabled={!allDefenseAllocated}
-          >
-            Resolve
-          </button>
         </div>
       </div>
     </div>
