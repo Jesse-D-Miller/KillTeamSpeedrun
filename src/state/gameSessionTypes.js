@@ -24,6 +24,10 @@
  * @property {"conceal" | "engage"} order
  * @property {Token[]} tokens
  * @property {string[]} effects
+ * @property {boolean=} ready
+ * @property {boolean=} expended
+ * @property {boolean=} counteractedThisTP
+ * @property {boolean=} blockedCounteract
  * @property {string|null} selectedWeaponId
  * @property {string[]} equipment
  * @property {{ aplCurrent: number, activatedThisRound: boolean }} activation
@@ -71,7 +75,7 @@
  */
 
 /**
- * @typedef {"SET_ORDER" | "APPLY_DAMAGE" | "HEAL" | "ADD_TOKEN" | "REMOVE_TOKEN" | "SELECT_OPERATIVE" | "SELECT_WEAPON" | "SPEND_APL" | "END_ACTIVATION" | "NEXT_PHASE" | "NEXT_ROUND"} GameEventType
+ * @typedef {"START_GAME" | "SET_INITIATIVE" | "START_TURN" | "SET_ACTIVE_OPERATIVE" | "END_TURN" | "SET_ORDER" | "APPLY_DAMAGE" | "HEAL" | "SET_WOUNDS" | "ADD_TOKEN" | "REMOVE_TOKEN" | "TOGGLE_TOKEN" | "SELECT_OPERATIVE" | "SELECT_WEAPON" | "SPEND_APL" | "END_ACTIVATION" | "NEXT_PHASE" | "NEXT_ROUND"} GameEventType
  */
 
 /**
@@ -88,6 +92,7 @@
  * @typedef {Object} GameActivation
  * @property {string|null} operativeId
  * @property {number} aplSpent
+ * @property {"determine_order" | "perform_actions" | "active" | "resolved"=} state
  */
 
 /**
@@ -97,6 +102,9 @@
  * @property {"strategy" | "firefight" | "end"} phase
  * @property {string} initiativePlayerId
  * @property {string} activePlayerId
+ * @property {boolean=} started
+ * @property {string[]=} activationPriority
+ * @property {string|null=} counteractForPlayerId
  * @property {GameActivation} activation
  */
 
@@ -107,7 +115,11 @@
  * @property {string} updatedAt
  * @property {[Player, Player]} players
  * @property {Record<string, Team>} teamsById
+ * @property {boolean} lockedTeams
+ * @property {{ ployUsedByPlayerId: Record<string, Record<string, boolean>>, gambitsUsedByPlayerId: Record<string, Record<string, boolean>> }=} perTurn
  * @property {GameActiveState} active
+ * @property {Object=} missionConfig
+ * @property {Object|null} currentAttack
  * @property {GameEvent[]} eventLog
  * @property {Object=} derivedCache
  */
