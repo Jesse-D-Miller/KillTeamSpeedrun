@@ -19,6 +19,26 @@ function UnitCard({
 }) {
   if (!unit) return null;
 
+  const normalizeWeaponRules = (wr) => {
+    if (!wr || wr === "-") return [];
+    return Array.isArray(wr) ? wr : [wr];
+  };
+
+  const formatWeaponRules = (wr) => {
+    const list = normalizeWeaponRules(wr)
+      .map((rule) => {
+        if (!rule) return "";
+        if (typeof rule === "string") return rule;
+        const id = rule.id || "";
+        const value =
+          rule.value !== undefined && rule.value !== null ? ` ${rule.value}` : "";
+        const note = rule.note ? ` (${rule.note})` : "";
+        return `${id}${value}${note}`.trim();
+      })
+      .filter(Boolean);
+    return list.length ? list.join(", ") : "-";
+  };
+
   const toNumber = (value) => {
     const parsed = Number(String(value).replace("+", ""));
     return Number.isNaN(parsed) ? null : parsed;
@@ -205,7 +225,7 @@ function UnitCard({
                     );
                   })()}
                   <td>{w.dmg}</td>
-                  <td className="left">{w.wr}</td>
+                  <td className="left">{formatWeaponRules(w.wr)}</td>
                 </tr>
               );
             })}

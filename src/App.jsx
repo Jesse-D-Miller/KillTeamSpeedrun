@@ -35,6 +35,11 @@ function normalizeKillteamData(moduleData) {
   return [];
 }
 
+function normalizeWeaponRules(wr) {
+  if (!wr || wr === "-") return [];
+  return Array.isArray(wr) ? wr : [wr];
+}
+
 const armies = Object.entries(killteamModules).map(([path, data]) => ({
   key: getArmyKey(path),
   name: getArmyKey(path).replace(/[-_]+/g, " "),
@@ -505,7 +510,11 @@ function ArmyOverlayRoute() {
       teamId,
       stats: { ...unit.stats },
       state: { ...unit.state },
-      weapons: unit.weapons?.map((weapon) => ({ ...weapon })) ?? [],
+      weapons:
+        unit.weapons?.map((weapon) => ({
+          ...weapon,
+          wr: normalizeWeaponRules(weapon.wr),
+        })) ?? [],
       rules: unit.rules?.map((rule) => ({ ...rule })) ?? [],
       abilities: unit.abilities?.map((ability) => ({ ...ability })) ?? [],
     }));

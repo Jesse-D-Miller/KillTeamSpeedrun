@@ -4,12 +4,45 @@
     "name": "Yaegir Theyn",
     "role": "Leader",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 9 },
-    "state": { "woundsCurrent": 9, "order": "conceal", "effects": [], "selectedWeapon": "Bolt shotgun (short range)" },
+    "state": {
+      "woundsCurrent": 9,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "Bolt shotgun (short range)"
+    },
     "weapons": [
-      { "name": "Bolt revolver", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "3/5", "wr": "Range 8\"" },
-      { "name": "Bolt shotgun (short range)", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "4/4", "wr": "Range 6\"" },
-      { "name": "Bolt shotgun (long range)", "mode": "ranged", "atk": 4, "hit": 5, "dmg": "2/2", "wr": "-" },
-      { "name": "Plasma knife", "mode": "melee", "atk": 4, "hit": 3, "dmg": "3/5", "wr": "Lethal 5+" }
+      {
+        "name": "Bolt revolver",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 3,
+        "dmg": "3/5",
+        "wr": [{ "id": "range", "value": 8 }]
+      },
+      {
+        "name": "Bolt shotgun (short range)",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 3,
+        "dmg": "4/4",
+        "wr": [{ "id": "range", "value": 6 }]
+      },
+      {
+        "name": "Bolt shotgun (long range)",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 5,
+        "dmg": "2/2",
+        "wr": []
+      },
+      {
+        "name": "Plasma knife",
+        "mode": "melee",
+        "atk": 4,
+        "hit": 3,
+        "dmg": "3/5",
+        "wr": [{ "id": "lethal", "value": 5 }]
+      }
     ],
     "rules": [
       {
@@ -29,13 +62,35 @@
     "name": "Yaegir Bladekyn",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
-    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "Dual plasma knives" },
+    "state": {
+      "woundsCurrent": 8,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "Dual plasma knives"
+    },
     "weapons": [
-      { "name": "Throwing plasma knife", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "3/5", "wr": "Range 6\", Lethal 5+, Limited 1, Silent" },
-      { "name": "Dual plasma knives", "mode": "melee", "atk": 4, "hit": 3, "dmg": "3/5", "wr": "Ceaseless, Lethal 5+" }
+      {
+        "name": "Throwing plasma knife",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 3,
+        "dmg": "3/5",
+        "wr": [{"id": "range" , "value": 6}, {"id": "lethal", "value": 5}, {"id": "limited", "value": 1}, {"id": "silent"}]
+      },
+      {
+        "name": "Dual plasma knives",
+        "mode": "melee",
+        "atk": 4,
+        "hit": 3,
+        "dmg": "3/5",
+        "wr": [{"id": "ceaseless"}, {"id": "lethal", "value": 5}]
+      }
     ],
     "rules": [
-      { "name": "Stalker", "text": "This operative can perform the Charge action while it has a Conceal order." },
+      {
+        "name": "Stalker",
+        "text": "This operative can perform the Charge action while it has a Conceal order."
+      },
       {
         "name": "Irrepressible Hardiness",
         "text": "If this operative is incapacitated during the Fight action, you can strike the enemy operative in that sequence with one of your unresolved successes before this operative is removed from the killzone."
@@ -49,10 +104,29 @@
     "name": "Yaegir Bombast",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
-    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "Wroughtlock revolvers" },
+    "state": {
+      "woundsCurrent": 8,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "Wroughtlock revolvers"
+    },
     "weapons": [
-      { "name": "Wroughtlock revolvers", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "3/5", "wr": "Range 9\", Ceaseless, Lethal 5+" },
-      { "name": "Fists", "mode": "melee", "atk": 3, "hit": 4, "dmg": "2/3", "wr": "-" }
+      {
+        "name": "Wroughtlock revolvers",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 3,
+        "dmg": "3/5",
+        "wr": [{"id": "range", "value": 9}, {"id": "ceaseless"}, {"id": "lethal", "value": 5}]
+      },
+      {
+        "name": "Fists",
+        "mode": "melee",
+        "atk": 3,
+        "hit": 4,
+        "dmg": "2/3",
+        "wr": []
+      }
     ],
     "rules": [
       {
@@ -72,12 +146,45 @@
     "name": "Yaegir Gunner",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
-    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "APM launcher (armour piercing)" },
+    "state": {
+      "woundsCurrent": 8,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "APM launcher (armour piercing)"
+    },
     "weapons": [
-      { "name": "APM launcher (armour piercing)", "mode": "ranged", "atk": 5, "hit": 4, "dmg": "4/5", "wr": "Heavy (Reposition only), Piercing 1, Bipod" },
-      { "name": "APM launcher (breaching)", "mode": "ranged", "atk": 5, "hit": 4, "dmg": "3/5", "wr": "Blast 2\", Heavy (Reposition only), Bipod" },
-      { "name": "APM launcher (high explosive)", "mode": "ranged", "atk": 5, "hit": 4, "dmg": "2/4", "wr": "Blast 3\", Heavy (Reposition only), Bipod" },
-      { "name": "Fists", "mode": "melee", "atk": 3, "hit": 4, "dmg": "2/3", "wr": "-" }
+      {
+        "name": "APM launcher (armour piercing)",
+        "mode": "ranged",
+        "atk": 5,
+        "hit": 4,
+        "dmg": "4/5",
+        "wr": [{"id": "heavy", "note": "Reposition only"}, {"id": "piercing", "value": 1}, {"id": "bipod"}]
+      },
+      {
+        "name": "APM launcher (breaching)",
+        "mode": "ranged",
+        "atk": 5,
+        "hit": 4,
+        "dmg": "3/5",
+        "wr": [{"id": "blast", "value": 2}, {"id": "heavy", "note": "Reposition only"}, {"id": "bipod"}]
+      },
+      {
+        "name": "APM launcher (high explosive)",
+        "mode": "ranged",
+        "atk": 5,
+        "hit": 4,
+        "dmg": "2/4",
+        "wr": [{"id": "blast", "value": 3}, {"id": "heavy", "note": "Reposition only"}, {"id": "bipod"}]
+      },
+      {
+        "name": "Fists",
+        "mode": "melee",
+        "atk": 3,
+        "hit": 4,
+        "dmg": "2/3",
+        "wr": []
+      }
     ],
     "rules": [
       {
@@ -93,10 +200,29 @@
     "name": "Yaegir Ironbraek",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
-    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "Bolt revolver" },
+    "state": {
+      "woundsCurrent": 8,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "Bolt revolver"
+    },
     "weapons": [
-      { "name": "Bolt revolver", "mode": "ranged", "atk": 4, "hit": 4, "dmg": "3/5", "wr": "Range 8\"" },
-      { "name": "Entrencher", "mode": "melee", "atk": 3, "hit": 4, "dmg": "3/4", "wr": "-" }
+      {
+        "name": "Bolt revolver",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 4,
+        "dmg": "3/5",
+        "wr": [{ "id": "range", "value": 8 }]
+      },
+      {
+        "name": "Entrencher",
+        "mode": "melee",
+        "atk": 3,
+        "hit": 4,
+        "dmg": "3/4",
+        "wr": []
+      }
     ],
     "rules": [
       {
@@ -116,15 +242,51 @@
     "name": "Yaegir Riflekyn",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
-    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "Magna-coil rifle (stationary)" },
+    "state": {
+      "woundsCurrent": 8,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "Magna-coil rifle (stationary)"
+    },
     "weapons": [
-      { "name": "Magna-coil rifle (concealed)", "mode": "ranged", "atk": 4, "hit": 2, "dmg": "3/3", "wr": "Devastating 3, Heavy, Piercing 1, Silent, Concealed Position" },
-      { "name": "Magna-coil rifle (mobile)", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "3/4", "wr": "Heavy (Reposition only), Piercing 1" },
-      { "name": "Magna-coil rifle (stationary)", "mode": "ranged", "atk": 4, "hit": 2, "dmg": "3/3", "wr": "Devastating 3, Heavy, Piercing 1" },
-      { "name": "Fists", "mode": "melee", "atk": 3, "hit": 4, "dmg": "2/3", "wr": "-" }
+      {
+        "name": "Magna-coil rifle (concealed)",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 2,
+        "dmg": "3/3",
+        "wr": [{"id": "devastating", "value": 3}, {"id": "heavy"}, {"id": "piercing", "value": 1}, {"id": "silent"}, {"id": "concealed-position"}]
+      },
+      {
+        "name": "Magna-coil rifle (mobile)",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 3,
+        "dmg": "3/4",
+        "wr": [{"id": "heavy", "note": "Reposition only"}, {"id": "piercing", "value": 1}]
+      },
+      {
+        "name": "Magna-coil rifle (stationary)",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 2,
+        "dmg": "3/3",
+        "wr": [{"id": "devastating", "value": 3}, {"id": "heavy"}, {"id": "piercing", "value": 1}]
+      },
+      {
+        "name": "Fists",
+        "mode": "melee",
+        "atk": 3,
+        "hit": 4,
+        "dmg": "2/3",
+        "wr": []
+      }
     ],
     "rules": [
-      { "name": "Concealed Position", "text": "This operative can only use Magna-coil rifle (concealed) the first time it performs the Shoot action during the battle." },
+      {
+        "name": "Concealed Position",
+        "text": "This operative can only use Magna-coil rifle (concealed) the first time it performs the Shoot action during the battle."
+      },
       {
         "name": "Weavewërke Cloak",
         "text": "Whenever an operative is shooting this operative: ignore Saturate; if you can retain any cover saves, you can retain one additional cover save, or retain one cover save as a critical success instead (not cumulative with improved cover saves from Vantage)."
@@ -138,11 +300,37 @@
     "name": "Yaegir Tracker",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
-    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "SiNR handbow" },
+    "state": {
+      "woundsCurrent": 8,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "SiNR handbow"
+    },
     "weapons": [
-      { "name": "SiNR handbow", "mode": "ranged", "atk": 4, "hit": 4, "dmg": "3/5", "wr": "Silent" },
-      { "name": "Throwing hatchet", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "3/5", "wr": "Range 6\", Limited 1, Rending, Silent" },
-      { "name": "Hatchet", "mode": "melee", "atk": 4, "hit": 3, "dmg": "4/5", "wr": "-" }
+      {
+        "name": "SiNR handbow",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 4,
+        "dmg": "3/5",
+        "wr": [{"id": "silent"}]
+      },
+      {
+        "name": "Throwing hatchet",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 3,
+        "dmg": "3/5",
+        "wr": [{"id": "range", "value": 6}, {"id": "limited", "value": 1}, {"id": "rending"}, {"id": "silent"}]
+      },
+      {
+        "name": "Hatchet",
+        "mode": "melee",
+        "atk": 4,
+        "hit": 3,
+        "dmg": "4/5",
+        "wr": []
+      }
     ],
     "rules": [
       {
@@ -162,13 +350,53 @@
     "name": "Yaegir Warrior",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
-    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "Bolt shotgun (short range)" },
+    "state": {
+      "woundsCurrent": 8,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "Bolt shotgun (short range)"
+    },
     "weapons": [
-      { "name": "Bolt revolver", "mode": "ranged", "atk": 4, "hit": 4, "dmg": "3/5", "wr": "Range 8\"" },
-      { "name": "Bolt shotgun (short range)", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "4/4", "wr": "Range 6\"" },
-      { "name": "Bolt shotgun (long range)", "mode": "ranged", "atk": 4, "hit": 5, "dmg": "2/2", "wr": "-" },
-      { "name": "Fists", "mode": "melee", "atk": 3, "hit": 4, "dmg": "2/3", "wr": "-" },
-      { "name": "Plasma knife", "mode": "melee", "atk": 4, "hit": 4, "dmg": "3/5", "wr": "Lethal 5+" }
+      {
+        "name": "Bolt revolver",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 4,
+        "dmg": "3/5",
+        "wr": [{"id": "range", "value": 8}]
+      },
+      {
+        "name": "Bolt shotgun (short range)",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 3,
+        "dmg": "4/4",
+        "wr": [{"id": "range", "value": 6}]
+      },
+      {
+        "name": "Bolt shotgun (long range)",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 5,
+        "dmg": "2/2",
+        "wr": []
+      },
+      {
+        "name": "Fists",
+        "mode": "melee",
+        "atk": 3,
+        "hit": 4,
+        "dmg": "2/3",
+        "wr": []
+      },
+      {
+        "name": "Plasma knife",
+        "mode": "melee",
+        "atk": 4,
+        "hit": 4,
+        "dmg": "3/5",
+        "wr": [{"id": "lethal", "value": 5}]
+      }
     ],
     "rules": [
       {
@@ -183,13 +411,53 @@
     "name": "Yaegir Warrior",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
-    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "Bolt shotgun (short range)" },
+    "state": {
+      "woundsCurrent": 8,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "Bolt shotgun (short range)"
+    },
     "weapons": [
-      { "name": "Bolt revolver", "mode": "ranged", "atk": 4, "hit": 4, "dmg": "3/5", "wr": "Range 8\"" },
-      { "name": "Bolt shotgun (short range)", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "4/4", "wr": "Range 6\"" },
-      { "name": "Bolt shotgun (long range)", "mode": "ranged", "atk": 4, "hit": 5, "dmg": "2/2", "wr": "-" },
-      { "name": "Fists", "mode": "melee", "atk": 3, "hit": 4, "dmg": "2/3", "wr": "-" },
-      { "name": "Plasma knife", "mode": "melee", "atk": 4, "hit": 4, "dmg": "3/5", "wr": "Lethal 5+" }
+      {
+        "name": "Bolt revolver",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 4,
+        "dmg": "3/5",
+        "wr": [{"id": "range", "value": 8}]
+      },
+      {
+        "name": "Bolt shotgun (short range)",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 3,
+        "dmg": "4/4",
+        "wr": [{"id": "range", "value": 6}]
+      },
+      {
+        "name": "Bolt shotgun (long range)",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 5,
+        "dmg": "2/2",
+        "wr": []
+      },
+      {
+        "name": "Fists",
+        "mode": "melee",
+        "atk": 3,
+        "hit": 4,
+        "dmg": "2/3",
+        "wr": []
+      },
+      {
+        "name": "Plasma knife",
+        "mode": "melee",
+        "atk": 4,
+        "hit": 4,
+        "dmg": "3/5",
+        "wr": [{"id": "lethal", "value": 5}]
+      }
     ],
     "rules": [
       {
@@ -204,13 +472,53 @@
     "name": "Yaegir Warrior",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
-    "state": { "woundsCurrent": 8, "order": "conceal", "effects": [], "selectedWeapon": "Bolt shotgun (short range)" },
+    "state": {
+      "woundsCurrent": 8,
+      "order": "conceal",
+      "effects": [],
+      "selectedWeapon": "Bolt shotgun (short range)"
+    },
     "weapons": [
-      { "name": "Bolt revolver", "mode": "ranged", "atk": 4, "hit": 4, "dmg": "3/5", "wr": "Range 8\"" },
-      { "name": "Bolt shotgun (short range)", "mode": "ranged", "atk": 4, "hit": 3, "dmg": "4/4", "wr": "Range 6\"" },
-      { "name": "Bolt shotgun (long range)", "mode": "ranged", "atk": 4, "hit": 5, "dmg": "2/2", "wr": "-" },
-      { "name": "Fists", "mode": "melee", "atk": 3, "hit": 4, "dmg": "2/3", "wr": "-" },
-      { "name": "Plasma knife", "mode": "melee", "atk": 4, "hit": 4, "dmg": "3/5", "wr": "Lethal 5+" }
+      {
+        "name": "Bolt revolver",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 4,
+        "dmg": "3/5",
+        "wr": [{"id": "range", "value": 8}]
+      },
+      {
+        "name": "Bolt shotgun (short range)",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 3,
+        "dmg": "4/4",
+        "wr": [{"id": "range", "value": 6}]
+      },
+      {
+        "name": "Bolt shotgun (long range)",
+        "mode": "ranged",
+        "atk": 4,
+        "hit": 5,
+        "dmg": "2/2",
+        "wr": []
+      },
+      {
+        "name": "Fists",
+        "mode": "melee",
+        "atk": 3,
+        "hit": 4,
+        "dmg": "2/3",
+        "wr": []
+      },
+      {
+        "name": "Plasma knife",
+        "mode": "melee",
+        "atk": 4,
+        "hit": 4,
+        "dmg": "3/5",
+        "wr": [{"id": "lethal", "value": 5}]
+      }
     ],
     "rules": [
       {
