@@ -1,0 +1,62 @@
+.kt-action-card {
+  margin-top: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(16, 16, 20, 0.9);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.kt-action-card--vertical-label {
+  grid-template-columns: auto 1fr;
+  align-items: stretch;
+}
+
+.kt-action-card__label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  text-transform: uppercase;
+  letter-spacing: 0.75em;
+  align-self: center;
+  font-size: 0.8rem;
+  font-weight: 800;
+  opacity: 0.7;
+}
+
+.kt-action-card__body {
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.kt-action-card__body--wrap {
+  flex-wrap: nowrap;
+  overflow-x: visible;
+}
+
+.kt-action-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 120, 60, 0.55);
+  background: rgba(255, 120, 60, 0.18);
+  color: inherit;
+  cursor: pointer;
+  font-weight: 600;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.kt-action-btn:hover {
+  border-color: rgba(255, 120, 60, 0.8);
+  background: rgba(255, 120, 60, 0.28);
+}
+
+.kt-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

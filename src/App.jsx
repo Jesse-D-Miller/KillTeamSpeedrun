@@ -2,7 +2,8 @@ import "./App.css";
 import UnitCard from "./ui/components/UnitCard";
 import UnitListNav from "./ui/components/UnitListNav";
 import LogsWindow from "./ui/components/LogsWindow";
-import ShootActionCard from "./ui/components/ShootActionCard";
+import Actions from "./ui/components/Actions";
+import TopBar from "./ui/components/TopBar";
 import TargetSelectModal from "./ui/components/TargetSelectModal";
 import DiceInputModal from "./ui/components/DiceInputModal";
 import DefenseAllocationModal from "./ui/components/DefenseAllocationModal";
@@ -242,24 +243,12 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
           )}
         </aside>
         <div className="kt-main">
-          <header className="kt-topbar">
-            <div className="kt-topbar__item">
-              <span className="kt-topbar__label">Phase</span>
-              <span className="kt-topbar__value">{phase}</span>
-            </div>
-            <div className="kt-topbar__item">
-              <span className="kt-topbar__label">Turning Point</span>
-              <span className="kt-topbar__value">{turningPoint}</span>
-            </div>
-            <div className="kt-topbar__item">
-              <span className="kt-topbar__label">VP</span>
-              <span className="kt-topbar__value">{vp}</span>
-            </div>
-            <div className="kt-topbar__item">
-              <span className="kt-topbar__label">CP</span>
-              <span className="kt-topbar__value">{cp}</span>
-            </div>
-          </header>
+          <TopBar
+            cp={cp}
+            vp={vp}
+            turningPoint={turningPoint}
+            phase={phase}
+          />
 
           <main className="kt-detail">
             {selectedUnit ? (
@@ -270,7 +259,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
                   dispatch={dispatch}
                   onLog={logEntry}
                 />
-                <ShootActionCard
+                <Actions
                   attacker={selectedUnit}
                   hasTargets={opponentUnits.length > 0 && canShoot}
                   onShoot={() => {
