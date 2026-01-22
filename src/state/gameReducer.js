@@ -24,6 +24,9 @@ export const initialCombatState = {
 	defenseLocked: false,
 	blocksResolved: false,
 	blocks: null,
+	inputs: {
+		accurateSpent: 0,
+	},
 };
 
 function clamp(n, min, max) {
@@ -111,12 +114,15 @@ export function gameReducer(state, action) {
 					defenseLocked: false,
 					blocksResolved: false,
 					blocks: null,
+					inputs: {
+						accurateSpent: 0,
+					},
 				},
 			};
 		}
 
 			case "SET_ATTACK_ROLL": {
-				const { roll } = action.payload || {};
+				const { roll, inputs } = action.payload || {};
 				if (!Array.isArray(roll)) return state;
 				if (state.combatState?.stage !== COMBAT_STAGES.ATTACK_ROLLING) return state;
 				if (state.combatState?.attackLocked) return state;
@@ -126,6 +132,25 @@ export function gameReducer(state, action) {
 						...state.combatState,
 						attackRoll: roll,
 						attackLocked: false,
+						inputs: {
+							...(state.combatState?.inputs || {}),
+							...(inputs || {}),
+						},
+					},
+				};
+			}
+
+			case "SET_COMBAT_INPUTS": {
+				const { inputs } = action.payload || {};
+				if (!inputs || typeof inputs !== "object") return state;
+				return {
+					...state,
+					combatState: {
+						...state.combatState,
+						inputs: {
+							...(state.combatState?.inputs || {}),
+							...inputs,
+						},
 					},
 				};
 			}

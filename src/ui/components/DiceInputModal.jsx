@@ -13,11 +13,14 @@ function DiceInputModal({
   defenseDiceCount,
   attackHitThreshold,
   hasCeaseless,
+  accurateMax,
+  combatInputs,
   combatStage,
   combatAttackRoll,
   combatDefenseRoll,
   combatSummary,
   onSetCombatAttackRoll,
+  onSetCombatInputs,
   onLockAttack,
   readOnly,
   statusMessage,
@@ -28,6 +31,9 @@ function DiceInputModal({
   const [attackDice, setAttackDice] = useState(() => buildInitialDice(attackDiceCount));
   const [defenseDice, setDefenseDice] = useState(() => buildInitialDice(defenseDiceCount));
   const [ceaselessApplied, setCeaselessApplied] = useState(false);
+  const [accurateSpent, setAccurateSpent] = useState(
+    Math.max(0, Math.min(Number(accurateMax || 0), Number(combatInputs?.accurateSpent ?? 0))),
+  );
   const autoLoggedRef = useRef(false);
   const lastCeaselessRef = useRef(null);
 
@@ -35,11 +41,17 @@ function DiceInputModal({
     Array.from({ length: count }, () => 1 + Math.floor(Math.random() * 6));
 
   const applyAutoRoll = () => {
-    const initialAttack = rollDiceNumbers(attackDiceCount);
+    const remainingCount = Math.max(
+      0,
+      Number(attackDiceCount || 0) - Math.max(0, Number(accurateSpent || 0)),
+    );
+    const retained = buildRetainedDice(accurateSpent);
+    const rolled = rollDiceNumbers(remainingCount);
+    const initialAttack = [...retained, ...rolled];
     const attackAfterCeaseless = initialAttack;
     const defenseRoll = rollDiceNumbers(defenseDiceCount);
 
-    setAttackDice(attackAfterCeaseless.map(String));
+    setAttackDice(rolled.map(String));
     setDefenseDice(defenseRoll.map(String));
     setCeaselessApplied(false);
     lastCeaselessRef.current = null;
@@ -59,6 +71,7 @@ function DiceInputModal({
       setDefenseDice(buildInitialDice(defenseDiceCount));
       setCeaselessApplied(false);
       lastCeaselessRef.current = null;
+      setAccurateSpent(0);
       autoLoggedRef.current = false;
     },
     [attackDiceCount, defenseDiceCount],
@@ -106,14 +119,27 @@ function DiceInputModal({
   const applyCeaseless = (dice, value) =>
     dice.map((die) => (die === value ? 1 + Math.floor(Math.random() * 6) : die));
 
+  const buildRetainedDice = (count) => {
+    const hitValue = Number(attackHitThreshold);
+    if (!Number.isFinite(hitValue)) return [];
+    return Array.from({ length: count }, () => hitValue);
+  };
+
   const handleRollClick = () => {
     if (readOnly) return;
+    const remainingCount = Math.max(
+      0,
+      Number(attackDiceCount || 0) - Math.max(0, Number(accurateSpent || 0)),
+    );
+    if (remainingCount <= 0) return;
     if (combatStage === "ATTACK_ROLLING") {
-      const initialAttack = rollDiceNumbers(attackDiceCount);
+      const retained = buildRetainedDice(accurateSpent);
+      const rolled = rollDiceNumbers(remainingCount);
+      const initialAttack = [...retained, ...rolled];
       const attackAfterCeaseless = initialAttack;
 
-      setAttackDice(attackAfterCeaseless.map(String));
-      onSetCombatAttackRoll?.(attackAfterCeaseless);
+      setAttackDice(rolled.map(String));
+      onSetCombatAttackRoll?.(attackAfterCeaseless, { accurateSpent });
       setCeaselessApplied(false);
       lastCeaselessRef.current = null;
       autoLoggedRef.current = true;
@@ -130,6 +156,26 @@ function DiceInputModal({
     applyAutoRoll();
   };
 
+  const handleAccurateClick = () => {
+    const max = Number(accurateMax || 0);
+    if (!Number.isFinite(max) || max <= 0) return;
+    if (readOnly) return;
+    const next = Math.max(0, Math.min(max, accurateSpent + 1));
+    if (next === accurateSpent) return;
+    const remainingCount = Math.max(
+      0,
+      Number(attackDiceCount || 0) - Math.max(0, Number(next || 0)),
+    );
+    const currentRolled = parseDice(attackDice).slice(0, remainingCount);
+    const retained = buildRetainedDice(next);
+    const combined = [...retained, ...currentRolled];
+    setAccurateSpent(next);
+    onSetCombatInputs?.({ accurateSpent: next });
+    if (Array.isArray(combatAttackRoll) && combatAttackRoll.length > 0) {
+      onSetCombatAttackRoll?.(combined, { accurateSpent: next });
+    }
+  };
+
   const handleCeaselessClick = () => {
     if (readOnly || !hasCeaseless || ceaselessApplied) return;
     const currentAttack = Array.isArray(combatAttackRoll) && combatAttackRoll.length > 0
@@ -144,7 +190,7 @@ function DiceInputModal({
 
     const attackAfterCeaseless = applyCeaseless(currentAttack, ceaselessValue);
     setAttackDice(attackAfterCeaseless.map(String));
-    onSetCombatAttackRoll?.(attackAfterCeaseless);
+    onSetCombatAttackRoll?.(attackAfterCeaseless, { accurateSpent });
     setCeaselessApplied(true);
 
     lastCeaselessRef.current = {
@@ -191,9 +237,22 @@ function DiceInputModal({
       if (!Array.isArray(combatAttackRoll) || combatAttackRoll.length === 0) {
         setCeaselessApplied(false);
         lastCeaselessRef.current = null;
+        setAccurateSpent(0);
+        onSetCombatInputs?.({ accurateSpent: 0 });
       }
     }
   }, [combatStage, combatAttackRoll, attackDiceCount]);
+
+  useEffect(() => {
+    const max = Number(accurateMax || 0);
+    const incoming = Number(combatInputs?.accurateSpent ?? 0);
+    if (!Number.isFinite(max) || max <= 0) {
+      if (accurateSpent !== 0) setAccurateSpent(0);
+      return;
+    }
+    const next = Math.max(0, Math.min(max, Math.floor(incoming)));
+    if (next !== accurateSpent) setAccurateSpent(next);
+  }, [accurateMax, combatInputs?.accurateSpent]);
 
   useEffect(() => {
     if (!open) return;
@@ -214,6 +273,10 @@ function DiceInputModal({
   const hasAttackRoll = combatStage
     ? Array.isArray(combatAttackRoll) && combatAttackRoll.length > 0
     : parseDice(attackDice).length > 0;
+  const remainingAttackDiceCount = Math.max(
+    0,
+    Number(attackDiceCount || 0) - Math.max(0, Number(accurateSpent || 0)),
+  );
 
   return (
     <div className="kt-modal">
@@ -248,10 +311,20 @@ function DiceInputModal({
                 className="kt-modal__btn kt-modal__btn--success"
                 type="button"
                 onClick={handleRollClick}
-                disabled={readOnly || hasAttackRoll}
+                disabled={readOnly || hasAttackRoll || remainingAttackDiceCount <= 0}
               >
                 Roll
               </button>
+              {Number(accurateMax) > 0 && (
+                <button
+                  className="kt-modal__btn kt-modal__btn--primary"
+                  type="button"
+                  onClick={handleAccurateClick}
+                  disabled={readOnly || accurateSpent >= Number(accurateMax)}
+                >
+                  Accurate {accurateSpent}/{accurateMax}
+                </button>
+              )}
               {hasCeaseless && (
                 <button
                   className="kt-modal__btn kt-modal__btn--primary"
@@ -322,6 +395,18 @@ function DiceInputModal({
               <>
                 <div className="defense-roll__section">
                   <div className="defense-roll__label">Attack Dice</div>
+                  {accurateSpent > 0 && !hasAttackRoll && Number.isFinite(Number(attackHitThreshold)) && (
+                    <div className="defense-roll__dice">
+                      {Array.from({ length: accurateSpent }).map((_, index) => (
+                        <span
+                          key={`acc-${index}`}
+                          className="defense-roll__die defense-roll__die--retained"
+                        >
+                          {attackHitThreshold}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <div className="defense-roll__dice">
                     {attackDice.map((value, index) => (
                       <div key={`atk-${index}`} className="defense-roll__input">

@@ -213,6 +213,11 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
+.defense-roll__die--retained {
+  border-color: rgba(255, 120, 60, 0.6);
+  background: rgba(255, 120, 60, 0.2);
+}
+
 .defense-roll__placeholder {
   opacity: 0.6;
 }

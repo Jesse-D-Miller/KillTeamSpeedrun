@@ -199,6 +199,12 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
     const rules = normalizeWeaponRules(selectedWeapon);
     return rules.some((rule) => rule.id === "ceaseless");
   })();
+  const getAccurateMax = (weapon) => {
+    const rules = normalizeWeaponRules(weapon);
+    const rule = rules.find((item) => item.id === "accurate");
+    const value = Number(rule?.value);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  };
   const canShoot = selectedWeapon?.mode === "ranged";
   const cp = 0;
   const vp = 0;
@@ -536,17 +542,24 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
         defenseDiceCount={3}
         attackHitThreshold={selectedWeapon?.hit ?? 6}
         hasCeaseless={hasCeaseless}
+        accurateMax={getAccurateMax(
+          combatState?.weaponProfile || selectedWeapon,
+        )}
+        combatInputs={combatState?.inputs}
         combatStage={combatState?.stage}
         combatAttackRoll={combatState?.attackRoll}
         combatDefenseRoll={combatState?.defenseRoll}
         combatSummary={combatSummary}
-        onSetCombatAttackRoll={(roll) => {
-          dispatchCombatEvent("SET_ATTACK_ROLL", { roll });
+        onSetCombatAttackRoll={(roll, inputs) => {
+          dispatchCombatEvent("SET_ATTACK_ROLL", { roll, inputs });
           logRollSequence({
             attackBefore: roll,
             defenseDice: [],
             ceaseless: null,
           });
+        }}
+        onSetCombatInputs={(inputs) => {
+          dispatchCombatEvent("SET_COMBAT_INPUTS", { inputs });
         }}
         onLockAttack={() => {
           dispatchCombatEvent("LOCK_ATTACK_ROLL");

@@ -6,10 +6,23 @@ export function resolveShooting(ctx) {
   if (!ctx?.defender) throw new Error("resolveShooting: defender is required");
   if (!ctx?.weapon) throw new Error("resolveShooting: weapon is required");
 
+  const rollAttackDice = (count) =>
+    Array.from({ length: count }, () => ({ value: Math.floor(Math.random() * 6) + 1, kept: true, tags: [] }));
+
   ctx.phase = "DECLARE_ATTACK";
   runWeaponRuleHook(ctx, "ON_DECLARE_ATTACK");
 
   ctx.phase = "ATTACK_ROLL";
+  ctx.modifiers.attackDiceCount = Number(ctx.weapon?.atk ?? ctx.modifiers.attackDiceCount ?? 0);
+  runWeaponRuleHook(ctx, "BEFORE_ROLL_ATTACK");
+  const attackDiceCount = Number(ctx.modifiers.attackDiceCount);
+  if (!Array.isArray(ctx.attackDice) || ctx.attackDice.length === 0) {
+    if (Number.isFinite(attackDiceCount) && attackDiceCount > 0) {
+      ctx.attackDice = rollAttackDice(attackDiceCount);
+    }
+  } else if (Number.isFinite(attackDiceCount) && attackDiceCount >= 0) {
+    ctx.attackDice = ctx.attackDice.slice(0, attackDiceCount);
+  }
   runWeaponRuleHook(ctx, "ON_ROLL_ATTACK");
   const critThreshold = ctx.modifiers.lethalThreshold ?? 6;
   const attackResults = parseHits(ctx.attackDice, ctx.weapon.hit, critThreshold);

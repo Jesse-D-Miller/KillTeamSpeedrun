@@ -7,6 +7,60 @@ const normalizeRuleId = (id) =>
 const rollD6 = () => Math.floor(Math.random() * 6) + 1;
 
 export const RULES = {
+  accurate: {
+    id: "accurate",
+    hooks: {
+      BEFORE_ROLL_ATTACK: (ctx, rule) => {
+        const x = Number(rule.value);
+        if (!Number.isFinite(x) || x <= 0) return;
+
+        const spentRaw = Number(ctx?.inputs?.accurateSpent ?? 0);
+        const spent = Math.max(0, Math.min(x, Math.floor(spentRaw)));
+
+        const currentCount = Number(ctx?.modifiers?.attackDiceCount);
+        if (!Number.isFinite(currentCount)) return;
+
+        const reduceBy = Math.min(spent, currentCount);
+        ctx.modifiers.attackDiceCount = currentCount - reduceBy;
+        ctx.modifiers.accurateSpent = reduceBy;
+
+        ctx.log.push({
+          type: "RULE_ACCURATE_BEFORE",
+          detail: {
+            max: x,
+            spent: reduceBy,
+            diceCountFrom: currentCount,
+            diceCountTo: currentCount - reduceBy,
+          },
+        });
+      },
+      AFTER_ROLL_ATTACK: (ctx, rule) => {
+        const x = Number(rule.value);
+        if (!Number.isFinite(x) || x <= 0) return;
+
+        const spent = Number(ctx?.modifiers?.accurateSpent ?? 0);
+        if (!Number.isFinite(spent) || spent <= 0) return;
+
+        const hit = Number(ctx?.weapon?.hit ?? ctx?.weaponProfile?.hit ?? ctx?.hit);
+        if (!Number.isFinite(hit) || hit < 2 || hit > 6) return;
+
+        const retained = Array.from({ length: spent }, () => ({
+          value: hit,
+          tags: ["accurate", "retained"],
+        }));
+
+        const before = ctx.attackDice.map((die) => ({ ...die }));
+        const next = [...retained, ...ctx.attackDice];
+
+        ctx.attackDice = next;
+
+        ctx.log.push({
+          type: "RULE_ACCURATE_AFTER",
+          detail: { added: spent, hitValue: hit, before, after: next },
+        });
+      },
+    },
+  },
   ceaseless: {
     id: "ceaseless",
     hooks: {

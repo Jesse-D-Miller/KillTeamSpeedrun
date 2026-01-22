@@ -93,8 +93,27 @@ export const validateGameIntent = (state, event) => {
     }
 
     case "SET_ATTACK_ROLL": {
-      const { roll } = event.payload || {};
+      const { roll, inputs } = event.payload || {};
       if (!Array.isArray(roll)) pushIssue(issues, "Attack roll must be an array.");
+      if (inputs && typeof inputs === "object") {
+        const spent = inputs.accurateSpent;
+        if (spent != null && (!Number.isFinite(spent) || spent < 0)) {
+          pushIssue(issues, "Accurate spent must be a non-negative number.");
+        }
+      }
+      break;
+    }
+
+    case "SET_COMBAT_INPUTS": {
+      const { inputs } = event.payload || {};
+      if (!inputs || typeof inputs !== "object") {
+        pushIssue(issues, "Inputs must be an object.");
+        break;
+      }
+      const spent = inputs.accurateSpent;
+      if (spent != null && (!Number.isFinite(spent) || spent < 0)) {
+        pushIssue(issues, "Accurate spent must be a non-negative number.");
+      }
       break;
     }
 

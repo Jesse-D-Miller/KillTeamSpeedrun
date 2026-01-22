@@ -35,6 +35,8 @@ const createAttackContext = ({
   modifiers: {
     reroll: { attack: 0, defense: 0 },
     lethalThreshold: null,
+    attackDiceCount: Number(weapon?.atk ?? 0),
+    accurateSpent: 0,
   },
   allocation: null,
   remaining: { hits: 0, crits: 0 },
