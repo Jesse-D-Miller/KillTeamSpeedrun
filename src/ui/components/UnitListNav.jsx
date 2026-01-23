@@ -2,10 +2,18 @@ import "./UnitListNav.css";
 import { isInjured, unitMove } from "../../engine/selectors/unitSelectors";
 
 function UnitListNav({ units, selectedUnitId, onSelectUnit }) {
+	const orderedUnits = [...units].sort((a, b) => {
+		const aDead = Number(a.state.woundsCurrent) <= 0;
+		const bDead = Number(b.state.woundsCurrent) <= 0;
+		if (aDead === bDead) return 0;
+		return aDead ? 1 : -1;
+	});
+
 	return (
 		<div className="kt-nav__list">
-			{units.map((unit) => {
+			{orderedUnits.map((unit) => {
 					const isSelected = unit.id === selectedUnitId;
+					const isDead = Number(unit.state.woundsCurrent) <= 0;
 					const woundsPct =
 						unit.stats.woundsMax === 0
 							? 0
@@ -20,7 +28,7 @@ function UnitListNav({ units, selectedUnitId, onSelectUnit }) {
 					return (
 						<button
 							key={unit.id}
-							className={`kt-navitem ${isSelected ? "kt-navitem--selected" : ""} ${unitIsInjured ? "kt-navitem--injured" : ""}`}
+							className={`kt-navitem ${isSelected ? "kt-navitem--selected" : ""} ${unitIsInjured ? "kt-navitem--injured" : ""} ${isDead ? "kt-navitem--dead" : ""}`}
 							onClick={() => onSelectUnit(unit.id)}
 							type="button"
 						>
@@ -28,18 +36,24 @@ function UnitListNav({ units, selectedUnitId, onSelectUnit }) {
 								<div className="kt-navitem__name">{unit.name}</div>
 
 								<div className="kt-navitem__tags">
-									<span
-										className={`kt-chip ${
-											unit.state.order === "conceal"
-												? "kt-chip--blue"
-												: "kt-chip--orange"
-										}`}
-									>
-										{unit.state.order}
-									</span>
+									{isDead ? (
+										<span className="kt-chip kt-chip--dead">dead</span>
+									) : (
+										<>
+											<span
+												className={`kt-chip ${
+													unit.state.order === "conceal"
+														? "kt-chip--blue"
+														: "kt-chip--orange"
+												}`}
+											>
+												{unit.state.order}
+											</span>
 
-									{unitIsInjured && (
-										<span className="kt-chip kt-chip--red">inj</span>
+											{unitIsInjured && (
+												<span className="kt-chip kt-chip--red">inj</span>
+											)}
+										</>
 									)}
 								</div>
 							</div>

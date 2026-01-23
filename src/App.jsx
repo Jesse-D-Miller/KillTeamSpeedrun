@@ -70,6 +70,9 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
       cursor: 0,
     },
     combatState: initialCombatState,
+    ui: {
+      actionFlow: null,
+    },
   });
   const socketRef = useRef(null);
   const seenLogIdsRef = useRef(new Set());
@@ -89,6 +92,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
     issues: [],
     pending: null,
   });
+  const activeOperativeRef = useRef(null);
 
   const logEntry = ({ type, summary, meta }) => {
     const entry = createLogEntry({
@@ -232,6 +236,21 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
   }, [selectedUnit, myTeamUnits]);
 
   useEffect(() => {
+    if (!selectedUnitId) return;
+    const prevId = activeOperativeRef.current;
+    if (prevId && prevId !== selectedUnitId) {
+      dispatchIntent({ type: "ACTIVATION_END" });
+    }
+    if (prevId !== selectedUnitId) {
+      dispatchIntent({
+        type: "ACTIVATION_START",
+        payload: { operativeId: selectedUnitId },
+      });
+      activeOperativeRef.current = selectedUnitId;
+    }
+  }, [selectedUnitId]);
+
+  useEffect(() => {
     if (!shootModalOpen) return;
     if (
       opponentUnits.length > 0 &&
@@ -251,6 +270,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
   const currentPlayerId = playerSlot || getOrCreatePlayerId();
   const otherPlayerId = playerSlot ? (playerSlot === "A" ? "B" : "A") : null;
   const combatState = state.combatState;
+  const actionFlow = state.ui?.actionFlow ?? null;
   const attackModalOpen =
     [
       COMBAT_STAGES.ATTACK_ROLLING,
@@ -297,6 +317,36 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
       weaponName: weapon?.name,
     };
   })();
+
+  const fightAttacker =
+    actionFlow?.mode === "fight"
+      ? state.game.find((unit) => unit.id === actionFlow.attackerId)
+      : null;
+  const fightTargets = fightAttacker
+    ? state.game.filter((unit) => unit.teamId !== fightAttacker.teamId)
+    : [];
+  const fightDefender =
+    actionFlow?.mode === "fight"
+      ? state.game.find((unit) => unit.id === actionFlow.defenderId)
+      : null;
+  const fightAttackerWeapons = Array.isArray(fightAttacker?.weapons)
+    ? fightAttacker.weapons.filter((weapon) => weapon.mode === "melee")
+    : [];
+  const fightDefenderWeapons = Array.isArray(fightDefender?.weapons)
+    ? fightDefender.weapons.filter((weapon) => weapon.mode === "melee")
+    : [];
+  const fightAttackerWeapon = fightAttackerWeapons.find(
+    (weapon) => weapon.name === actionFlow?.attackerWeapon,
+  );
+  const fightDefenderWeapon = fightDefenderWeapons.find(
+    (weapon) => weapon.name === actionFlow?.defenderWeapon,
+  );
+  const canCancelFightFlow =
+    actionFlow?.mode === "fight" &&
+    ["pickTarget", "pickWeapons", "rollDice"].includes(actionFlow?.step) &&
+    !actionFlow?.locked?.attackerWeapon &&
+    !actionFlow?.locked?.defenderWeapon &&
+    !actionFlow?.locked?.diceRolled;
 
   const showIssues = (result, event) =>
     setIntentGate({
@@ -525,8 +575,16 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
                 />
                 <Actions
                   attacker={selectedUnit}
-                  hasTargets={opponentUnits.length > 0 && canShoot}
-                  onShoot={() => {
+                  actionMarks={selectedUnit?.state?.actionMarks}
+                  onAction={(actionKey) => {
+                    if (!selectedUnit?.id) return;
+
+                    dispatchIntent({
+                      type: "ACTION_USE",
+                      payload: { operativeId: selectedUnit.id, actionKey },
+                    });
+
+                    if (actionKey !== "shoot") return;
                     if (!canShoot) {
                       logEntry({
                         type: "ACTION_REJECTED",
@@ -538,6 +596,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
                       });
                       return;
                     }
+                    if (opponentUnits.length === 0) return;
                     setAttackerId(selectedUnit.id);
                     setShootModalOpen(true);
                   }}
@@ -616,6 +675,526 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
           setSelectedTargetId(null);
         }}
       />
+
+      <TargetSelectModal
+        open={actionFlow?.mode === "fight" && actionFlow?.step === "pickTarget"}
+        attacker={fightAttacker}
+        targets={fightTargets}
+        primaryTargetId={actionFlow?.defenderId ?? null}
+        secondaryTargetIds={[]}
+        allowSecondarySelection={false}
+        onSelectPrimary={(id) => {
+          if (!id || !fightAttacker) return;
+          dispatchIntent({
+            type: "FLOW_SET_TARGET",
+            payload: { defenderId: id },
+          });
+          const defenderUnit = fightTargets.find((unit) => unit.id === id);
+          logEntry({
+            type: "FIGHT_TARGET",
+            summary: `TARGET:${fightAttacker.name} -> ${defenderUnit?.name || "defender"}`,
+            meta: {
+              attackerId: fightAttacker.id,
+              defenderId: id,
+            },
+          });
+        }}
+        onToggleSecondary={() => {}}
+        onClose={() => {
+          if (!canCancelFightFlow) return;
+          dispatchIntent({ type: "FLOW_CANCEL" });
+        }}
+        onConfirm={() => {}}
+      />
+
+      {actionFlow?.mode === "fight" && actionFlow?.step === "pickWeapons" && (
+        <div className="kt-modal">
+          <div
+            className="kt-modal__backdrop"
+            onClick={() => {
+              if (!canCancelFightFlow) return;
+              dispatchIntent({ type: "FLOW_CANCEL" });
+            }}
+          />
+          <div className="kt-modal__panel">
+            <button
+              className="kt-modal__close"
+              type="button"
+              onClick={() => {
+                if (!canCancelFightFlow) return;
+                dispatchIntent({ type: "FLOW_CANCEL" });
+              }}
+              aria-label="Close"
+              title="Close"
+              disabled={!canCancelFightFlow}
+            >
+              ×
+            </button>
+            <div className="kt-modal__layout">
+              <aside className="kt-modal__sidebar">
+                <div className="kt-modal__sidebar-group">
+                  <div className="kt-modal__sidebar-title">Fight: Select Weapons</div>
+                  <div className="kt-modal__sidebar-empty">
+                    Both sides must ready their melee weapons.
+                  </div>
+                  <button
+                    className="kt-modal__btn kt-modal__btn--primary"
+                    type="button"
+                    onClick={() => {
+                      dispatchIntent({
+                        type: "FLOW_LOCK_WEAPON",
+                        payload: { role: "attacker" },
+                      });
+                    }}
+                    disabled={!actionFlow?.attackerWeapon || actionFlow?.locked?.attackerWeapon}
+                  >
+                    Attacker Ready
+                  </button>
+                  <button
+                    className="kt-modal__btn kt-modal__btn--primary"
+                    type="button"
+                    onClick={() => {
+                      dispatchIntent({
+                        type: "FLOW_LOCK_WEAPON",
+                        payload: { role: "defender" },
+                      });
+                    }}
+                    disabled={!actionFlow?.defenderWeapon || actionFlow?.locked?.defenderWeapon}
+                  >
+                    Defender Ready
+                  </button>
+                  <button
+                    className="kt-modal__btn"
+                    type="button"
+                    onClick={() => {
+                      dispatchIntent({ type: "FLOW_CANCEL" });
+                    }}
+                    disabled={!canCancelFightFlow}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </aside>
+              <div className="kt-modal__content">
+                <div className="kt-modal__header">
+                  <div className="kt-modal__title">Fight: Select Weapons</div>
+                  <div className="kt-modal__subtitle">
+                    {fightAttacker?.name || "Attacker"} vs {fightDefender?.name || "Defender"}
+                  </div>
+                </div>
+                <div className="defense-roll__section">
+                  <div className="defense-roll__label">Attacker Weapon</div>
+                  <select
+                    className="defense-roll__field"
+                    value={actionFlow?.attackerWeapon || ""}
+                    onChange={(event) => {
+                      dispatchIntent({
+                        type: "FLOW_SET_WEAPON",
+                        payload: {
+                          role: "attacker",
+                          weaponName: event.target.value,
+                        },
+                      });
+                    }}
+                    disabled={actionFlow?.locked?.attackerWeapon}
+                  >
+                    <option value="" disabled>
+                      Select melee weapon
+                    </option>
+                    {fightAttackerWeapons.map((weapon) => (
+                      <option key={weapon.name} value={weapon.name}>
+                        {weapon.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="defense-roll__section">
+                  <div className="defense-roll__label">Defender Weapon</div>
+                  <select
+                    className="defense-roll__field"
+                    value={actionFlow?.defenderWeapon || ""}
+                    onChange={(event) => {
+                      dispatchIntent({
+                        type: "FLOW_SET_WEAPON",
+                        payload: {
+                          role: "defender",
+                          weaponName: event.target.value,
+                        },
+                      });
+                    }}
+                    disabled={actionFlow?.locked?.defenderWeapon}
+                  >
+                    <option value="" disabled>
+                      Select melee weapon
+                    </option>
+                    {fightDefenderWeapons.map((weapon) => (
+                      <option key={weapon.name} value={weapon.name}>
+                        {weapon.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {actionFlow?.mode === "fight" && actionFlow?.step === "rollDice" && (
+        <div className="kt-modal">
+          <div
+            className="kt-modal__backdrop"
+            onClick={() => {
+              if (!canCancelFightFlow) return;
+              dispatchIntent({ type: "FLOW_CANCEL" });
+            }}
+          />
+          <div className="kt-modal__panel">
+            <div className="kt-modal__layout">
+              <aside className="kt-modal__sidebar">
+                <div className="kt-modal__sidebar-group">
+                  <div className="kt-modal__sidebar-title">Fight: Roll Dice</div>
+                  <div className="kt-modal__sidebar-empty">
+                    Both sides roll and reveal dice.
+                  </div>
+                  <button
+                    className="kt-modal__btn kt-modal__btn--primary"
+                    type="button"
+                    onClick={() => {
+                      const attackerHit = Number(fightAttackerWeapon?.hit ?? 6);
+                      const defenderHit = Number(fightDefenderWeapon?.hit ?? 6);
+                      const attackerAtk = Number(fightAttackerWeapon?.atk ?? 0);
+                      const defenderAtk = Number(fightDefenderWeapon?.atk ?? 0);
+                      const roll = (count) =>
+                        Array.from({ length: Math.max(0, count) }, () =>
+                          1 + Math.floor(Math.random() * 6),
+                        );
+                      const countResults = (raw, hit) => {
+                        const crit = raw.filter((v) => v === 6).length;
+                        const norm = raw.filter(
+                          (v) => v >= hit && v !== 6,
+                        ).length;
+                        return { raw, crit, norm };
+                      };
+
+                      const attackerRaw = roll(attackerAtk);
+                      const defenderRaw = roll(defenderAtk);
+
+                      dispatchIntent({
+                        type: "FLOW_ROLL_DICE",
+                        payload: {
+                          attacker: countResults(attackerRaw, attackerHit),
+                          defender: countResults(defenderRaw, defenderHit),
+                        },
+                      });
+                    }}
+                    disabled={actionFlow?.locked?.diceRolled}
+                  >
+                    Roll Dice
+                  </button>
+                  <button
+                    className="kt-modal__btn"
+                    type="button"
+                    onClick={() => {
+                      if (!canCancelFightFlow) return;
+                      dispatchIntent({ type: "FLOW_CANCEL" });
+                    }}
+                    disabled={!canCancelFightFlow}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </aside>
+              <div className="kt-modal__content">
+                <div className="kt-modal__header">
+                  <div className="kt-modal__title">Fight: Roll Dice</div>
+                  <div className="kt-modal__subtitle">
+                    {fightAttacker?.name || "Attacker"} vs {fightDefender?.name || "Defender"}
+                  </div>
+                </div>
+                <div className="defense-roll__section">
+                  <div className="defense-roll__label">Attacker Dice</div>
+                  <div className="defense-roll__dice">
+                    {(actionFlow?.dice?.attacker?.raw || []).length > 0
+                      ? actionFlow.dice.attacker.raw.map((value, index) => (
+                          <span key={`atk-${index}`} className="defense-roll__die">
+                            {value}
+                          </span>
+                        ))
+                      : "-"}
+                  </div>
+                  <div className="defense-roll__dice defense-roll__dice--summary">
+                    <span className="defense-roll__die defense-roll__die--summary">
+                      C {actionFlow?.dice?.attacker?.crit ?? 0}
+                    </span>
+                    <span className="defense-roll__die defense-roll__die--summary">
+                      H {actionFlow?.dice?.attacker?.norm ?? 0}
+                    </span>
+                  </div>
+                </div>
+                <div className="defense-roll__section">
+                  <div className="defense-roll__label">Defender Dice</div>
+                  <div className="defense-roll__dice">
+                    {(actionFlow?.dice?.defender?.raw || []).length > 0
+                      ? actionFlow.dice.defender.raw.map((value, index) => (
+                          <span key={`def-${index}`} className="defense-roll__die">
+                            {value}
+                          </span>
+                        ))
+                      : "-"}
+                  </div>
+                  <div className="defense-roll__dice defense-roll__dice--summary">
+                    <span className="defense-roll__die defense-roll__die--summary">
+                      C {actionFlow?.dice?.defender?.crit ?? 0}
+                    </span>
+                    <span className="defense-roll__die defense-roll__die--summary">
+                      H {actionFlow?.dice?.defender?.norm ?? 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {actionFlow?.mode === "fight" && actionFlow?.step === "resolve" && (
+        <div className="kt-modal">
+          <div className="kt-modal__backdrop" />
+          <div className="kt-modal__panel">
+            <div className="kt-modal__layout">
+              <aside className="kt-modal__sidebar">
+                <div className="kt-modal__sidebar-group">
+                  <div className="kt-modal__sidebar-title">Fight: Resolve</div>
+                  <div className="kt-modal__sidebar-empty">
+                    Turn: {actionFlow?.resolve?.turn}
+                  </div>
+                </div>
+              </aside>
+              <div className="kt-modal__content">
+                <div className="kt-modal__header">
+                  <div className="kt-modal__title">Fight: Resolve</div>
+                  <div className="kt-modal__subtitle">
+                    {fightAttacker?.name || "Attacker"} vs {fightDefender?.name || "Defender"}
+                  </div>
+                </div>
+
+                <div className="defense-roll__section">
+                  <div className="defense-roll__label">Attacker Remaining</div>
+                  <div className="defense-roll__dice defense-roll__dice--summary">
+                    <span className="defense-roll__die defense-roll__die--summary">
+                      C {actionFlow?.remaining?.attacker?.crit ?? 0}
+                    </span>
+                    <span className="defense-roll__die defense-roll__die--summary">
+                      H {actionFlow?.remaining?.attacker?.norm ?? 0}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="defense-roll__section">
+                  <div className="defense-roll__label">Defender Remaining</div>
+                  <div className="defense-roll__dice defense-roll__dice--summary">
+                    <span className="defense-roll__die defense-roll__die--summary">
+                      C {actionFlow?.remaining?.defender?.crit ?? 0}
+                    </span>
+                    <span className="defense-roll__die defense-roll__die--summary">
+                      H {actionFlow?.remaining?.defender?.norm ?? 0}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="defense-roll__section">
+                  <div className="defense-roll__label">Resolve Action</div>
+                  <div className="defense-roll__dice defense-roll__dice--summary">
+                    <button
+                      className="kt-modal__btn kt-modal__btn--primary"
+                      type="button"
+                      disabled={actionFlow?.resolve?.turn !== "attacker" || (actionFlow?.remaining?.attacker?.norm ?? 0) <= 0}
+                      onClick={() => {
+                        dispatchIntent({
+                          type: "FLOW_RESOLVE_ACTION",
+                          payload: {
+                            actorRole: "attacker",
+                            actionType: "strike",
+                            dieType: "norm",
+                          },
+                        });
+                      }}
+                    >
+                      Attacker Strike (norm)
+                    </button>
+                    <button
+                      className="kt-modal__btn kt-modal__btn--primary"
+                      type="button"
+                      disabled={actionFlow?.resolve?.turn !== "attacker" || (actionFlow?.remaining?.attacker?.crit ?? 0) <= 0}
+                      onClick={() => {
+                        dispatchIntent({
+                          type: "FLOW_RESOLVE_ACTION",
+                          payload: {
+                            actorRole: "attacker",
+                            actionType: "strike",
+                            dieType: "crit",
+                          },
+                        });
+                      }}
+                    >
+                      Attacker Strike (crit)
+                    </button>
+                    <button
+                      className="kt-modal__btn"
+                      type="button"
+                      disabled={actionFlow?.resolve?.turn !== "attacker" || (actionFlow?.remaining?.attacker?.norm ?? 0) <= 0 || (actionFlow?.remaining?.defender?.norm ?? 0) <= 0}
+                      onClick={() => {
+                        dispatchIntent({
+                          type: "FLOW_RESOLVE_ACTION",
+                          payload: {
+                            actorRole: "attacker",
+                            actionType: "block",
+                            dieType: "norm",
+                            blockedType: "norm",
+                          },
+                        });
+                      }}
+                    >
+                      Attacker Block (norm)
+                    </button>
+                    <button
+                      className="kt-modal__btn"
+                      type="button"
+                      disabled={actionFlow?.resolve?.turn !== "attacker" || (actionFlow?.remaining?.attacker?.crit ?? 0) <= 0 || ((actionFlow?.remaining?.defender?.crit ?? 0) + (actionFlow?.remaining?.defender?.norm ?? 0)) <= 0}
+                      onClick={() => {
+                        dispatchIntent({
+                          type: "FLOW_RESOLVE_ACTION",
+                          payload: {
+                            actorRole: "attacker",
+                            actionType: "block",
+                            dieType: "crit",
+                            blockedType: "crit",
+                          },
+                        });
+                      }}
+                    >
+                      Attacker Block (crit→crit)
+                    </button>
+                    <button
+                      className="kt-modal__btn"
+                      type="button"
+                      disabled={actionFlow?.resolve?.turn !== "attacker" || (actionFlow?.remaining?.attacker?.crit ?? 0) <= 0 || (actionFlow?.remaining?.defender?.norm ?? 0) <= 0}
+                      onClick={() => {
+                        dispatchIntent({
+                          type: "FLOW_RESOLVE_ACTION",
+                          payload: {
+                            actorRole: "attacker",
+                            actionType: "block",
+                            dieType: "crit",
+                            blockedType: "norm",
+                          },
+                        });
+                      }}
+                    >
+                      Attacker Block (crit→norm)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="defense-roll__section">
+                  <div className="defense-roll__label">Resolve Action (Defender)</div>
+                  <div className="defense-roll__dice defense-roll__dice--summary">
+                    <button
+                      className="kt-modal__btn kt-modal__btn--primary"
+                      type="button"
+                      disabled={actionFlow?.resolve?.turn !== "defender" || (actionFlow?.remaining?.defender?.norm ?? 0) <= 0}
+                      onClick={() => {
+                        dispatchIntent({
+                          type: "FLOW_RESOLVE_ACTION",
+                          payload: {
+                            actorRole: "defender",
+                            actionType: "strike",
+                            dieType: "norm",
+                          },
+                        });
+                      }}
+                    >
+                      Defender Strike (norm)
+                    </button>
+                    <button
+                      className="kt-modal__btn kt-modal__btn--primary"
+                      type="button"
+                      disabled={actionFlow?.resolve?.turn !== "defender" || (actionFlow?.remaining?.defender?.crit ?? 0) <= 0}
+                      onClick={() => {
+                        dispatchIntent({
+                          type: "FLOW_RESOLVE_ACTION",
+                          payload: {
+                            actorRole: "defender",
+                            actionType: "strike",
+                            dieType: "crit",
+                          },
+                        });
+                      }}
+                    >
+                      Defender Strike (crit)
+                    </button>
+                    <button
+                      className="kt-modal__btn"
+                      type="button"
+                      disabled={actionFlow?.resolve?.turn !== "defender" || (actionFlow?.remaining?.defender?.norm ?? 0) <= 0 || (actionFlow?.remaining?.attacker?.norm ?? 0) <= 0}
+                      onClick={() => {
+                        dispatchIntent({
+                          type: "FLOW_RESOLVE_ACTION",
+                          payload: {
+                            actorRole: "defender",
+                            actionType: "block",
+                            dieType: "norm",
+                            blockedType: "norm",
+                          },
+                        });
+                      }}
+                    >
+                      Defender Block (norm)
+                    </button>
+                    <button
+                      className="kt-modal__btn"
+                      type="button"
+                      disabled={actionFlow?.resolve?.turn !== "defender" || (actionFlow?.remaining?.defender?.crit ?? 0) <= 0 || ((actionFlow?.remaining?.attacker?.crit ?? 0) + (actionFlow?.remaining?.attacker?.norm ?? 0)) <= 0}
+                      onClick={() => {
+                        dispatchIntent({
+                          type: "FLOW_RESOLVE_ACTION",
+                          payload: {
+                            actorRole: "defender",
+                            actionType: "block",
+                            dieType: "crit",
+                            blockedType: "crit",
+                          },
+                        });
+                      }}
+                    >
+                      Defender Block (crit→crit)
+                    </button>
+                    <button
+                      className="kt-modal__btn"
+                      type="button"
+                      disabled={actionFlow?.resolve?.turn !== "defender" || (actionFlow?.remaining?.defender?.crit ?? 0) <= 0 || (actionFlow?.remaining?.attacker?.norm ?? 0) <= 0}
+                      onClick={() => {
+                        dispatchIntent({
+                          type: "FLOW_RESOLVE_ACTION",
+                          payload: {
+                            actorRole: "defender",
+                            actionType: "block",
+                            dieType: "crit",
+                            blockedType: "norm",
+                          },
+                        });
+                      }}
+                    >
+                      Defender Block (crit→norm)
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <DiceInputModal
         open={attackModalOpen}
@@ -1016,7 +1595,14 @@ function ArmyOverlayRoute() {
       baseId: unit.id,
       teamId,
       stats: { ...unit.stats },
-      state: { ...unit.state },
+      state: {
+        ...unit.state,
+        apCurrent:
+          Number.isFinite(Number(unit.state?.apCurrent))
+            ? Number(unit.state?.apCurrent)
+            : Number(unit.stats?.apl ?? 0),
+        actionMarks: { ...(unit.state?.actionMarks ?? {}) },
+      },
       weapons:
         unit.weapons?.map((weapon) => ({
           ...weapon,

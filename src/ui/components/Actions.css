@@ -60,3 +60,8 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+.kt-action-btn--dark {
+  opacity: 0.5;
+  filter: brightness(0.8);
+}

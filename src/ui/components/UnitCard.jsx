@@ -68,7 +68,12 @@ function UnitCard({
         <div className="kt-card__stats">
           <div className="statbox">
             <div className="statbox__label">APL</div>
-            <div className="statbox__value">{stats.apl}</div>
+            <div className="statbox__value">
+              {Number.isFinite(Number(state.apCurrent))
+                ? Number(state.apCurrent)
+                : stats.apl}
+              /{stats.apl}
+            </div>
           </div>
           <div className="statbox">
             <div className="statbox__label">MOVE</div>

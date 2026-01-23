@@ -23,6 +23,11 @@
   box-shadow: inset 0 0 0 1px rgba(255, 120, 60, 0.4);
 }
 
+.kt-navitem--dead {
+  opacity: 0.6;
+  filter: saturate(0.7) brightness(0.7);
+}
+
 .kt-navitem__top {
   display: flex;
   justify-content: space-between;
@@ -64,6 +69,17 @@
 .kt-chip--red {
   border-color: rgba(255, 90, 90, 0.45);
   background: rgba(255, 90, 90, 0.18);
+}
+
+.kt-chip--dead {
+  border-color: rgba(120, 20, 20, 0.7);
+  background: rgba(120, 20, 20, 0.35);
+  color: #ffd6d6;
+}
+
+.kt-navitem--dead .kt-chip--dead {
+  opacity: 1 !important;
+  filter: none !important;
 }
 
 

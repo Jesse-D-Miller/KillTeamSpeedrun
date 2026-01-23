@@ -149,6 +149,85 @@ export const validateGameIntent = (state, event) => {
     case "CLEAR_COMBAT_STATE":
       break;
 
+    case "ACTION_USE": {
+      const { operativeId, actionKey } = event.payload || {};
+      if (!operativeId) pushIssue(issues, "Missing operativeId.");
+      if (!actionKey) pushIssue(issues, "Missing actionKey.");
+      if (operativeId && !hasUnit(state, operativeId)) {
+        pushIssue(issues, "Unit not found.", { unitId: operativeId });
+      }
+      break;
+    }
+
+    case "ACTIVATION_START": {
+      const { operativeId } = event.payload || {};
+      if (!operativeId) pushIssue(issues, "Missing operativeId.");
+      if (operativeId && !hasUnit(state, operativeId)) {
+        pushIssue(issues, "Unit not found.", { unitId: operativeId });
+      }
+      break;
+    }
+
+    case "ACTIVATION_END":
+    case "FLOW_CANCEL":
+      break;
+
+    case "FLOW_START_SHOOT":
+    case "FLOW_START_FIGHT": {
+      const { attackerId } = event.payload || {};
+      if (!attackerId) pushIssue(issues, "Missing attackerId.");
+      if (attackerId && !hasUnit(state, attackerId)) {
+        pushIssue(issues, "Unit not found.", { unitId: attackerId });
+      }
+      break;
+    }
+
+    case "FLOW_SET_TARGET": {
+      const { defenderId } = event.payload || {};
+      if (!defenderId) pushIssue(issues, "Missing defenderId.");
+      if (defenderId && !hasUnit(state, defenderId)) {
+        pushIssue(issues, "Unit not found.", { unitId: defenderId });
+      }
+      break;
+    }
+
+    case "FLOW_SET_WEAPON": {
+      const { role, weaponName } = event.payload || {};
+      if (role !== "attacker" && role !== "defender") {
+        pushIssue(issues, "Role must be attacker or defender.");
+      }
+      if (!weaponName) pushIssue(issues, "Missing weaponName.");
+      break;
+    }
+
+    case "FLOW_LOCK_WEAPON": {
+      const { role } = event.payload || {};
+      if (role !== "attacker" && role !== "defender") {
+        pushIssue(issues, "Role must be attacker or defender.");
+      }
+      break;
+    }
+
+    case "FLOW_ROLL_DICE": {
+      const { attacker, defender } = event.payload || {};
+      if (!attacker || !defender) pushIssue(issues, "Missing dice payload.");
+      break;
+    }
+
+    case "FLOW_RESOLVE_ACTION": {
+      const { actorRole, actionType, dieType } = event.payload || {};
+      if (actorRole !== "attacker" && actorRole !== "defender") {
+        pushIssue(issues, "Role must be attacker or defender.");
+      }
+      if (actionType !== "strike" && actionType !== "block") {
+        pushIssue(issues, "ActionType must be strike or block.");
+      }
+      if (dieType !== "crit" && dieType !== "norm") {
+        pushIssue(issues, "DieType must be crit or norm.");
+      }
+      break;
+    }
+
     default:
       pushIssue(issues, `Unknown event type: ${event.type}`);
       break;
