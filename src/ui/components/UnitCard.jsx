@@ -11,6 +11,8 @@ function UnitCard({
   unit,
   dispatch,
   onLog,
+  canChooseOrder = false,
+  onChooseOrder = null,
 }) {
   if (!unit) return null;
 
@@ -138,15 +140,21 @@ function UnitCard({
               state.order === "conceal" ? "pill--blue" : "pill--orange"
             }`}
             type="button"
-            onClick={() =>
+            onClick={() => {
+              const nextOrder = state.order === "conceal" ? "engage" : "conceal";
+              if (canChooseOrder && typeof onChooseOrder === "function") {
+                onChooseOrder(nextOrder);
+                return;
+              }
               dispatch({
                 type: "SET_ORDER_OVERRIDE",
                 payload: {
                   id: unit.id,
-                  order: state.order === "conceal" ? "engage" : "conceal",
+                  order: nextOrder,
                 },
-              })
-            }
+              });
+            }}
+            disabled={Boolean(onChooseOrder) && !canChooseOrder}
           >
             {state.order.toUpperCase()}
           </button>

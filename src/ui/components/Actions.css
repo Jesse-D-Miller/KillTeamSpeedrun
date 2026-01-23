@@ -30,6 +30,48 @@
   justify-content: space-between;
 }
 
+.kt-action-card__activate {
+  display: flex;
+  gap: 8px;
+  flex: 1 1 0;
+}
+
+.kt-action-btn.kt-action-btn--activate-conceal {
+  border-color: rgba(90, 160, 255, 0.6);
+  background: rgba(90, 160, 255, 0.2);
+  writing-mode: horizontal-tb;
+  transform: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 2px;
+}
+
+.kt-action-btn.kt-action-btn--activate-conceal:hover {
+  border-color: rgba(90, 160, 255, 0.85);
+  background: rgba(90, 160, 255, 0.32);
+}
+
+.kt-action-btn.kt-action-btn--activate-engage {
+  border-color: rgba(255, 140, 60, 0.6);
+  background: rgba(255, 140, 60, 0.2);
+  writing-mode: horizontal-tb;
+  transform: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 2px;
+}
+
+.kt-action-btn--activate-engage:hover {
+  border-color: rgba(255, 140, 60, 0.85);
+  background: rgba(255, 140, 60, 0.32);
+}
+
 .kt-action-card__body--wrap {
   flex-wrap: nowrap;
   overflow-x: visible;
@@ -74,4 +116,33 @@
 .kt-action-btn--dark {
   opacity: 0.5;
   filter: brightness(0.8);
+}
+
+.kt-action-card__counteract {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 0;
+}
+
+.kt-action-card__counteract-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.kt-action-card__counteract-option {
+  border-radius: 8px;
+  padding: 6px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kt-action-card__counteract-option:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.16);
 }

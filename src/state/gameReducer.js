@@ -93,6 +93,8 @@ function applyDamageNoLog(state, targetId, amount) {
 						...unit.state,
 						woundsCurrent: nextWounds,
 						},
+				awaitingOrder: false,
+				awaitingActions: false,
 					}
 			: unit,
 	);
@@ -184,6 +186,8 @@ function resetTpFlags(state) {
 			...(state.firefight || {}),
 			activeOperativeId: null,
 			activePlayerId: null,
+			awaitingOrder: false,
+			awaitingActions: false,
 		},
 		game: state.game.map((unit) => ({
 			...unit,
@@ -467,15 +471,28 @@ export function gameReducer(state, action) {
 		case "ACTION_USE": {
 			const { operativeId, actionKey } = action.payload || {};
 			if (!operativeId || !actionKey) return state;
+			if (state.phase !== "FIREFIGHT") return state;
+			if (operativeId !== state.firefight?.activeOperativeId) return state;
+			if (!state.firefight?.orderChosenThisActivation) return state;
+			if (state.firefight?.awaitingActions !== true) return state;
 			const actionConfig = ACTION_CONFIG[actionKey];
 			if (!actionConfig) return state;
 
 			const operative = state.game.find((unit) => unit.id === operativeId);
 			if (!operative) return state;
+			if (operative.owner !== state.firefight?.activePlayerId) return state;
 
 			const cost = Number(actionConfig.cost) || 0;
 			const prevAp = Number(operative.state?.apCurrent ?? 0);
-			const nextAp = prevAp - cost;
+			const isCounteract = Boolean(state.firefight?.activation?.isCounteract);
+			const actionsAllowed = Number(state.firefight?.activation?.actionsAllowed ?? 0);
+			const actionsTaken = state.firefight?.activation?.actionsTaken || [];
+			if (isCounteract && cost > 1) return state;
+			if (isCounteract && actionsAllowed > 0 && actionsTaken.length >= actionsAllowed) {
+				return state;
+			}
+			if (!isCounteract && (!Number.isFinite(prevAp) || prevAp < cost)) return state;
+			const nextAp = isCounteract ? prevAp : prevAp - cost;
 			const nextMarks = {
 				...(operative.state?.actionMarks ?? {}),
 				[actionKey]: true,
@@ -516,15 +533,91 @@ export function gameReducer(state, action) {
 						? createActionFlow({ mode: "fight", attackerId: operativeId })
 						: state.ui?.actionFlow ?? null;
 
-			return {
+			const nextActivation = {
+				...(state.firefight?.activation || {}),
+				aplSpent: (state.firefight?.activation?.aplSpent || 0) + (isCounteract ? 0 : cost),
+				actionsTaken: [
+					...(state.firefight?.activation?.actionsTaken || []),
+					actionKey,
+				],
+			};
+
+			const nextState = {
 				...state,
 				game: nextGame,
 				log: pushLog(state.log, entry),
+				firefight: {
+					...(state.firefight || {}),
+					activation: nextActivation,
+				},
 				ui: {
 					...(state.ui || {}),
 					actionFlow: nextActionFlow,
 				},
 			};
+
+			if (!isCounteract) return nextState;
+
+			const remainingAllowed =
+				Number(state.firefight?.activation?.actionsAllowed ?? 0) -
+				nextActivation.actionsTaken.length;
+			if (remainingAllowed > 0) return nextState;
+
+			const currentPlayer = state.firefight?.activePlayerId;
+			const otherPlayer = getOtherPlayerId(currentPlayer);
+			const otherHasReady = getReadyOperatives(
+				{ ...state, game: nextGame },
+				otherPlayer,
+			).length;
+			const otherCanCounteract = otherPlayer
+				? canCounteract({ ...state, game: nextGame }, otherPlayer)
+				: false;
+			const nextPlayer = otherHasReady > 0 || otherCanCounteract
+				? otherPlayer
+				: currentPlayer;
+
+			const endState = {
+				...nextState,
+				firefight: {
+					...(nextState.firefight || {}),
+					activeOperativeId: null,
+					activePlayerId: nextPlayer,
+					orderChosenThisActivation: false,
+					awaitingOrder: false,
+					awaitingActions: false,
+					activation: null,
+					roundIndex: (state.firefight?.roundIndex ?? 0) + 1,
+				},
+			};
+
+			if (allOperativesExpended({ ...state, game: nextGame })) {
+				const nextTp = Number(state.turningPoint ?? 0) + 1;
+				const entry = createLogEntry({
+					type: "TURNING_POINT_END",
+					summary: `Turning Point ${state.turningPoint ?? 0} ended`,
+					meta: { turningPoint: state.turningPoint ?? 0 },
+					undo: state.game,
+					redo: nextGame,
+				});
+				return {
+					...endState,
+					log: pushLog(endState.log, entry),
+					phase: nextTp > 4 ? "GAME_OVER" : "STRATEGY",
+					turningPoint: nextTp > 4 ? 4 : nextTp,
+					initiativePlayerId: null,
+					firefight: {
+						...(endState.firefight || {}),
+						activeOperativeId: null,
+						activePlayerId: null,
+						orderChosenThisActivation: false,
+						awaitingOrder: false,
+						awaitingActions: false,
+						activation: null,
+					},
+				};
+			}
+
+			return endState;
 		}
 
 		case "FLOW_START_SHOOT": {
@@ -1069,6 +1162,11 @@ export function gameReducer(state, action) {
 						...(state.firefight || {}),
 						activePlayerId: state.initiativePlayerId,
 						activeOperativeId: null,
+						orderChosenThisActivation: false,
+						awaitingOrder: false,
+						awaitingActions: false,
+						awaitingChoice: true,
+						roundIndex: 0,
 					},
 					strategy: {
 						...(state.strategy || {}),
@@ -1097,6 +1195,8 @@ export function gameReducer(state, action) {
 					activePlayerId: state.initiativePlayerId,
 					activeOperativeId: null,
 					orderChosenThisActivation: false,
+					awaitingChoice: true,
+					roundIndex: 0,
 				},
 				strategy: {
 					...(state.strategy || {}),
@@ -1119,6 +1219,14 @@ export function gameReducer(state, action) {
 					...(state.firefight || {}),
 					activeOperativeId: operativeId,
 					orderChosenThisActivation: false,
+					awaitingOrder: true,
+					awaitingActions: false,
+					activation: {
+						ownerPlayerId: playerId,
+						aplSpent: 0,
+						orderChosen: false,
+						actionsTaken: [],
+					},
 				},
 			};
 		}
@@ -1129,6 +1237,8 @@ export function gameReducer(state, action) {
 			if (operativeId !== state.firefight?.activeOperativeId) return state;
 			if (order !== "conceal" && order !== "engage") return state;
 			if (state.firefight?.orderChosenThisActivation) return state;
+			const operative = state.game.find((unit) => unit.id === operativeId);
+			if (!operative || operative.owner !== state.firefight?.activePlayerId) return state;
 			return {
 				...state,
 				game: state.game.map((unit) =>
@@ -1145,6 +1255,12 @@ export function gameReducer(state, action) {
 				firefight: {
 					...(state.firefight || {}),
 					orderChosenThisActivation: true,
+					awaitingOrder: false,
+					awaitingActions: true,
+					activation: {
+						...(state.firefight?.activation || {}),
+						orderChosen: true,
+					},
 				},
 			};
 		}
@@ -1156,6 +1272,7 @@ export function gameReducer(state, action) {
 			if (!state.firefight?.orderChosenThisActivation) return state;
 			const operative = state.game.find((unit) => unit.id === operativeId);
 			if (!operative) return state;
+			if (operative.owner !== state.firefight?.activePlayerId) return state;
 			const updatedGame = state.game.map((unit) =>
 				unit.id === operativeId
 					? {
@@ -1188,15 +1305,37 @@ export function gameReducer(state, action) {
 					activeOperativeId: null,
 					activePlayerId: nextPlayer,
 					orderChosenThisActivation: false,
+					awaitingOrder: false,
+					awaitingActions: false,
+					activation: null,
+					roundIndex: (state.firefight?.roundIndex ?? 0) + 1,
 				},
 			};
 
 			if (allOperativesExpended({ ...state, game: updatedGame })) {
 				const nextTp = Number(state.turningPoint ?? 0) + 1;
+				const entry = createLogEntry({
+					type: "TURNING_POINT_END",
+					summary: `Turning Point ${state.turningPoint ?? 0} ended`,
+					meta: { turningPoint: state.turningPoint ?? 0 },
+					undo: state.game,
+					redo: updatedGame,
+				});
 				return {
 					...nextState,
+					log: pushLog(nextState.log, entry),
 					phase: nextTp > 4 ? "GAME_OVER" : "STRATEGY",
 					turningPoint: nextTp > 4 ? 4 : nextTp,
+					initiativePlayerId: null,
+					firefight: {
+						...(nextState.firefight || {}),
+						activeOperativeId: null,
+						activePlayerId: null,
+						orderChosenThisActivation: false,
+						awaitingOrder: false,
+						awaitingActions: false,
+						activation: null,
+					},
 				};
 			}
 
@@ -1225,22 +1364,91 @@ export function gameReducer(state, action) {
 						}
 					: unit,
 			);
-			const nextPlayer = getOtherPlayerId(playerId);
-			const nextState = {
+			return {
 				...state,
 				game: updatedGame,
 				firefight: {
 					...(state.firefight || {}),
+					activeOperativeId: operativeId,
+					orderChosenThisActivation: true,
+					awaitingOrder: false,
+					awaitingActions: true,
+					activation: {
+						ownerPlayerId: playerId,
+						aplSpent: 0,
+						actionsTaken: [],
+						orderChosen: true,
+						isCounteract: true,
+						actionsAllowed: 1,
+						orderLocked: true,
+					},
+				},
+			};
+		}
+
+		case "SKIP_ACTIVATION": {
+			const { playerId } = action.payload || {};
+			if (state.phase !== "FIREFIGHT") return state;
+			if (!playerId || playerId !== state.firefight?.activePlayerId) return state;
+			if (state.firefight?.activeOperativeId) return state;
+			if (getReadyOperatives(state, playerId).length > 0) return state;
+			if (canCounteract(state, playerId)) return state;
+
+			const otherPlayer = getOtherPlayerId(playerId);
+			const otherHasReady = getReadyOperatives(state, otherPlayer).length > 0;
+			const otherCanCounteract = otherPlayer
+				? canCounteract(state, otherPlayer)
+				: false;
+			const nextPlayer = otherHasReady || otherCanCounteract
+				? otherPlayer
+				: playerId;
+
+			const entry = createLogEntry({
+				type: "ACTIVATION_SKIPPED",
+				summary: `Player ${playerId} has no activations`,
+				meta: { playerId },
+				undo: state.game,
+				redo: state.game,
+			});
+
+			const nextState = {
+				...state,
+				log: pushLog(state.log, entry),
+				firefight: {
+					...(state.firefight || {}),
+					activeOperativeId: null,
 					activePlayerId: nextPlayer,
+					orderChosenThisActivation: false,
+					awaitingOrder: false,
+					awaitingActions: false,
+					activation: null,
 				},
 			};
 
-			if (allOperativesExpended({ ...state, game: updatedGame })) {
+			if (allOperativesExpended(state)) {
 				const nextTp = Number(state.turningPoint ?? 0) + 1;
+				const entry = createLogEntry({
+					type: "TURNING_POINT_END",
+					summary: `Turning Point ${state.turningPoint ?? 0} ended`,
+					meta: { turningPoint: state.turningPoint ?? 0 },
+					undo: state.game,
+					redo: state.game,
+				});
 				return {
 					...nextState,
+					log: pushLog(nextState.log, entry),
 					phase: nextTp > 4 ? "GAME_OVER" : "STRATEGY",
 					turningPoint: nextTp > 4 ? 4 : nextTp,
+					initiativePlayerId: null,
+					firefight: {
+						...(nextState.firefight || {}),
+						activeOperativeId: null,
+						activePlayerId: null,
+						orderChosenThisActivation: false,
+						awaitingOrder: false,
+						awaitingActions: false,
+						activation: null,
+					},
 				};
 			}
 
@@ -1250,15 +1458,27 @@ export function gameReducer(state, action) {
 		case "END_FIREFIGHT_PHASE": {
 			if (!allOperativesExpended(state)) return state;
 			const nextTp = Number(state.turningPoint ?? 0) + 1;
+			const entry = createLogEntry({
+				type: "TURNING_POINT_END",
+				summary: `Turning Point ${state.turningPoint ?? 0} ended`,
+				meta: { turningPoint: state.turningPoint ?? 0 },
+				undo: state.game,
+				redo: state.game,
+			});
 			return {
 				...state,
+				log: pushLog(state.log, entry),
 				phase: nextTp > 4 ? "GAME_OVER" : "STRATEGY",
 				turningPoint: nextTp > 4 ? 4 : nextTp,
+				initiativePlayerId: null,
 				firefight: {
 					...(state.firefight || {}),
 					activeOperativeId: null,
 					activePlayerId: null,
 					orderChosenThisActivation: false,
+					awaitingOrder: false,
+					awaitingActions: false,
+					activation: null,
 				},
 			};
 		}
@@ -1321,7 +1541,6 @@ export function gameReducer(state, action) {
 						0,
 						unit.stats.woundsMax,
 					);
-
 					return {
 						...unit,
 						state: {

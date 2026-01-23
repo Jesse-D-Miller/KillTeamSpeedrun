@@ -1,3 +1,6 @@
+import { ACTION_CONFIG } from "../engine/rules/actionsCore";
+import { canCounteract, getReadyOperatives } from "./gameLoopSelectors";
+
 const isFiniteNumber = (value) => Number.isFinite(Number(value));
 
 const pushIssue = (issues, message, detail = {}) => {
@@ -38,6 +41,7 @@ const PHASE_ALLOWED_EVENTS = {
     "PERFORM_ACTION",
     "END_ACTIVATION",
     "COUNTERACT",
+    "SKIP_ACTIVATION",
     "END_FIREFIGHT_PHASE",
     "ACTION_USE",
     "ACTIVATION_START",
@@ -343,12 +347,22 @@ export const validateGameIntent = (state, event) => {
       if (state?.phase !== "FIREFIGHT") {
         pushIssue(issues, "SET_ORDER only allowed in FIREFIGHT.");
       }
+      if (!state?.firefight?.activeOperativeId) {
+        pushIssue(issues, "No active operative set.");
+      }
       if (!operativeId) pushIssue(issues, "Missing operativeId.");
       if (order !== "conceal" && order !== "engage") {
         pushIssue(issues, "Order must be conceal or engage.");
       }
       if (operativeId && state?.firefight?.activeOperativeId !== operativeId) {
         pushIssue(issues, "Order can only be set for active operative.");
+      }
+      if (operativeId && !hasUnit(state, operativeId)) {
+        pushIssue(issues, "Operative not found.", { unitId: operativeId });
+      }
+      const operative = state?.game?.find((unit) => unit.id === operativeId);
+      if (operative && operative.owner !== state?.firefight?.activePlayerId) {
+        pushIssue(issues, "Operative does not belong to active player.");
       }
       if (state?.firefight?.orderChosenThisActivation) {
         pushIssue(issues, "Order already chosen this activation.");
@@ -362,6 +376,12 @@ export const validateGameIntent = (state, event) => {
       }
       if (!state?.firefight?.activeOperativeId) {
         pushIssue(issues, "No active operative to end.");
+      }
+      const operative = state?.game?.find(
+        (unit) => unit.id === state?.firefight?.activeOperativeId,
+      );
+      if (operative && operative.owner !== state?.firefight?.activePlayerId) {
+        pushIssue(issues, "Active operative does not belong to active player.");
       }
       if (!state?.firefight?.orderChosenThisActivation) {
         pushIssue(issues, "Order must be chosen before ending activation.");
@@ -378,6 +398,48 @@ export const validateGameIntent = (state, event) => {
       if (!operativeId) pushIssue(issues, "Missing operativeId.");
       if (playerId && state?.firefight?.activePlayerId !== playerId) {
         pushIssue(issues, "Not this player's turn.");
+      }
+      if (playerId && getReadyOperatives(state, playerId).length > 0) {
+        pushIssue(issues, "Ready operatives remain; counteract not allowed.");
+      }
+      if (operativeId && !hasUnit(state, operativeId)) {
+        pushIssue(issues, "Operative not found.", { unitId: operativeId });
+      }
+      const operative = state?.game?.find((unit) => unit.id === operativeId);
+      if (operative) {
+        if (operative.owner !== playerId) {
+          pushIssue(issues, "Operative does not belong to active player.");
+        }
+        if (operative.state?.readyState !== "EXPENDED") {
+          pushIssue(issues, "Operative must be expended to counteract.");
+        }
+        if (operative.state?.order !== "engage") {
+          pushIssue(issues, "Operative must be Engage to counteract.");
+        }
+        if (operative.state?.hasCounteractedThisTP) {
+          pushIssue(issues, "Operative already counteracted this turning point.");
+        }
+      }
+      break;
+    }
+
+    case "SKIP_ACTIVATION": {
+      const { playerId } = event.payload || {};
+      if (state?.phase !== "FIREFIGHT") {
+        pushIssue(issues, "SKIP_ACTIVATION only allowed in FIREFIGHT.");
+      }
+      if (!playerId) pushIssue(issues, "Missing playerId.");
+      if (playerId && state?.firefight?.activePlayerId !== playerId) {
+        pushIssue(issues, "Not this player's turn.");
+      }
+      if (state?.firefight?.activeOperativeId) {
+        pushIssue(issues, "Cannot skip while an operative is active.");
+      }
+      if (playerId && getReadyOperatives(state, playerId).length > 0) {
+        pushIssue(issues, "Ready operatives remain; cannot skip.");
+      }
+      if (playerId && canCounteract(state, playerId)) {
+        pushIssue(issues, "Counteract available; cannot skip.");
       }
       break;
     }
@@ -416,6 +478,42 @@ export const validateGameIntent = (state, event) => {
       if (!actionKey) pushIssue(issues, "Missing actionKey.");
       if (operativeId && !hasUnit(state, operativeId)) {
         pushIssue(issues, "Unit not found.", { unitId: operativeId });
+      }
+      if (state?.phase !== "FIREFIGHT") {
+        pushIssue(issues, "ACTION_USE only allowed in FIREFIGHT.");
+      }
+      if (operativeId && state?.firefight?.activeOperativeId !== operativeId) {
+        pushIssue(issues, "Only the active operative can act.");
+      }
+      const operative = state?.game?.find((unit) => unit.id === operativeId);
+      if (operative && operative.owner !== state?.firefight?.activePlayerId) {
+        pushIssue(issues, "Only the active player can act.");
+      }
+      if (!state?.firefight?.orderChosenThisActivation) {
+        pushIssue(issues, "Order must be chosen before acting.");
+      }
+      if (state?.firefight?.awaitingActions !== true) {
+        pushIssue(issues, "Activation is not ready for actions.");
+      }
+      const actionConfig = actionKey ? ACTION_CONFIG[actionKey] : null;
+      if (actionKey && !actionConfig) {
+        pushIssue(issues, "Unknown action.");
+      }
+      const isCounteract = Boolean(state?.firefight?.activation?.isCounteract);
+      const actionsAllowed = Number(state?.firefight?.activation?.actionsAllowed ?? 0);
+      const actionsTaken = state?.firefight?.activation?.actionsTaken || [];
+      if (isCounteract && actionConfig && Number(actionConfig?.cost ?? 0) > 1) {
+        pushIssue(issues, "Counteract allows only 1AP actions.");
+      }
+      if (isCounteract && actionsAllowed > 0 && actionsTaken.length >= actionsAllowed) {
+        pushIssue(issues, "Counteract action already used.");
+      }
+      if (operative && actionConfig && !isCounteract) {
+        const ap = Number(operative?.state?.apCurrent ?? 0);
+        const cost = Number(actionConfig?.cost ?? 0);
+        if (!Number.isFinite(ap) || ap < cost) {
+          pushIssue(issues, "Not enough APL for this action.");
+        }
       }
       break;
     }

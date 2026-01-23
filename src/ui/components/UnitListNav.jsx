@@ -1,7 +1,14 @@
 import "./UnitListNav.css";
 import { isInjured, unitMove } from "../../engine/selectors/unitSelectors";
 
-function UnitListNav({ units, selectedUnitId, onSelectUnit, activeOperativeId }) {
+function UnitListNav({
+	units,
+	selectedUnitId,
+	onSelectUnit,
+	activeOperativeId,
+	highlightReadyForPlayerId,
+	canSelectUnit = true,
+}) {
 	const orderedUnits = [...units].sort((a, b) => {
 		const aDead = Number(a.state.woundsCurrent) <= 0;
 		const bDead = Number(b.state.woundsCurrent) <= 0;
@@ -16,6 +23,10 @@ function UnitListNav({ units, selectedUnitId, onSelectUnit, activeOperativeId })
 					const isDead = Number(unit.state.woundsCurrent) <= 0;
 					const readyState = unit.state?.readyState;
 					const isActive = Boolean(activeOperativeId) && unit.id === activeOperativeId;
+					const shouldHighlightReady =
+						!isDead &&
+						readyState === "READY" &&
+						unit.owner === highlightReadyForPlayerId;
 					const woundsPct =
 						unit.stats.woundsMax === 0
 							? 0
@@ -30,8 +41,9 @@ function UnitListNav({ units, selectedUnitId, onSelectUnit, activeOperativeId })
 					return (
 						<button
 							key={unit.id}
-							className={`kt-navitem ${isSelected ? "kt-navitem--selected" : ""} ${unitIsInjured ? "kt-navitem--injured" : ""} ${isDead ? "kt-navitem--dead" : ""}`}
+								className={`kt-navitem ${isSelected ? "kt-navitem--selected" : ""} ${unitIsInjured ? "kt-navitem--injured" : ""} ${isDead ? "kt-navitem--dead" : ""} ${shouldHighlightReady ? "kt-navitem--ready" : ""}`}
 							onClick={() => onSelectUnit(unit.id)}
+								disabled={!canSelectUnit}
 							type="button"
 						>
 							<div className="kt-navitem__top">

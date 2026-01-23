@@ -28,6 +28,11 @@
   filter: saturate(0.7) brightness(0.7);
 }
 
+.kt-navitem--ready {
+  border-color: rgba(120, 255, 140, 0.6);
+  box-shadow: 0 0 0 1px rgba(120, 255, 140, 0.25);
+}
+
 .kt-navitem__top {
   display: flex;
   justify-content: space-between;
@@ -44,6 +49,11 @@
   display: flex;
   gap: 6px;
   align-items: center;
+}
+
+.kt-navitem:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .kt-status-dot {

@@ -30,6 +30,7 @@ import {
   getExpendedEngageOperatives,
   getReadyOperatives,
 } from "./state/gameLoopSelectors";
+import { ACTION_CONFIG } from "./engine/rules/actionsCore";
 import { useEffect, useReducer, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { connectWS } from "./lib/multiplayer";
@@ -93,6 +94,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
       activeOperativeId: null,
       activePlayerId: null,
       orderChosenThisActivation: false,
+      awaitingOrder: false,
+      awaitingActions: false,
     },
     game: initialUnits,
     log: {
@@ -123,6 +126,10 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
     issues: [],
     pending: null,
   });
+  const [skipToast, setSkipToast] = useState(null);
+  const skipToastRef = useRef(null);
+  const [tpEndToast, setTpEndToast] = useState(null);
+  const prevPhaseRef = useRef(null);
 
   const logEntry = ({ type, summary, meta }) => {
     const entry = createLogEntry({
@@ -235,6 +242,18 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
 
   const loopPlayerId = playerSlot || "A";
   const isFirefight = phase === "FIREFIGHT";
+  const allOperativesReady = state.game.every((unit) => {
+    const isDead = Number(unit.state?.woundsCurrent ?? 0) <= 0;
+    if (isDead) return true;
+    return unit.state?.readyState === "READY";
+  });
+  const isFirefightReady =
+    phase === "FIREFIGHT" &&
+    Boolean(state.initiativePlayerId) &&
+    allOperativesReady &&
+    !state.strategy?.turn;
+  const canSelectOperative =
+    !isFirefight || state.firefight?.activePlayerId === loopPlayerId;
   const isMyTurn = state.firefight?.activePlayerId === loopPlayerId;
   const readyOperatives = getReadyOperatives(state, loopPlayerId);
   const hasReadyOperatives = readyOperatives.length > 0;
@@ -244,6 +263,29 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   const selectedIsReady =
     selectedUnit?.owner === loopPlayerId &&
     selectedUnit?.state?.readyState === "READY";
+  const isCounteractActive =
+    isFirefight &&
+    state.firefight?.activation?.isCounteract === true &&
+    state.firefight?.activeOperativeId === selectedUnit?.id;
+  const counteractAllowedActions = isCounteractActive
+    ? Object.entries(ACTION_CONFIG)
+        .filter(([, config]) => Number(config?.cost ?? 0) <= 1)
+        .map(([key]) => key)
+    : null;
+  const awaitingOrder =
+    isFirefight &&
+    state.firefight?.activeOperativeId === selectedUnit?.id &&
+    !state.firefight?.orderChosenThisActivation;
+  const awaitingActions =
+    isFirefight &&
+    state.firefight?.activeOperativeId === selectedUnit?.id &&
+    state.firefight?.awaitingActions === true;
+  const canUseActions = isFirefight && awaitingActions;
+  const canChooseOrder =
+    isFirefight &&
+    isMyTurn &&
+    state.firefight?.activeOperativeId === selectedUnit?.id &&
+    !state.firefight?.orderChosenThisActivation;
   const showActivate =
     isFirefight &&
     isMyTurn &&
@@ -259,12 +301,21 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
     !hasReadyOperatives &&
     canCounteractNow;
   const statusMessage =
-    isFirefight &&
-    isMyTurn &&
-    !hasReadyOperatives &&
-    !canCounteractNow
-      ? "No ready operatives"
-      : null;
+    awaitingOrder
+      ? "Choose order"
+      : isCounteractActive
+        ? "Counteract: take 1 free action"
+      : isFirefight &&
+          isMyTurn &&
+          !hasReadyOperatives &&
+          canCounteractNow
+        ? "No ready operatives. Counteract available."
+        : isFirefight &&
+            isMyTurn &&
+            !hasReadyOperatives &&
+            !canCounteractNow
+          ? "No ready operatives"
+        : null;
 
   const selectedWeaponName =
     selectedUnit?.state?.selectedWeapon || selectedUnit?.weapons?.[0]?.name;
@@ -365,6 +416,43 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
     if (shootModalOpen) return;
     autoSelectTargetRef.current = false;
   }, [shootModalOpen]);
+
+  useEffect(() => {
+    if (!isFirefight) return;
+    if (!isMyTurn) return;
+    if (hasActiveOperative) return;
+    if (hasReadyOperatives) return;
+    if (canCounteractNow) return;
+    const key = `${turningPoint}-${state.firefight?.activePlayerId}`;
+    if (skipToastRef.current === key) return;
+    skipToastRef.current = key;
+    dispatchIntent({ type: "SKIP_ACTIVATION", payload: { playerId: loopPlayerId } });
+    setSkipToast(`Player ${loopPlayerId} has no activations`);
+    const timer = setTimeout(() => setSkipToast(null), 2000);
+    return () => clearTimeout(timer);
+  }, [
+    isFirefight,
+    isMyTurn,
+    hasActiveOperative,
+    hasReadyOperatives,
+    canCounteractNow,
+    turningPoint,
+    state.firefight?.activePlayerId,
+    loopPlayerId,
+  ]);
+
+  useEffect(() => {
+    const prevPhase = prevPhaseRef.current;
+    if (prevPhase === "FIREFIGHT" && phase === "STRATEGY") {
+      const endedTp = Math.max(1, Number(turningPoint ?? 1) - 1);
+      setTpEndToast(`Turning Point ${endedTp} ended`);
+      const timer = setTimeout(() => setTpEndToast(null), 2000);
+      prevPhaseRef.current = phase;
+      return () => clearTimeout(timer);
+    }
+    prevPhaseRef.current = phase;
+    return undefined;
+  }, [phase, turningPoint]);
 
   const currentPlayerId = playerSlot || getOrCreatePlayerId();
   const otherPlayerId = playerSlot ? (playerSlot === "A" ? "B" : "A") : null;
@@ -677,8 +765,13 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
             <UnitListNav
               units={myTeamUnits}
               selectedUnitId={selectedUnit?.id}
-              onSelectUnit={setSelectedUnitId}
+              onSelectUnit={(unitId) => {
+                if (!canSelectOperative) return;
+                setSelectedUnitId(unitId);
+              }}
               activeOperativeId={state.firefight?.activeOperativeId}
+              highlightReadyForPlayerId={state.firefight?.activePlayerId}
+              canSelectUnit={canSelectOperative}
             />
           ) : (
             <LogsWindow
@@ -699,10 +792,23 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
           />
 
           <main className="kt-detail">
+            {tpEndToast && <div className="kt-toast">{tpEndToast}</div>}
+            {skipToast && <div className="kt-toast">{skipToast}</div>}
             {phase === "STRATEGY" && !isStrategyReady && (
               <div className="kt-setup-warning">
                 Setup not complete. Lock rosters and deploy operatives before
                 Strategy Phase. (Stop trying to cheat.)
+              </div>
+            )}
+            {phase === "FIREFIGHT" && !isFirefightReady && (
+              <div className="kt-setup-warning">
+                Firefight cannot begin yet. Finish Strategy and ready all operatives.
+              </div>
+            )}
+            {phase === "FIREFIGHT" && state.firefight?.activePlayerId && (
+              <div className="kt-firefight-banner">
+                <div>Firefight Phase — TP {turningPoint}</div>
+                <div>Player {state.firefight.activePlayerId} to activate</div>
               </div>
             )}
             {selectedUnit ? (
@@ -712,6 +818,18 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
                   unit={selectedUnit}
                   dispatch={dispatchIntent}
                   onLog={logEntry}
+                  canChooseOrder={canChooseOrder}
+                  onChooseOrder={
+                    isFirefight
+                      ? (order) => {
+                          if (!selectedUnit?.id) return;
+                          dispatchIntent({
+                            type: "SET_ORDER",
+                            payload: { operativeId: selectedUnit.id, order },
+                          });
+                        }
+                      : null
+                  }
                 />
                 <StrategicPloys
                   armyKey={myTeamKey}
@@ -738,7 +856,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
                     attacker={selectedUnit}
                     actionMarks={selectedUnit?.state?.actionMarks}
                     showActivate={showActivate}
-                    onActivate={() => {
+                    onActivateConceal={() => {
                       if (!selectedUnit?.id) return;
                       dispatchIntent({
                         type: "SET_ACTIVE_OPERATIVE",
@@ -747,8 +865,28 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
                           operativeId: selectedUnit.id,
                         },
                       });
+                      dispatchIntent({
+                        type: "SET_ORDER",
+                        payload: { operativeId: selectedUnit.id, order: "conceal" },
+                      });
+                    }}
+                    onActivateEngage={() => {
+                      if (!selectedUnit?.id) return;
+                      dispatchIntent({
+                        type: "SET_ACTIVE_OPERATIVE",
+                        payload: {
+                          playerId: loopPlayerId,
+                          operativeId: selectedUnit.id,
+                        },
+                      });
+                      dispatchIntent({
+                        type: "SET_ORDER",
+                        payload: { operativeId: selectedUnit.id, order: "engage" },
+                      });
                     }}
                     showActionButtons={showActionButtons}
+                    canUseActions={canUseActions}
+                    allowedActions={counteractAllowedActions}
                     onEndActivation={() =>
                       dispatchIntent({ type: "END_ACTIVATION" })
                     }
@@ -777,6 +915,18 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
                       setShootModalOpen(true);
                     }}
                     showCounteract={showCounteract}
+                    counteractOptions={counteractOperatives}
+                    onSelectCounteractOperative={(operativeId) => {
+                      if (!operativeId) return;
+                      dispatchIntent({
+                        type: "COUNTERACT",
+                        payload: {
+                          playerId: loopPlayerId,
+                          operativeId,
+                          action: null,
+                        },
+                      });
+                    }}
                     onCounteract={() => {
                       const target =
                         counteractOperatives.find((op) => op.id === selectedUnit?.id) ||

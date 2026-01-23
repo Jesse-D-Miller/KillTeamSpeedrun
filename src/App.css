@@ -120,6 +120,28 @@ body,
   font-weight: 700;
 }
 
+.kt-toast {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(120, 200, 255, 0.4);
+  background: rgba(120, 200, 255, 0.12);
+  color: rgba(210, 239, 255, 0.95);
+  font-weight: 800;
+}
+
+.kt-firefight-banner {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 170, 80, 0.4);
+  background: rgba(255, 170, 80, 0.12);
+  color: rgba(255, 230, 200, 0.95);
+  font-weight: 800;
+  display: grid;
+  gap: 4px;
+}
+
 
 
 .kt-intentgate {
