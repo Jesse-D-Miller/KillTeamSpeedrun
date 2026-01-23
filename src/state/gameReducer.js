@@ -565,16 +565,7 @@ export function gameReducer(state, action) {
 
 			const currentPlayer = state.firefight?.activePlayerId;
 			const otherPlayer = getOtherPlayerId(currentPlayer);
-			const otherHasReady = getReadyOperatives(
-				{ ...state, game: nextGame },
-				otherPlayer,
-			).length;
-			const otherCanCounteract = otherPlayer
-				? canCounteract({ ...state, game: nextGame }, otherPlayer)
-				: false;
-			const nextPlayer = otherHasReady > 0 || otherCanCounteract
-				? otherPlayer
-				: currentPlayer;
+			const nextPlayer = otherPlayer ?? currentPlayer;
 
 			const endState = {
 				...nextState,
@@ -1213,18 +1204,33 @@ export function gameReducer(state, action) {
 			const operative = state.game.find((unit) => unit.id === operativeId);
 			if (!operative || operative.owner !== playerId) return state;
 			if (operative.state?.readyState !== "READY") return state;
+			const desiredOrder = action.payload?.order;
+			const hasOrder = desiredOrder === "conceal" || desiredOrder === "engage";
 			return {
 				...state,
+				game: hasOrder
+					? state.game.map((unit) =>
+							unit.id === operativeId
+								? {
+										...unit,
+										state: {
+											...unit.state,
+											order: desiredOrder,
+										},
+									}
+								: unit,
+							)
+					: state.game,
 				firefight: {
 					...(state.firefight || {}),
 					activeOperativeId: operativeId,
-					orderChosenThisActivation: false,
-					awaitingOrder: true,
-					awaitingActions: false,
+					orderChosenThisActivation: hasOrder,
+					awaitingOrder: !hasOrder,
+					awaitingActions: hasOrder,
 					activation: {
 						ownerPlayerId: playerId,
 						aplSpent: 0,
-						orderChosen: false,
+						orderChosen: hasOrder,
 						actionsTaken: [],
 					},
 				},
@@ -1286,16 +1292,7 @@ export function gameReducer(state, action) {
 			);
 			const currentPlayer = state.firefight?.activePlayerId;
 			const otherPlayer = getOtherPlayerId(currentPlayer);
-			const otherHasReady = getReadyOperatives(
-				{ ...state, game: updatedGame },
-				otherPlayer,
-			).length;
-			const otherCanCounteract = otherPlayer
-				? canCounteract({ ...state, game: updatedGame }, otherPlayer)
-				: false;
-			const nextPlayer = otherHasReady > 0 || otherCanCounteract
-				? otherPlayer
-				: currentPlayer;
+			const nextPlayer = otherPlayer ?? currentPlayer;
 
 			const nextState = {
 				...state,
@@ -1395,13 +1392,7 @@ export function gameReducer(state, action) {
 			if (canCounteract(state, playerId)) return state;
 
 			const otherPlayer = getOtherPlayerId(playerId);
-			const otherHasReady = getReadyOperatives(state, otherPlayer).length > 0;
-			const otherCanCounteract = otherPlayer
-				? canCounteract(state, otherPlayer)
-				: false;
-			const nextPlayer = otherHasReady || otherCanCounteract
-				? otherPlayer
-				: playerId;
+			const nextPlayer = otherPlayer ?? playerId;
 
 			const entry = createLogEntry({
 				type: "ACTIVATION_SKIPPED",

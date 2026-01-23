@@ -10,7 +10,6 @@ import TargetSelectModal from "./ui/components/TargetSelectModal";
 import DiceInputModal from "./ui/components/DiceInputModal";
 import DefenseAllocationModal from "./ui/components/DefenseAllocationModal";
 import DefenseRollModal from "./ui/components/DefenseRollModal";
-import Login from "./ui/screens/Login";
 import ArmySelector from "./ui/screens/ArmySelector";
 import UnitSelector from "./ui/screens/UnitSelector";
 import MultiplayerLobby from "./ui/screens/MultiplayerLobby";
@@ -249,9 +248,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   });
   const isFirefightReady =
     phase === "FIREFIGHT" &&
-    Boolean(state.initiativePlayerId) &&
-    allOperativesReady &&
-    !state.strategy?.turn;
+    Boolean(state.firefight?.activePlayerId);
   const canSelectOperative =
     !isFirefight || state.firefight?.activePlayerId === loopPlayerId;
   const isMyTurn = state.firefight?.activePlayerId === loopPlayerId;
@@ -355,6 +352,15 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
       setSelectedUnitId(myTeamUnits[0].id);
     }
   }, [selectedUnit, myTeamUnits]);
+
+  useEffect(() => {
+    if (!isFirefight) return;
+    if (myTeamUnits.length === 0) return;
+    const current = myTeamUnits.find((u) => u.id === selectedUnitId);
+    if (!current) {
+      setSelectedUnitId(myTeamUnits[0].id);
+    }
+  }, [isFirefight, myTeamUnits, selectedUnitId, state.firefight?.activePlayerId]);
 
   const lastTpStartRef = useRef(null);
 
@@ -863,11 +869,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
                         payload: {
                           playerId: loopPlayerId,
                           operativeId: selectedUnit.id,
+                          order: "conceal",
                         },
-                      });
-                      dispatchIntent({
-                        type: "SET_ORDER",
-                        payload: { operativeId: selectedUnit.id, order: "conceal" },
                       });
                     }}
                     onActivateEngage={() => {
@@ -877,11 +880,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
                         payload: {
                           playerId: loopPlayerId,
                           operativeId: selectedUnit.id,
+                          order: "engage",
                         },
-                      });
-                      dispatchIntent({
-                        type: "SET_ORDER",
-                        payload: { operativeId: selectedUnit.id, order: "engage" },
                       });
                     }}
                     showActionButtons={showActionButtons}
@@ -2044,13 +2044,12 @@ function App() {
 
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="/login" element={<Login />} />
+      <Route path="/" element={<Navigate to="/multiplayer" replace />} />
       <Route path="/multiplayer" element={<MultiplayerLobby />} />
       <Route path="/:username/army-selector" element={<ArmySelector />} />
       <Route path="/:username/unit-selector" element={<UnitSelector />} />
       <Route path="/:username/army" element={<ArmyOverlayRoute />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/multiplayer" replace />} />
     </Routes>
   );
 }
