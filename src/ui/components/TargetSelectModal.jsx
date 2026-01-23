@@ -11,6 +11,7 @@ function TargetSelectModal({
   onConfirm,
   onClose,
   allowSecondarySelection,
+  confirmLabel = "Shoot",
 }) {
   if (!open) return null;
 
@@ -42,7 +43,7 @@ function TargetSelectModal({
               onClick={onConfirm}
               disabled={!primaryTargetId}
             >
-              Shoot
+              {confirmLabel}
             </button>
             {allowSecondarySelection && (
               <div className="kt-modal__sidebar-empty">

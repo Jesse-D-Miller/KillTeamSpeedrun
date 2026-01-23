@@ -38,6 +38,58 @@
   cursor: pointer;
 }
 
+.fight-resolve__strike {
+  width: 100%;
+  min-height: 48px;
+  color: #fff;
+  background: rgba(200, 40, 40, 0.7);
+  border-color: rgba(255, 120, 120, 0.85);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+}
+
+.fight-resolve__strike::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 50%;
+  height: 1px;
+  background: rgba(150, 30, 30, 0.6);
+  transform: translateY(-0.5px);
+}
+
+.fight-log {
+  display: grid;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  max-height: 220px;
+  overflow: auto;
+}
+
+.fight-log__item {
+  font-size: 0.8rem;
+  padding: 4px 6px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+}
+
+.fight-log__item--attacker {
+  color: rgba(255, 180, 180, 0.95);
+  border-color: rgba(255, 90, 90, 0.35);
+  background: rgba(255, 60, 60, 0.12);
+}
+
+.fight-log__item--defender {
+  color: rgba(180, 210, 255, 0.95);
+  border-color: rgba(90, 140, 255, 0.35);
+  background: rgba(60, 120, 255, 0.12);
+}
+
 .allocation__pips {
   position: absolute;
   top: 50%;

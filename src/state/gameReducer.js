@@ -50,6 +50,11 @@ const createActionFlow = ({ mode, attackerId }) => ({
 	step: "pickTarget",
 	attackerWeapon: null,
 	defenderWeapon: null,
+	log: [],
+	remainingDice: {
+		attacker: [],
+		defender: [],
+	},
 	dice: {
 		attacker: { raw: [], crit: 0, norm: 0 },
 		defender: { raw: [], crit: 0, norm: 0 },
@@ -64,12 +69,45 @@ const createActionFlow = ({ mode, attackerId }) => ({
 	locked: {
 		attackerWeapon: false,
 		defenderWeapon: false,
+		attackerDice: false,
+		defenderDice: false,
 		diceRolled: false,
 	},
 });
 
 function getRemainingCount(remaining = {}) {
 	return (remaining.crit || 0) + (remaining.norm || 0);
+}
+
+function buildDiceFromCounts(critCount = 0, normCount = 0) {
+	const crits = Array.from({ length: Math.max(0, Number(critCount) || 0) }, () => 6);
+	const norms = Array.from({ length: Math.max(0, Number(normCount) || 0) }, () => 4);
+	return [...crits, ...norms];
+}
+
+function countDiceTypes(dice = []) {
+	return dice.reduce(
+		(acc, value) => {
+			const numeric = Number(value);
+			if (Number.isFinite(numeric) && numeric === 6) acc.crit += 1;
+			else if (Number.isFinite(numeric)) acc.norm += 1;
+			return acc;
+		},
+		{ crit: 0, norm: 0 },
+	);
+}
+
+function removeDieByType(dice = [], type) {
+	const isCrit = type === "crit";
+	const index = dice.findIndex((value) => {
+		const numeric = Number(value);
+		if (!Number.isFinite(numeric)) return false;
+		return isCrit ? numeric === 6 : numeric !== 6;
+	});
+	if (index === -1) return { next: dice, removed: false };
+	const next = [...dice];
+	next.splice(index, 1);
+	return { next, removed: true };
 }
 
 function clampNonNegative(value) {
@@ -629,7 +667,13 @@ function reduceGameState(state, action) {
 			const flow = state.ui?.actionFlow;
 			if (!flow) return state;
 			const locked = flow.locked || {};
-			if (locked.attackerWeapon || locked.defenderWeapon || locked.diceRolled) {
+			if (
+				locked.attackerWeapon ||
+				locked.defenderWeapon ||
+				locked.attackerDice ||
+				locked.defenderDice ||
+				locked.diceRolled
+			) {
 				return state;
 			}
 			return {
@@ -709,12 +753,94 @@ function reduceGameState(state, action) {
 			};
 		}
 
+		case "FLOW_LOCK_DICE": {
+			const { role } = action.payload || {};
+			const flow = state.ui?.actionFlow;
+			if (!flow || flow.step !== "rollDice") return state;
+			if (role !== "attacker" && role !== "defender") return state;
+			const nextLocked = {
+				...(flow.locked || {}),
+				attackerDice:
+					role === "attacker" ? true : Boolean(flow.locked?.attackerDice),
+				defenderDice:
+					role === "defender" ? true : Boolean(flow.locked?.defenderDice),
+			};
+			return {
+				...state,
+				ui: {
+					...(state.ui || {}),
+					actionFlow: {
+						...flow,
+						locked: nextLocked,
+					},
+				},
+			};
+		}
+
 		case "FLOW_ROLL_DICE": {
-			const { attacker, defender } = action.payload || {};
+			const { attacker, defender, attackerSuccesses, defenderSuccesses } = action.payload || {};
 			const flow = state.ui?.actionFlow;
 			if (!flow || flow.step !== "rollDice") return state;
 			if (flow.locked?.diceRolled) return state;
+			if (!flow.locked?.attackerDice || !flow.locked?.defenderDice) return state;
 			if (!attacker || !defender) return state;
+			const fallbackAttackerDice = buildDiceFromCounts(attacker.crit, attacker.norm);
+			const fallbackDefenderDice = buildDiceFromCounts(defender.crit, defender.norm);
+			const nextAttackerDice = Array.isArray(attackerSuccesses)
+				? attackerSuccesses
+				: fallbackAttackerDice;
+			const nextDefenderDice = Array.isArray(defenderSuccesses)
+				? defenderSuccesses
+				: fallbackDefenderDice;
+			const attackerCount = Number(attacker.crit || 0) + Number(attacker.norm || 0);
+			const defenderCount = Number(defender.crit || 0) + Number(defender.norm || 0);
+			if ((attackerCount === 0 && defenderCount > 0) || (defenderCount === 0 && attackerCount > 0)) {
+				const actorRole = attackerCount > 0 ? "attacker" : "defender";
+				const actorUnit = state.game.find((unit) =>
+					unit.id === (actorRole === "attacker" ? flow.attackerId : flow.defenderId),
+				);
+				const opponentUnit = state.game.find((unit) =>
+					unit.id === (actorRole === "attacker" ? flow.defenderId : flow.attackerId),
+				);
+				if (!actorUnit || !opponentUnit) return state;
+				const actorWeaponName =
+					actorRole === "attacker" ? flow.attackerWeapon : flow.defenderWeapon;
+				const actorWeapon = (actorUnit.weapons || []).find(
+					(weapon) => weapon.name === actorWeaponName,
+				);
+				if (!actorWeapon) return state;
+				const [dmgNormal, dmgCrit] = String(actorWeapon.dmg || "0/0")
+					.split("/")
+					.map(Number);
+				const safeNormal = Number.isFinite(dmgNormal) ? dmgNormal : 0;
+				const safeCrit = Number.isFinite(dmgCrit) ? dmgCrit : 0;
+				let nextGame = state.game;
+				let remainingCrit = actorRole === "attacker" ? attacker.crit || 0 : defender.crit || 0;
+				let remainingNorm = actorRole === "attacker" ? attacker.norm || 0 : defender.norm || 0;
+				while (remainingCrit > 0 || remainingNorm > 0) {
+					const useCrit = remainingCrit > 0;
+					const damage = useCrit ? safeCrit : safeNormal;
+					const { nextGame: updatedGame } = applyDamageNoLog(
+						{ ...state, game: nextGame },
+						opponentUnit.id,
+						damage,
+					);
+					nextGame = updatedGame;
+					const updatedOpponent = nextGame.find((unit) => unit.id === opponentUnit.id);
+					if ((updatedOpponent?.state?.woundsCurrent ?? 0) <= 0) break;
+					if (useCrit) remainingCrit -= 1;
+					else remainingNorm -= 1;
+				}
+				return {
+					...state,
+					game: nextGame,
+					log: state.log,
+					ui: {
+						...(state.ui || {}),
+						actionFlow: null,
+					},
+				};
+			}
 			return {
 				...state,
 				ui: {
@@ -732,6 +858,10 @@ function reduceGameState(state, action) {
 								crit: Number(defender.crit || 0),
 								norm: Number(defender.norm || 0),
 							},
+						},
+						remainingDice: {
+							attacker: nextAttackerDice,
+							defender: nextDefenderDice,
 						},
 						remaining: {
 							attacker: {
@@ -759,7 +889,7 @@ function reduceGameState(state, action) {
 		case "FLOW_RESOLVE_ACTION": {
 			const { actorRole, actionType, dieType, blockedType } = action.payload || {};
 			const flow = state.ui?.actionFlow;
-			if (!flow || flow.step !== "resolve") return state;
+			if (!flow || (flow.step !== "resolve" && flow.step !== "summary")) return state;
 			if (actorRole !== "attacker" && actorRole !== "defender") return state;
 			if (actorRole !== flow.resolve?.turn) return state;
 			if (actionType !== "strike" && actionType !== "block") return state;
@@ -775,6 +905,17 @@ function reduceGameState(state, action) {
 				actorRole === "attacker" ? flow.remaining.defender : flow.remaining.attacker;
 			if ((actorRemaining[dieType] || 0) <= 0) return state;
 
+			const actorDice =
+				actorRole === "attacker"
+					? flow.remainingDice?.attacker || []
+					: flow.remainingDice?.defender || [];
+			const opponentDice =
+				actorRole === "attacker"
+					? flow.remainingDice?.defender || []
+					: flow.remainingDice?.attacker || [];
+			const removedActor = removeDieByType(actorDice, dieType);
+			if (!removedActor.removed) return state;
+
 			const actorUnit = actorRole === "attacker" ? attackerUnit : defenderUnit;
 			const opponentUnit = actorRole === "attacker" ? defenderUnit : attackerUnit;
 			const actorWeaponName =
@@ -789,14 +930,36 @@ function reduceGameState(state, action) {
 			const safeNormal = Number.isFinite(dmgNormal) ? dmgNormal : 0;
 			const safeCrit = Number.isFinite(dmgCrit) ? dmgCrit : 0;
 			const damage = dieType === "crit" ? safeCrit : safeNormal;
+			const entryIdBase = action.meta?.eventId || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+			const nextLogEntry = {
+				id: `${entryIdBase}-${actorRole}-${actionType}-${dieType}-${blockedType ?? "none"}`,
+				role: actorRole,
+				message:
+					actionType === "strike"
+						? `Strike ${dieType} for ${damage} dmg`
+						: blockedType
+							? `Block ${dieType} vs ${blockedType}`
+							: `Block ${dieType}`,
+			};
 
 			let nextGame = state.game;
 
-			const nextActorRemaining = {
-				...actorRemaining,
-				[dieType]: clampNonNegative((actorRemaining[dieType] || 0) - 1),
-			};
-			let nextOpponentRemaining = { ...opponentRemaining };
+			let nextOpponentDice = opponentDice;
+			if (actionType === "block") {
+				if (blockedType == null) {
+					nextOpponentDice = opponentDice;
+				} else {
+					if (blockedType !== "crit" && blockedType !== "norm") return state;
+					if (dieType === "norm" && blockedType !== "norm") return state;
+					const removedOpponent = removeDieByType(opponentDice, blockedType);
+					if (!removedOpponent.removed) return state;
+					nextOpponentDice = removedOpponent.next;
+				}
+			}
+
+			const nextActorDice = removedActor.next;
+			const nextActorRemaining = countDiceTypes(nextActorDice);
+			let nextOpponentRemaining = countDiceTypes(nextOpponentDice);
 
 			if (actionType === "strike") {
 				const { nextGame: updatedGame, actualDamage } = applyDamageNoLog(
@@ -805,36 +968,6 @@ function reduceGameState(state, action) {
 					damage,
 				);
 				nextGame = updatedGame;
-			} else {
-				if (dieType === "norm") {
-					if ((nextOpponentRemaining.norm || 0) > 0) {
-						nextOpponentRemaining.norm = clampNonNegative(
-							nextOpponentRemaining.norm - 1,
-						);
-					}
-				} else {
-					if (blockedType === "crit" && (nextOpponentRemaining.crit || 0) > 0) {
-						nextOpponentRemaining.crit = clampNonNegative(
-							nextOpponentRemaining.crit - 1,
-						);
-					} else if ((nextOpponentRemaining.norm || 0) > 0) {
-						nextOpponentRemaining.norm = clampNonNegative(
-							nextOpponentRemaining.norm - 1,
-						);
-					} else if ((nextOpponentRemaining.crit || 0) > 0) {
-						nextOpponentRemaining.crit = clampNonNegative(
-							nextOpponentRemaining.crit - 1,
-						);
-					}
-				}
-
-				const blockedResolvedType =
-					dieType === "norm"
-						? "norm"
-						: blockedType === "crit" && (opponentRemaining.crit || 0) > 0
-							? "crit"
-							: "norm";
-
 			}
 
 			const attackerRemaining =
@@ -847,6 +980,11 @@ function reduceGameState(state, action) {
 
 			const nextFlowBase = {
 				...flow,
+				log: [...(flow.log || []), nextLogEntry],
+				remainingDice: {
+					attacker: actorRole === "attacker" ? nextActorDice : nextOpponentDice,
+					defender: actorRole === "attacker" ? nextOpponentDice : nextActorDice,
+				},
 				remaining: {
 					attacker: attackerRemaining,
 					defender: defenderRemaining,
@@ -860,10 +998,16 @@ function reduceGameState(state, action) {
 				return {
 					...state,
 					game: nextGame,
-					log: nextLog,
+					log: state.log,
 					ui: {
 						...(state.ui || {}),
-						actionFlow: null,
+						actionFlow: {
+							...nextFlowBase,
+							step: "summary",
+							resolve: {
+								turn: null,
+							},
+						},
 					},
 				};
 			}
@@ -875,7 +1019,7 @@ function reduceGameState(state, action) {
 
 			if (opponentHasNone && actorHasDice) {
 				let autoGame = nextGame;
-				let autoLog = state.log;
+				let autoLog = nextFlowBase.log || [];
 				let autoRemaining =
 					actorRole === "attacker" ? attackerRemaining : defenderRemaining;
 				while (getRemainingCount(autoRemaining) > 0) {
@@ -891,16 +1035,30 @@ function reduceGameState(state, action) {
 						autoDamage,
 					);
 					autoGame = updatedGame;
-					autoLog = autoLog;
+					autoLog = [
+						...autoLog,
+						{
+							id: `${action.meta?.eventId || "auto"}-${actorRole}-auto-${autoDieType}-${autoLog.length}`,
+							role: actorRole,
+							message: `Auto strike ${autoDieType} for ${autoDamage} dmg`,
+						},
+					];
 				}
 
 				return {
 					...state,
 					game: autoGame,
-					log: autoLog,
+					log: state.log,
 					ui: {
 						...(state.ui || {}),
-						actionFlow: null,
+						actionFlow: {
+							...nextFlowBase,
+							log: autoLog,
+							step: "summary",
+							resolve: {
+								turn: null,
+							},
+						},
 					},
 				};
 			}
@@ -918,6 +1076,19 @@ function reduceGameState(state, action) {
 							turn: nextTurn,
 						},
 					},
+				},
+			};
+		}
+
+		case "FLOW_RESOLVE_COMBAT": {
+			const flow = state.ui?.actionFlow;
+			if (!flow || flow.mode !== "fight") return state;
+			if (flow.step !== "summary") return state;
+			return {
+				...state,
+				ui: {
+					...(state.ui || {}),
+					actionFlow: null,
 				},
 			};
 		}

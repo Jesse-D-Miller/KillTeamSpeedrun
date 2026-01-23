@@ -147,6 +147,40 @@
   opacity: 0.75;
 }
 
+.fight-weapon__line {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  background: rgba(255, 120, 60, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(255, 120, 60, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.fight-weapon__name {
+  font-weight: 900;
+}
+
+.fight-weapon__stat {
+  opacity: 0.9;
+}
+
+.fight-weapon__table {
+  font-size: clamp(0.62rem, 0.75vw, 0.72rem);
+}
+
+.fight-weapon__table th {
+  padding: 4px 4px;
+}
+
+.fight-weapon__table td {
+  padding: 4px 4px;
+}
+
 .kt-modal__bar {
   height: 6px;
   border-radius: 999px;

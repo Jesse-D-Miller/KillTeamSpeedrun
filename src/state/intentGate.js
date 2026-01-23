@@ -53,8 +53,10 @@ const PHASE_ALLOWED_EVENTS = {
     "FLOW_SET_TARGET",
     "FLOW_SET_WEAPON",
     "FLOW_LOCK_WEAPON",
+    "FLOW_LOCK_DICE",
     "FLOW_ROLL_DICE",
     "FLOW_RESOLVE_ACTION",
+    "FLOW_RESOLVE_COMBAT",
     "START_RANGED_ATTACK",
     "SET_ATTACK_ROLL",
     "SET_COMBAT_INPUTS",
@@ -597,6 +599,14 @@ export const validateGameIntent = (state, event) => {
       break;
     }
 
+    case "FLOW_LOCK_DICE": {
+      const { role } = event.payload || {};
+      if (role !== "attacker" && role !== "defender") {
+        pushIssue(issues, "Role must be attacker or defender.");
+      }
+      break;
+    }
+
     case "FLOW_ROLL_DICE": {
       const { attacker, defender } = event.payload || {};
       if (!attacker || !defender) pushIssue(issues, "Missing dice payload.");
@@ -614,6 +624,10 @@ export const validateGameIntent = (state, event) => {
       if (dieType !== "crit" && dieType !== "norm") {
         pushIssue(issues, "DieType must be crit or norm.");
       }
+      break;
+    }
+
+    case "FLOW_RESOLVE_COMBAT": {
       break;
     }
 
