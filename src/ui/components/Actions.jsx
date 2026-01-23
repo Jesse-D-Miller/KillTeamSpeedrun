@@ -11,11 +11,15 @@ function Actions({
   canUseActions,
   onEndActivation,
   showCounteract,
+  showCounteractWindow,
   onCounteract,
+  onPassCounteract,
   counteractOptions,
   onSelectCounteractOperative,
   allowedActions,
   statusMessage,
+  isCounteractActive = false,
+  counteractActionsTaken = 0,
 }) {
   const getActionClass = (actionKey, baseClass) =>
     actionMarks?.[actionKey]
@@ -54,16 +58,26 @@ function Actions({
             </button>
           </div>
         )}
-        {showCounteract && (
+        {showCounteractWindow && (
           <div className="kt-action-card__counteract">
-            <button
-              className="kt-action-btn"
-              type="button"
-              onClick={onCounteract}
-              disabled={!attacker}
-            >
-              Counteract
-            </button>
+            <div className="kt-action-card__counteract-actions">
+              <button
+                className="kt-action-btn"
+                type="button"
+                onClick={onCounteract}
+                disabled={!attacker || !showCounteract}
+              >
+                Counteract
+              </button>
+              <button
+                className="kt-action-btn kt-action-btn--ghost"
+                type="button"
+                onClick={onPassCounteract}
+                disabled={!attacker}
+              >
+                Pass
+              </button>
+            </div>
             {Array.isArray(counteractOptions) && counteractOptions.length > 0 && (
               <div className="kt-action-card__counteract-list">
                 {counteractOptions.map((unit) => (
@@ -190,7 +204,7 @@ function Actions({
           )}
           type="button"
           onClick={() => onEndActivation?.()}
-          disabled={!attacker}
+          disabled={!attacker || (isCounteractActive && counteractActionsTaken <= 0)}
         >
           End Activation
         </button>

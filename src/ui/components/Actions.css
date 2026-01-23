@@ -118,11 +118,26 @@
   filter: brightness(0.8);
 }
 
+.kt-action-btn--ghost {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.kt-action-btn--ghost:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.14);
+}
+
 .kt-action-card__counteract {
   display: flex;
   flex-direction: column;
   gap: 6px;
   flex: 1 1 0;
+}
+
+.kt-action-card__counteract-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .kt-action-card__counteract-list {

@@ -28,6 +28,16 @@ export const getExpendedEngageOperatives = (game, playerId) =>
       isAlive(op),
   );
 
+export const getCounteractCandidates = (game, playerId) =>
+  getOperatives(game).filter(
+    (op) =>
+      op?.owner === playerId &&
+      op?.state?.readyState === "EXPENDED" &&
+      op?.state?.order === "engage" &&
+      op?.state?.hasCounteractedThisTP !== true &&
+      isAlive(op),
+  );
+
 export const hasAnyReady = (game) =>
   getOperatives(game).some(
     (op) => op?.state?.readyState === "READY" && isAlive(op),
@@ -64,4 +74,12 @@ export const nextActivePlayer = (game) => {
 };
 
 export const canCounteract = (game, playerId) =>
+  getReadyOperatives(game, playerId).length === 0 &&
   getExpendedEngageOperatives(game, playerId).length > 0;
+
+export const isInCounteractWindow = (game, playerId) =>
+  game?.phase === "FIREFIGHT" &&
+  game?.firefight?.activePlayerId === playerId &&
+  !game?.firefight?.activeOperativeId &&
+  getReadyOperatives(game, playerId).length === 0 &&
+  getCounteractCandidates(game, playerId).length > 0;

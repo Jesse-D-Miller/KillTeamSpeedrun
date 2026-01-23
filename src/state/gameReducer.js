@@ -527,7 +527,7 @@ export function gameReducer(state, action) {
 			const isCounteract = Boolean(state.firefight?.activation?.isCounteract);
 			const actionsAllowed = Number(state.firefight?.activation?.actionsAllowed ?? 0);
 			const actionsTaken = state.firefight?.activation?.actionsTaken || [];
-			if (isCounteract && cost > 1) return state;
+			if (isCounteract && cost !== 1) return state;
 			if (isCounteract && actionsAllowed > 0 && actionsTaken.length >= actionsAllowed) {
 				return state;
 			}
@@ -1000,8 +1000,16 @@ export function gameReducer(state, action) {
 		}
 
 		case "TURNING_POINT_START": {
+			const entry = createLogEntry({
+				type: "TURNING_POINT_START",
+				summary: `Turning Point ${state.turningPoint ?? "?"} start`,
+				meta: { turningPoint: state.turningPoint ?? null },
+				undo: state.game,
+				redo: state.game,
+			});
 			return {
 				...state,
+				log: pushLog(state.log, entry),
 				...resetTpFlags(state),
 			};
 		}
@@ -1083,8 +1091,16 @@ export function gameReducer(state, action) {
 		case "READY_ALL_OPERATIVES": {
 			if (!state.strategy?.cpGrantedThisTP) return state;
 			if (state.strategy?.operativesReadiedThisTP) return state;
+			const entry = createLogEntry({
+				type: "READY_ALL_OPERATIVES",
+				summary: `Ready all operatives (TP ${state.turningPoint ?? "?"})`,
+				meta: { turningPoint: state.turningPoint ?? null },
+				undo: state.game,
+				redo: state.game,
+			});
 			return {
 				...state,
+				log: pushLog(state.log, entry),
 				game: state.game.map((unit) => ({
 					...unit,
 					state: {
@@ -1322,6 +1338,13 @@ export function gameReducer(state, action) {
 			if (operative.state?.readyState !== "EXPENDED") return state;
 			if (operative.state?.order !== "engage") return state;
 			if (operative.state?.hasCounteractedThisTP) return state;
+			const entry = createLogEntry({
+				type: "COUNTERACT",
+				summary: `${operative?.name || "Operative"} counteracts`,
+				meta: { playerId, operativeId },
+				undo: state.game,
+				redo: state.game,
+			});
 
 			const updatedGame = state.game.map((unit) =>
 				unit.id === operativeId
@@ -1336,6 +1359,7 @@ export function gameReducer(state, action) {
 			);
 			return {
 				...state,
+				log: pushLog(state.log, entry),
 				game: updatedGame,
 				firefight: {
 					...(state.firefight || {}),
@@ -1362,13 +1386,51 @@ export function gameReducer(state, action) {
 			if (!playerId || playerId !== state.firefight?.activePlayerId) return state;
 			if (state.firefight?.activeOperativeId) return state;
 			if (getReadyOperatives(state, playerId).length > 0) return state;
-			if (canCounteract(state, playerId)) return state;
 
 			const nextPlayer = resolveNextActivePlayer(state.game, playerId);
 
 			const entry = createLogEntry({
 				type: "ACTIVATION_SKIPPED",
 				summary: `Player ${playerId} has no activations`,
+				meta: { playerId },
+				undo: state.game,
+				redo: state.game,
+			});
+
+			const nextState = {
+				...state,
+				log: pushLog(state.log, entry),
+				firefight: {
+					...(state.firefight || {}),
+					activeOperativeId: null,
+					activePlayerId: nextPlayer,
+					orderChosenThisActivation: false,
+					awaitingOrder: false,
+					awaitingActions: false,
+					activation: null,
+				},
+			};
+
+			if (!nextPlayer || allOperativesExpended(state.game)) {
+				return endTurningPoint(nextState, state.game);
+			}
+
+			return nextState;
+		}
+
+		case "PASS_COUNTERACT_WINDOW": {
+			const { playerId } = action.payload || {};
+			if (state.phase !== "FIREFIGHT") return state;
+			if (!playerId || playerId !== state.firefight?.activePlayerId) return state;
+			if (state.firefight?.activeOperativeId) return state;
+			if (getReadyOperatives(state, playerId).length > 0) return state;
+			if (!canCounteract(state, playerId)) return state;
+
+			const nextPlayer = resolveNextActivePlayer(state.game, playerId);
+
+			const entry = createLogEntry({
+				type: "COUNTERACT_PASSED",
+				summary: `Player ${playerId} passed counteract`,
 				meta: { playerId },
 				undo: state.game,
 				redo: state.game,
@@ -1404,12 +1466,20 @@ export function gameReducer(state, action) {
 			const { turningPoint: tp } = action.payload || {};
 			if (!Number.isFinite(Number(tp))) return state;
 			if (Number(state.turningPoint ?? 0) !== Number(tp)) return state;
+			const entry = createLogEntry({
+				type: "TURNING_POINT_END",
+				summary: `Turning Point ${tp} end`,
+				meta: { turningPoint: tp },
+				undo: state.game,
+				redo: state.game,
+			});
 			if (tp === 4) {
 				return {
 					...state,
 					phase: "GAME_OVER",
 					endedAt: state.endedAt ?? new Date().toISOString(),
 					winner: state.winner ?? null,
+					log: pushLog(state.log, entry),
 				};
 			}
 			return {
@@ -1417,6 +1487,7 @@ export function gameReducer(state, action) {
 				turningPoint: tp + 1,
 				initiativePlayerId: null,
 				phase: "STRATEGY",
+				log: pushLog(state.log, entry),
 				...resetTpFlags(state),
 			};
 		}

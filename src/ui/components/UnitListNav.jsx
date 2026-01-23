@@ -7,6 +7,9 @@ function UnitListNav({
 	onSelectUnit,
 	activeOperativeId,
 	highlightReadyForPlayerId,
+	isCounteractWindow = false,
+	counteractEligibleIds = [],
+	isCounteractActivation = false,
 	canSelectUnit = true,
 }) {
 	const orderedUnits = [...units].sort((a, b) => {
@@ -23,6 +26,8 @@ function UnitListNav({
 					const isDead = Number(unit.state.woundsCurrent) <= 0;
 					const readyState = unit.state?.readyState;
 					const isActive = Boolean(activeOperativeId) && unit.id === activeOperativeId;
+					const isCounteractEligible = counteractEligibleIds.includes(unit.id);
+					const showCounteractTag = isCounteractActivation && isActive;
 					const shouldHighlightReady =
 						!isDead &&
 						readyState === "READY" &&
@@ -41,9 +46,9 @@ function UnitListNav({
 					return (
 						<button
 							key={unit.id}
-								className={`kt-navitem ${isSelected ? "kt-navitem--selected" : ""} ${unitIsInjured ? "kt-navitem--injured" : ""} ${isDead ? "kt-navitem--dead" : ""} ${shouldHighlightReady ? "kt-navitem--ready" : ""}`}
+							className={`kt-navitem ${isSelected ? "kt-navitem--selected" : ""} ${unitIsInjured ? "kt-navitem--injured" : ""} ${isDead ? "kt-navitem--dead" : ""} ${shouldHighlightReady ? "kt-navitem--ready" : ""} ${isCounteractWindow && isCounteractEligible ? "kt-navitem--counteract" : ""}`}
 							onClick={() => onSelectUnit(unit.id)}
-								disabled={!canSelectUnit}
+							disabled={!canSelectUnit || (isCounteractWindow && !isCounteractEligible)}
 							type="button"
 						>
 							<div className="kt-navitem__top">
@@ -66,6 +71,12 @@ function UnitListNav({
 
 											{unitIsInjured && (
 												<span className="kt-chip kt-chip--red">inj</span>
+											)}
+
+											{showCounteractTag && (
+												<span className="kt-chip kt-chip--counteract">
+													counteract
+												</span>
 											)}
 
 											{!isDead && (

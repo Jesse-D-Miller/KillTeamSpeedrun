@@ -42,6 +42,7 @@ const PHASE_ALLOWED_EVENTS = {
     "PERFORM_ACTION",
     "END_ACTIVATION",
     "COUNTERACT",
+    "PASS_COUNTERACT_WINDOW",
     "SKIP_ACTIVATION",
     "END_FIREFIGHT_PHASE",
     "ACTION_USE",
@@ -399,6 +400,9 @@ export const validateGameIntent = (state, event) => {
       if (playerId && state?.firefight?.activePlayerId !== playerId) {
         pushIssue(issues, "Not this player's turn.");
       }
+      if (state?.firefight?.activeOperativeId) {
+        pushIssue(issues, "Cannot counteract during an activation.");
+      }
       if (playerId && getReadyOperatives(state, playerId).length > 0) {
         pushIssue(issues, "Ready operatives remain; counteract not allowed.");
       }
@@ -423,6 +427,27 @@ export const validateGameIntent = (state, event) => {
       break;
     }
 
+    case "PASS_COUNTERACT_WINDOW": {
+      const { playerId } = event.payload || {};
+      if (state?.phase !== "FIREFIGHT") {
+        pushIssue(issues, "PASS_COUNTERACT_WINDOW only allowed in FIREFIGHT.");
+      }
+      if (!playerId) pushIssue(issues, "Missing playerId.");
+      if (playerId && state?.firefight?.activePlayerId !== playerId) {
+        pushIssue(issues, "Not this player's turn.");
+      }
+      if (state?.firefight?.activeOperativeId) {
+        pushIssue(issues, "Cannot pass during an activation.");
+      }
+      if (playerId && getReadyOperatives(state, playerId).length > 0) {
+        pushIssue(issues, "Ready operatives remain; cannot pass.");
+      }
+      if (playerId && !canCounteract(state, playerId)) {
+        pushIssue(issues, "No counteract available to pass.");
+      }
+      break;
+    }
+
     case "SKIP_ACTIVATION": {
       const { playerId } = event.payload || {};
       if (state?.phase !== "FIREFIGHT") {
@@ -437,9 +462,6 @@ export const validateGameIntent = (state, event) => {
       }
       if (playerId && getReadyOperatives(state, playerId).length > 0) {
         pushIssue(issues, "Ready operatives remain; cannot skip.");
-      }
-      if (playerId && canCounteract(state, playerId)) {
-        pushIssue(issues, "Counteract available; cannot skip.");
       }
       break;
     }
@@ -502,8 +524,11 @@ export const validateGameIntent = (state, event) => {
       const isCounteract = Boolean(state?.firefight?.activation?.isCounteract);
       const actionsAllowed = Number(state?.firefight?.activation?.actionsAllowed ?? 0);
       const actionsTaken = state?.firefight?.activation?.actionsTaken || [];
-      if (isCounteract && actionConfig && Number(actionConfig?.cost ?? 0) > 1) {
-        pushIssue(issues, "Counteract allows only 1AP actions.");
+      if (isCounteract && actionConfig) {
+        const cost = Number(actionConfig?.cost ?? 0);
+        if (cost !== 1) {
+          pushIssue(issues, "Counteract allows only 1AP actions.");
+        }
       }
       if (isCounteract && actionsAllowed > 0 && actionsTaken.length >= actionsAllowed) {
         pushIssue(issues, "Counteract action already used.");

@@ -33,6 +33,12 @@
   box-shadow: 0 0 0 1px rgba(120, 255, 140, 0.25);
 }
 
+.kt-navitem--counteract {
+  border-color: rgba(120, 210, 255, 0.6);
+  box-shadow: 0 0 0 1px rgba(120, 210, 255, 0.3);
+  background: rgba(120, 210, 255, 0.08);
+}
+
 .kt-navitem__top {
   display: flex;
   justify-content: space-between;
@@ -110,6 +116,12 @@
   border-color: rgba(120, 20, 20, 0.7);
   background: rgba(120, 20, 20, 0.35);
   color: #ffd6d6;
+}
+
+.kt-chip--counteract {
+  border-color: rgba(120, 210, 255, 0.6);
+  background: rgba(120, 210, 255, 0.2);
+  color: #e0f5ff;
 }
 
 .kt-navitem--dead .kt-chip--dead {

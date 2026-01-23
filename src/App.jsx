@@ -26,8 +26,9 @@ import {
 } from "./engine/rules/weaponRules";
 import {
   canCounteract,
-  getExpendedEngageOperatives,
+  getCounteractCandidates,
   getReadyOperatives,
+  isInCounteractWindow,
 } from "./state/gameLoopSelectors";
 import { ACTION_CONFIG } from "./engine/rules/actionsCore";
 import { useEffect, useReducer, useRef, useState } from "react";
@@ -56,18 +57,18 @@ function normalizeWeaponRulesList(wr) {
   return Array.isArray(wr) ? wr : [wr];
 }
 
+function generateClientId() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 const armies = Object.entries(killteamModules).map(([path, data]) => ({
   key: getArmyKey(path),
   name: getArmyKey(path).replace(/[-_]+/g, " "),
   units: normalizeKillteamData(data),
 }));
-
-const generateClientId = () => {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-};
 
 function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   const [state, dispatch] = useReducer(gameReducer, {
@@ -254,7 +255,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   const isMyTurn = state.firefight?.activePlayerId === loopPlayerId;
   const readyOperatives = getReadyOperatives(state, loopPlayerId);
   const hasReadyOperatives = readyOperatives.length > 0;
-  const counteractOperatives = getExpendedEngageOperatives(state, loopPlayerId);
+  const counteractOperatives = getCounteractCandidates(state, loopPlayerId);
   const canCounteractNow = canCounteract(state, loopPlayerId);
   const hasActiveOperative = Boolean(state.firefight?.activeOperativeId);
   const selectedIsReady =
@@ -264,6 +265,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
     isFirefight &&
     state.firefight?.activation?.isCounteract === true &&
     state.firefight?.activeOperativeId === selectedUnit?.id;
+  const counteractActionsTaken =
+    state.firefight?.activation?.actionsTaken?.length ?? 0;
   const counteractAllowedActions = isCounteractActive
     ? Object.entries(ACTION_CONFIG)
         .filter(([, config]) => Number(config?.cost ?? 0) <= 1)
@@ -292,21 +295,15 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   const showActionButtons =
     isFirefight &&
     state.firefight?.activeOperativeId === selectedUnit?.id;
-  const showCounteract =
-    isFirefight &&
-    isMyTurn &&
-    !hasReadyOperatives &&
-    canCounteractNow;
+  const inCounteractWindow = isInCounteractWindow(state, loopPlayerId);
+  const showCounteract = inCounteractWindow;
   const statusMessage =
     awaitingOrder
       ? "Choose order"
       : isCounteractActive
         ? "Counteract: take 1 free action"
-      : isFirefight &&
-          isMyTurn &&
-          !hasReadyOperatives &&
-          canCounteractNow
-        ? "No ready operatives. Counteract available."
+      : inCounteractWindow
+        ? "No READY operatives. Counteract available."
         : isFirefight &&
             isMyTurn &&
             !hasReadyOperatives &&
@@ -388,6 +385,22 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
     if (state.strategy?.operativesReadiedThisTP) return;
     dispatchIntent({ type: "READY_ALL_OPERATIVES" });
   }, [phase, state.strategy?.cpGrantedThisTP, state.strategy?.operativesReadiedThisTP]);
+
+  useEffect(() => {
+    const readyA = getReadyOperatives(state, "A").length;
+    const readyB = getReadyOperatives(state, "B").length;
+    const counteractA = getCounteractCandidates(state, "A").length;
+    const counteractB = getCounteractCandidates(state, "B").length;
+    console.log("[KT DEBUG] phase", {
+      phase,
+      turningPoint,
+      activePlayerId: state.firefight?.activePlayerId ?? null,
+      readyA,
+      readyB,
+      counteractA,
+      counteractB,
+    });
+  }, [phase, turningPoint, state.firefight?.activePlayerId, state.game]);
 
   useEffect(() => {
     if (state.phase !== "SETUP") return;
@@ -773,11 +786,29 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
               selectedUnitId={selectedUnit?.id}
               onSelectUnit={(unitId) => {
                 if (!canSelectOperative) return;
+                if (inCounteractWindow) {
+                  const eligible = counteractOperatives.some(
+                    (unit) => unit.id === unitId,
+                  );
+                  if (!eligible) return;
+                  setSelectedUnitId(unitId);
+                  dispatchGameEvent("COUNTERACT", {
+                    playerId: loopPlayerId,
+                    operativeId: unitId,
+                    action: null,
+                  });
+                  return;
+                }
                 setSelectedUnitId(unitId);
               }}
               activeOperativeId={state.firefight?.activeOperativeId}
               highlightReadyForPlayerId={state.firefight?.activePlayerId}
               canSelectUnit={canSelectOperative}
+              isCounteractWindow={inCounteractWindow}
+              counteractEligibleIds={counteractOperatives.map((unit) => unit.id)}
+              isCounteractActivation={
+                state.firefight?.activation?.isCounteract === true
+              }
             />
           ) : (
             <LogsWindow
@@ -907,6 +938,14 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
                       setShootModalOpen(true);
                     }}
                     showCounteract={showCounteract}
+                    showCounteractWindow={inCounteractWindow}
+                    onPassCounteract={() =>
+                      dispatchGameEvent("PASS_COUNTERACT_WINDOW", {
+                        playerId: loopPlayerId,
+                      })
+                    }
+                    isCounteractActive={isCounteractActive}
+                    counteractActionsTaken={counteractActionsTaken}
                     counteractOptions={counteractOperatives}
                     onSelectCounteractOperative={(operativeId) => {
                       if (!operativeId) return;
