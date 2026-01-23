@@ -432,7 +432,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
     const key = `${turningPoint}-${state.firefight?.activePlayerId}`;
     if (skipToastRef.current === key) return;
     skipToastRef.current = key;
-    dispatchIntent({ type: "SKIP_ACTIVATION", payload: { playerId: loopPlayerId } });
+    dispatchGameEvent("SKIP_ACTIVATION", { playerId: loopPlayerId });
     setSkipToast(`Player ${loopPlayerId} has no activations`);
     const timer = setTimeout(() => setSkipToast(null), 2000);
     return () => clearTimeout(timer);
@@ -829,9 +829,9 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
                     isFirefight
                       ? (order) => {
                           if (!selectedUnit?.id) return;
-                          dispatchIntent({
-                            type: "SET_ORDER",
-                            payload: { operativeId: selectedUnit.id, order },
+                          dispatchGameEvent("SET_ORDER", {
+                            operativeId: selectedUnit.id,
+                            order,
                           });
                         }
                       : null
@@ -864,32 +864,24 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
                     showActivate={showActivate}
                     onActivateConceal={() => {
                       if (!selectedUnit?.id) return;
-                      dispatchIntent({
-                        type: "SET_ACTIVE_OPERATIVE",
-                        payload: {
-                          playerId: loopPlayerId,
-                          operativeId: selectedUnit.id,
-                          order: "conceal",
-                        },
+                      dispatchGameEvent("SET_ACTIVE_OPERATIVE", {
+                        playerId: loopPlayerId,
+                        operativeId: selectedUnit.id,
+                        order: "conceal",
                       });
                     }}
                     onActivateEngage={() => {
                       if (!selectedUnit?.id) return;
-                      dispatchIntent({
-                        type: "SET_ACTIVE_OPERATIVE",
-                        payload: {
-                          playerId: loopPlayerId,
-                          operativeId: selectedUnit.id,
-                          order: "engage",
-                        },
+                      dispatchGameEvent("SET_ACTIVE_OPERATIVE", {
+                        playerId: loopPlayerId,
+                        operativeId: selectedUnit.id,
+                        order: "engage",
                       });
                     }}
                     showActionButtons={showActionButtons}
                     canUseActions={canUseActions}
                     allowedActions={counteractAllowedActions}
-                    onEndActivation={() =>
-                      dispatchIntent({ type: "END_ACTIVATION" })
-                    }
+                    onEndActivation={() => dispatchGameEvent("END_ACTIVATION")}
                     onAction={(actionKey) => {
                       if (!selectedUnit?.id) return;
 
@@ -918,13 +910,10 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
                     counteractOptions={counteractOperatives}
                     onSelectCounteractOperative={(operativeId) => {
                       if (!operativeId) return;
-                      dispatchIntent({
-                        type: "COUNTERACT",
-                        payload: {
-                          playerId: loopPlayerId,
-                          operativeId,
-                          action: null,
-                        },
+                      dispatchGameEvent("COUNTERACT", {
+                        playerId: loopPlayerId,
+                        operativeId,
+                        action: null,
                       });
                     }}
                     onCounteract={() => {
@@ -932,13 +921,10 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
                         counteractOperatives.find((op) => op.id === selectedUnit?.id) ||
                         counteractOperatives[0];
                       if (!target) return;
-                      dispatchIntent({
-                        type: "COUNTERACT",
-                        payload: {
-                          playerId: loopPlayerId,
-                          operativeId: target.id,
-                          action: null,
-                        },
+                      dispatchGameEvent("COUNTERACT", {
+                        playerId: loopPlayerId,
+                        operativeId: target.id,
+                        action: null,
                       });
                     }}
                     statusMessage={statusMessage}
