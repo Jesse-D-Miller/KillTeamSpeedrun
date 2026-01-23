@@ -61,6 +61,26 @@ function UnitSelector() {
 	const storageKeyForReady = (slotId) =>
 		gameCode ? `kt_game_${gameCode}_ready_${slotId}` : null;
 
+	const storageKeyForUnits = (slotId) =>
+		gameCode ? `kt_game_${gameCode}_units_${slotId}` : null;
+
+	const storageKeyForWeapons = (slotId) =>
+		gameCode ? `kt_game_${gameCode}_weapons_${slotId}` : null;
+
+	const storageKeyForEquipment = (slotId) =>
+		gameCode ? `kt_game_${gameCode}_equipment_${slotId}` : null;
+
+	const readStoredJson = (storageKey) => {
+		if (!storageKey) return null;
+		const raw = localStorage.getItem(storageKey);
+		if (!raw) return null;
+		try {
+			return JSON.parse(raw);
+		} catch {
+			return null;
+		}
+	};
+
 	const readReadyState = (slotId) => {
 		const key = storageKeyForReady(slotId);
 		if (!key) return false;
@@ -95,6 +115,42 @@ function UnitSelector() {
 		setReadySlots((prev) => ({ ...prev, [eventSlot]: true }));
 	};
 
+	const applyRosterEvent = (event) => {
+		if (!event || event.kind !== "ROSTER_SELECTED") return;
+		const eventSlot = event.slot;
+		const payload = event.payload || {};
+		if (!eventSlot) return;
+		const unitsKey = storageKeyForUnits(eventSlot);
+		const weaponsKey = storageKeyForWeapons(eventSlot);
+		const equipmentKey = storageKeyForEquipment(eventSlot);
+		if (unitsKey) {
+			localStorage.setItem(unitsKey, JSON.stringify(payload.selectedUnitIds || []));
+		}
+		if (weaponsKey) {
+			localStorage.setItem(
+				weaponsKey,
+				JSON.stringify(payload.selectedWeaponsByUnitId || {}),
+			);
+		}
+		if (equipmentKey) {
+			localStorage.setItem(
+				equipmentKey,
+				JSON.stringify(payload.selectedEquipmentIds || []),
+			);
+		}
+		if (eventSlot === slot) {
+			if (Array.isArray(payload.selectedUnitIds)) {
+				setSelectedUnitIdsA(payload.selectedUnitIds);
+			}
+			if (payload.selectedWeaponsByUnitId && typeof payload.selectedWeaponsByUnitId === "object") {
+				setWeaponSelectionsA(payload.selectedWeaponsByUnitId);
+			}
+			if (Array.isArray(payload.selectedEquipmentIds)) {
+				setSelectedEquipmentIds(payload.selectedEquipmentIds);
+			}
+		}
+	};
+
 	useEffect(() => {
 		if (!gameCode || !slot) return undefined;
 
@@ -105,11 +161,13 @@ function UnitSelector() {
 				if (message.type === "SNAPSHOT" && Array.isArray(message.eventLog)) {
 					message.eventLog.forEach(applyArmyEvent);
 					message.eventLog.forEach(applyReadyEvent);
+					message.eventLog.forEach(applyRosterEvent);
 					return;
 				}
 				if (message.type === "EVENT" && message.event) {
 					applyArmyEvent(message.event);
 					applyReadyEvent(message.event);
+					applyRosterEvent(message.event);
 				}
 			},
 		});
@@ -162,16 +220,28 @@ function UnitSelector() {
 	}, [isSingleSelect, resolvedArmyKeyB]);
 
 	const [activeTeam, setActiveTeam] = useState("alpha");
-	const [selectedUnitIdsA, setSelectedUnitIdsA] = useState([]);
+	const [selectedUnitIdsA, setSelectedUnitIdsA] = useState(() => {
+		if (!gameCode || !slot) return [];
+		const stored = readStoredJson(storageKeyForUnits(slot));
+		return Array.isArray(stored) ? stored : [];
+	});
 	const [selectedUnitIdsB, setSelectedUnitIdsB] = useState([]);
-	const [weaponSelectionsA, setWeaponSelectionsA] = useState({});
+	const [weaponSelectionsA, setWeaponSelectionsA] = useState(() => {
+		if (!gameCode || !slot) return {};
+		const stored = readStoredJson(storageKeyForWeapons(slot));
+		return stored && typeof stored === "object" ? stored : {};
+	});
 	const [weaponSelectionsB, setWeaponSelectionsB] = useState({});
 	const [unitModal, setUnitModal] = useState({
 		open: false,
 		team: "alpha",
 		unitId: null,
 	});
-	const [selectedEquipmentIds, setSelectedEquipmentIds] = useState([]);
+	const [selectedEquipmentIds, setSelectedEquipmentIds] = useState(() => {
+		if (!gameCode || !slot) return [];
+		const stored = readStoredJson(storageKeyForEquipment(slot));
+		return Array.isArray(stored) ? stored : [];
+	});
 
 	const selectedFactionKey = isSingleSelect
 		? playerArmyKey
@@ -203,6 +273,7 @@ function UnitSelector() {
 		: selectedUnitIdsA.length > 0 && selectedUnitIdsB.length > 0;
 	const canNavigate = canSelectUnits && (!gameCode || bothReady);
 	const hasNavigatedRef = useRef(false);
+	const isRosterLocked = Boolean(gameCode && isReadyClicked);
 
 	const navigateToArmy = () => {
 		navigate(`/${username}/army`, {
@@ -255,6 +326,7 @@ function UnitSelector() {
 
 	const openUnitModal = (unit, team) => {
 		if (!unit) return;
+		if (isRosterLocked) return;
 		if (team === "alpha") {
 			setSelectedUnitIdsA((prev) =>
 				prev.includes(unit.id) ? prev : [...prev, unit.id],
@@ -273,6 +345,7 @@ function UnitSelector() {
 
 	const removeUnitFromRoster = () => {
 		if (!unitModal.unitId) return;
+		if (isRosterLocked) return;
 		if (unitModal.team === "alpha") {
 			setSelectedUnitIdsA((prev) => prev.filter((id) => id !== unitModal.unitId));
 			setWeaponSelectionsA((prev) => {
@@ -334,6 +407,7 @@ function UnitSelector() {
 
 	const toggleEquipmentSelection = (equipmentId) => {
 		if (!equipmentId) return;
+		if (isRosterLocked) return;
 		setSelectedEquipmentIds((prev) => {
 			if (prev.includes(equipmentId)) {
 				return prev.filter((id) => id !== equipmentId);
@@ -414,6 +488,7 @@ function UnitSelector() {
 											isSelected ? "unit-selector__tile--selected" : ""
 										}`}
 										type="button"
+										disabled={isRosterLocked}
 										onClick={() =>
 											openUnitModal(
 												unit,
@@ -451,6 +526,7 @@ function UnitSelector() {
 												isSelected ? "unit-selector__tile--selected" : ""
 											}`}
 											type="button"
+											disabled={isDisabled || isRosterLocked}
 											onClick={() => {
 												if (isDisabled) return;
 												toggleEquipmentSelection(item.id);
@@ -487,6 +563,7 @@ function UnitSelector() {
 													isSelected ? "unit-selector__tile--selected" : ""
 												}`}
 												type="button"
+												disabled={isDisabled || isRosterLocked}
 												onClick={() => {
 													if (isDisabled) return;
 													toggleEquipmentSelection(item.id);
@@ -606,6 +683,47 @@ function UnitSelector() {
 						disabled={!canSelectUnits || isReadyClicked}
 						onClick={() => {
 							if (gameCode && slot) {
+								const unitsKey = storageKeyForUnits(slot);
+								const weaponsKey = storageKeyForWeapons(slot);
+								const equipmentKey = storageKeyForEquipment(slot);
+								if (unitsKey) {
+									localStorage.setItem(
+										unitsKey,
+										JSON.stringify(selectedUnitIdsA),
+									);
+								}
+								if (weaponsKey) {
+									localStorage.setItem(
+										weaponsKey,
+										JSON.stringify(weaponSelectionsA),
+									);
+								}
+								if (equipmentKey) {
+									localStorage.setItem(
+										equipmentKey,
+										JSON.stringify(selectedEquipmentIds),
+									);
+								}
+								if (socketRef.current?.readyState === WebSocket.OPEN) {
+									socketRef.current.send(
+										JSON.stringify({
+											type: "EVENT",
+											code: gameCode,
+											slot,
+											event: {
+												id: getOrCreatePlayerId(),
+												ts: Date.now(),
+												slot,
+												kind: "ROSTER_SELECTED",
+												payload: {
+													selectedUnitIds: selectedUnitIdsA,
+													selectedWeaponsByUnitId: weaponSelectionsA,
+													selectedEquipmentIds,
+												},
+											},
+										}),
+									);
+								}
 								const readyKey = storageKeyForReady(slot);
 								if (readyKey) {
 									localStorage.setItem(readyKey, "true");

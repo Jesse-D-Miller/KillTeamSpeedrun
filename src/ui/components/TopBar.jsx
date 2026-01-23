@@ -1,4 +1,4 @@
-function TopBar({ cp, vp, turningPoint, phase }) {
+function TopBar({ cp, vp, turningPoint, phase, initiativePlayerId }) {
   return (
     <header className="kt-topbar">
       <div className="kt-topbar__item">
@@ -8,6 +8,12 @@ function TopBar({ cp, vp, turningPoint, phase }) {
       <div className="kt-topbar__item">
         <span className="kt-topbar__label">Turning Point</span>
         <span className="kt-topbar__value">{turningPoint}</span>
+      </div>
+      <div className="kt-topbar__item">
+        <span className="kt-topbar__label">Initiative</span>
+        <span className="kt-topbar__value">
+          {initiativePlayerId ? `Player ${initiativePlayerId}` : "—"}
+        </span>
       </div>
       <div className="kt-topbar__item">
         <span className="kt-topbar__label">VP</span>

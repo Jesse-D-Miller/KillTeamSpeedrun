@@ -1,0 +1,110 @@
+.kt-init-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: grid;
+  place-items: center;
+  z-index: 9999;
+  padding: 16px;
+}
+
+.kt-init-modal {
+  width: min(520px, 100%);
+  background: #0f1115;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.kt-init-modal__header {
+  padding: 16px 18px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.kt-init-modal__title {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0.6px;
+  color: rgba(255, 255, 255, 0.92);
+  text-transform: uppercase;
+}
+
+.kt-init-modal__body {
+  padding: 18px;
+}
+
+.kt-init-modal__hint {
+  margin: 0 0 14px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 14px;
+}
+
+.kt-init-modal__buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.kt-init-btn {
+  height: 140px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: 64px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.95);
+  cursor: pointer;
+  transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+  user-select: none;
+}
+
+.kt-init-btn:active {
+  transform: translateY(1px) scale(0.995);
+}
+
+.kt-init-btn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.35);
+  outline-offset: 3px;
+}
+
+.kt-init-btn--a {
+  background: linear-gradient(180deg, rgba(0, 255, 153, 0.28), rgba(0, 255, 153, 0.08));
+  box-shadow: 0 0 0 rgba(0, 255, 153, 0);
+}
+
+.kt-init-btn--a:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 0 24px rgba(0, 255, 153, 0.18);
+}
+
+.kt-init-btn--b {
+  background: linear-gradient(180deg, rgba(160, 90, 255, 0.30), rgba(160, 90, 255, 0.09));
+  box-shadow: 0 0 0 rgba(160, 90, 255, 0);
+}
+
+.kt-init-btn--b:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 0 24px rgba(160, 90, 255, 0.18);
+}
+
+.kt-init-modal__footer {
+  padding: 12px 18px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.kt-init-modal__close {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: filter 120ms ease;
+}
+
+.kt-init-modal__close:hover {
+  filter: brightness(1.1);
+}

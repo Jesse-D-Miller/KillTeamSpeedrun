@@ -4,6 +4,7 @@ import UnitListNav from "./ui/components/UnitListNav";
 import LogsWindow from "./ui/components/LogsWindow";
 import Actions from "./ui/components/Actions";
 import TopBar from "./ui/components/TopBar";
+import InitiativeModal from "./ui/components/InitiativeModal";
 import TargetSelectModal from "./ui/components/TargetSelectModal";
 import DiceInputModal from "./ui/components/DiceInputModal";
 import DefenseAllocationModal from "./ui/components/DefenseAllocationModal";
@@ -106,6 +107,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
   const seenLogIdsRef = useRef(new Set());
   const seenDamageIdsRef = useRef(new Set());
   const seenCombatIdsRef = useRef(new Set());
+  const seenGameIdsRef = useRef(new Set());
   const [attackerId, setAttackerId] = useState(null);
   const [defenderId, setDefenderId] = useState(null);
   const [leftTab, setLeftTab] = useState("units");
@@ -345,6 +347,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
 
   const currentPlayerId = playerSlot || getOrCreatePlayerId();
   const otherPlayerId = playerSlot ? (playerSlot === "A" ? "B" : "A") : null;
+  const showInitiativeModal =
+    phase === "STRATEGY" && !state.initiativePlayerId;
   const combatState = state.combatState;
   const actionFlow = state.ui?.actionFlow ?? null;
   const attackModalOpen =
@@ -524,6 +528,14 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
     }
   };
 
+  const dispatchGameEvent = (type, payload = {}) => {
+    dispatchIntent({ type, payload });
+    const event = sendMultiplayerEvent("GAME_EVENT", { type, payload });
+    if (event?.id) {
+      seenGameIdsRef.current.add(event.id);
+    }
+  };
+
   const applyRemoteLogEvent = (event) => {
     if (!event || event.kind !== "LOG_ENTRY") return;
     const entry = event.payload?.entry;
@@ -554,6 +566,15 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
     dispatch({ type, payload });
   };
 
+  const applyRemoteGameEvent = (event) => {
+    if (!event || event.kind !== "GAME_EVENT") return;
+    if (!event.id || seenGameIdsRef.current.has(event.id)) return;
+    const { type, payload } = event.payload || {};
+    if (!type) return;
+    seenGameIdsRef.current.add(event.id);
+    dispatch({ type, payload });
+  };
+
   useEffect(() => {
     if (!gameCode || !playerSlot) return undefined;
 
@@ -566,6 +587,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
             applyRemoteLogEvent(event);
             applyRemoteDamageEvent(event);
             applyRemoteCombatEvent(event);
+            applyRemoteGameEvent(event);
           });
           return;
         }
@@ -573,6 +595,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
           applyRemoteLogEvent(message.event);
           applyRemoteDamageEvent(message.event);
           applyRemoteCombatEvent(message.event);
+          applyRemoteGameEvent(message.event);
         }
       },
     });
@@ -638,7 +661,13 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
           )}
         </aside>
         <div className="kt-main">
-          <TopBar cp={cp} vp={vp} turningPoint={turningPoint} phase={phase} />
+          <TopBar
+            cp={cp}
+            vp={vp}
+            turningPoint={turningPoint}
+            phase={phase}
+            initiativePlayerId={state.initiativePlayerId}
+          />
 
           <main className="kt-detail">
             {selectedUnit ? (
@@ -714,6 +743,15 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
           </main>
         </div>
       </div>
+
+      <InitiativeModal
+        isOpen={showInitiativeModal}
+        isPlayerA={playerSlot === "A"}
+        onSelectWinner={(playerId) =>
+          dispatchGameEvent("SET_INITIATIVE", { playerId })
+        }
+        onClose={() => {}}
+      />
 
       <TargetSelectModal
         open={shootModalOpen}
@@ -1665,6 +1703,28 @@ function ArmyOverlayRoute() {
   const storedArmyKeyB = gameCode
     ? localStorage.getItem(`kt_game_${gameCode}_army_B`)
     : null;
+  const readStoredJson = (storageKey) => {
+    if (!storageKey) return null;
+    const raw = localStorage.getItem(storageKey);
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  };
+  const storedUnitIdsA = gameCode
+    ? readStoredJson(`kt_game_${gameCode}_units_A`)
+    : null;
+  const storedUnitIdsB = gameCode
+    ? readStoredJson(`kt_game_${gameCode}_units_B`)
+    : null;
+  const storedWeaponsA = gameCode
+    ? readStoredJson(`kt_game_${gameCode}_weapons_A`)
+    : null;
+  const storedWeaponsB = gameCode
+    ? readStoredJson(`kt_game_${gameCode}_weapons_B`)
+    : null;
   const armyKeyA =
     location.state?.armyKeyA ||
     (slot === "A" ? armyKey : undefined) ||
@@ -1678,10 +1738,22 @@ function ArmyOverlayRoute() {
   const selectedUnitIds = location.state?.selectedUnitIds;
   const selectedUnitIdsA =
     location.state?.selectedUnitIdsA ||
-    (slot === "A" ? selectedUnitIds : undefined);
+    (slot === "A" ? selectedUnitIds : undefined) ||
+    storedUnitIdsA;
   const selectedUnitIdsB =
     location.state?.selectedUnitIdsB ||
-    (slot === "B" ? selectedUnitIds : undefined);
+    (slot === "B" ? selectedUnitIds : undefined) ||
+    storedUnitIdsB;
+
+  const selectedWeaponsByUnitId = location.state?.selectedWeaponsByUnitId;
+  const selectedWeaponsByUnitIdA =
+    location.state?.selectedWeaponsByUnitIdA ||
+    (slot === "A" ? selectedWeaponsByUnitId : undefined) ||
+    storedWeaponsA;
+  const selectedWeaponsByUnitIdB =
+    location.state?.selectedWeaponsByUnitIdB ||
+    (slot === "B" ? selectedWeaponsByUnitId : undefined) ||
+    storedWeaponsB;
 
   const teamA = armies.find((army) => army.key === armyKeyA) || armies[0];
   const teamB = armies.find((army) => army.key === armyKeyB) || teamA;
@@ -1694,37 +1766,50 @@ function ArmyOverlayRoute() {
     ? teamB.units.filter((unit) => selectedUnitIdsB.includes(unit.id))
     : teamB.units;
 
-  const buildTeamUnits = (units, teamId) =>
-    units.map((unit) => ({
-      ...unit,
-      id: `${teamId}:${unit.id}`,
-      baseId: unit.id,
-      teamId,
-      owner: teamId === "alpha" ? "A" : "B",
-      stats: { ...unit.stats },
-      state: {
-        ...unit.state,
-        apCurrent:
-          Number.isFinite(Number(unit.state?.apCurrent))
-            ? Number(unit.state?.apCurrent)
-            : Number(unit.stats?.apl ?? 0),
-        actionMarks: { ...(unit.state?.actionMarks ?? {}) },
-        readyState: unit.state?.readyState ?? "READY",
-        hasCounteractedThisTP:
-          unit.state?.hasCounteractedThisTP ?? false,
-      },
-      weapons:
-        unit.weapons?.map((weapon) => ({
-          ...weapon,
-          wr: normalizeWeaponRulesList(weapon.wr),
-        })) ?? [],
-      rules: unit.rules?.map((rule) => ({ ...rule })) ?? [],
-      abilities: unit.abilities?.map((ability) => ({ ...ability })) ?? [],
-    }));
+  const buildTeamUnits = (units, teamId, weaponSelections) =>
+    units.map((unit) => {
+      const selectedWeaponNames = Array.isArray(weaponSelections?.[unit.id])
+        ? weaponSelections[unit.id]
+        : null;
+      const filteredWeapons = Array.isArray(unit.weapons)
+        ? selectedWeaponNames && selectedWeaponNames.length > 0
+          ? unit.weapons.filter((weapon) =>
+              selectedWeaponNames.includes(weapon.name),
+            )
+          : unit.weapons
+        : [];
+
+      return {
+        ...unit,
+        id: `${teamId}:${unit.id}`,
+        baseId: unit.id,
+        teamId,
+        owner: teamId === "alpha" ? "A" : "B",
+        stats: { ...unit.stats },
+        state: {
+          ...unit.state,
+          apCurrent:
+            Number.isFinite(Number(unit.state?.apCurrent))
+              ? Number(unit.state?.apCurrent)
+              : Number(unit.stats?.apl ?? 0),
+          actionMarks: { ...(unit.state?.actionMarks ?? {}) },
+          readyState: unit.state?.readyState ?? "READY",
+          hasCounteractedThisTP:
+            unit.state?.hasCounteractedThisTP ?? false,
+        },
+        weapons:
+          filteredWeapons.map((weapon) => ({
+            ...weapon,
+            wr: normalizeWeaponRulesList(weapon.wr),
+          })) ?? [],
+        rules: unit.rules?.map((rule) => ({ ...rule })) ?? [],
+        abilities: unit.abilities?.map((ability) => ({ ...ability })) ?? [],
+      };
+    });
 
   const combinedUnits = [
-    ...buildTeamUnits(filteredUnitsA, "alpha"),
-    ...buildTeamUnits(filteredUnitsB, "beta"),
+    ...buildTeamUnits(filteredUnitsA, "alpha", selectedWeaponsByUnitIdA),
+    ...buildTeamUnits(filteredUnitsB, "beta", selectedWeaponsByUnitIdB),
   ];
 
   return (
