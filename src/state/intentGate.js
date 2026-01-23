@@ -283,6 +283,9 @@ export const validateGameIntent = (state, event) => {
       if (state?.phase !== "STRATEGY") {
         pushIssue(issues, "Strategic gambits only allowed in STRATEGY.");
       }
+      if (!state?.strategy?.operativesReadiedThisTP) {
+        pushIssue(issues, "Operatives must be readied before using strategic gambits.");
+      }
       if (!playerId) pushIssue(issues, "Missing playerId.");
       if (!gambitId) pushIssue(issues, "Missing gambitId.");
       if (playerId && state?.strategy?.turn !== playerId) {

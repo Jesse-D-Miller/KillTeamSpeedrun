@@ -7,6 +7,7 @@ function Actions({
   showActivate,
   onActivate,
   showActionButtons,
+  onEndActivation,
   showCounteract,
   onCounteract,
   statusMessage,
@@ -129,6 +130,17 @@ function Actions({
           disabled={!attacker}
         >
           Place Marker
+        </button>
+        <button
+          className={getActionClass(
+            "endActivation",
+            "kt-action-btn kt-action-btn--endActivation",
+          )}
+          type="button"
+          onClick={() => onEndActivation?.()}
+          disabled={!attacker}
+        >
+          End Activation
         </button>
           </>
         )}

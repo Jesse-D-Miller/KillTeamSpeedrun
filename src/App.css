@@ -109,6 +109,19 @@ body,
   color: rgba(255, 255, 255, 0.8);
 }
 
+
+.kt-setup-warning {
+  margin-bottom: 12px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 120, 120, 0.4);
+  background: rgba(255, 90, 90, 0.12);
+  color: rgba(255, 220, 220, 0.95);
+  font-weight: 700;
+}
+
+
+
 .kt-intentgate {
   position: fixed;
   inset: 0;

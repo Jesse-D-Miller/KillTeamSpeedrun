@@ -5,6 +5,7 @@ import LogsWindow from "./ui/components/LogsWindow";
 import Actions from "./ui/components/Actions";
 import TopBar from "./ui/components/TopBar";
 import InitiativeModal from "./ui/components/InitiativeModal";
+import StrategicPloys from "./ui/components/strategicPloys";
 import TargetSelectModal from "./ui/components/TargetSelectModal";
 import DiceInputModal from "./ui/components/DiceInputModal";
 import DefenseAllocationModal from "./ui/components/DefenseAllocationModal";
@@ -68,7 +69,7 @@ const generateClientId = () => {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-function GameOverlay({ initialUnits, playerSlot, gameCode }) {
+function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   const [state, dispatch] = useReducer(gameReducer, {
     gameId: generateClientId(),
     phase: "SETUP",
@@ -216,11 +217,18 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
   const teamBUnits = state.game.filter((unit) => unit.teamId === "beta");
   const myTeamId = playerSlot === "B" ? "beta" : "alpha";
   const myTeamUnits = myTeamId === "alpha" ? teamAUnits : teamBUnits;
+  const myTeamKey =
+    playerSlot === "B"
+      ? teamKeys?.beta || teamKeys?.alpha
+      : teamKeys?.alpha || teamKeys?.beta;
   const selectedUnit =
     myTeamUnits.find((u) => u.id === selectedUnitId) ?? myTeamUnits[0] ?? null;
   const attackerTeamId = selectedUnit?.teamId || myTeamId;
   const opponentUnits = attackerTeamId === "alpha" ? teamBUnits : teamAUnits;
-  const cp = 0;
+  const cp =
+    playerSlot === "B"
+      ? state.cp?.B ?? 0
+      : state.cp?.A ?? 0;
   const vp = 0;
   const turningPoint = state.turningPoint ?? 0;
   const phase = state.phase ?? "SETUP";
@@ -244,8 +252,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
     selectedIsReady;
   const showActionButtons =
     isFirefight &&
-    state.firefight?.activeOperativeId === selectedUnit?.id &&
-    state.firefight?.orderChosenThisActivation;
+    state.firefight?.activeOperativeId === selectedUnit?.id;
   const showCounteract =
     isFirefight &&
     isMyTurn &&
@@ -312,6 +319,20 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
   }, [phase, turningPoint]);
 
   useEffect(() => {
+    if (phase !== "STRATEGY") return;
+    if (!state.initiativePlayerId) return;
+    if (state.strategy?.cpGrantedThisTP) return;
+    dispatchIntent({ type: "GAIN_CP" });
+  }, [phase, state.initiativePlayerId, state.strategy?.cpGrantedThisTP]);
+
+  useEffect(() => {
+    if (phase !== "STRATEGY") return;
+    if (!state.strategy?.cpGrantedThisTP) return;
+    if (state.strategy?.operativesReadiedThisTP) return;
+    dispatchIntent({ type: "READY_ALL_OPERATIVES" });
+  }, [phase, state.strategy?.cpGrantedThisTP, state.strategy?.operativesReadiedThisTP]);
+
+  useEffect(() => {
     if (state.phase !== "SETUP") return;
     if (!gameCode) return;
     const readyA = localStorage.getItem(`kt_game_${gameCode}_ready_A`) === "true";
@@ -349,6 +370,13 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
   const otherPlayerId = playerSlot ? (playerSlot === "A" ? "B" : "A") : null;
   const showInitiativeModal =
     phase === "STRATEGY" && !state.initiativePlayerId;
+  const isStrategyReady =
+    phase === "STRATEGY" &&
+    Number.isFinite(Number(turningPoint)) &&
+    turningPoint >= 1 &&
+    turningPoint <= 4 &&
+    Boolean(state.setup?.teamsLocked) &&
+    Boolean(state.setup?.deploymentComplete);
   const combatState = state.combatState;
   const actionFlow = state.ui?.actionFlow ?? null;
   const attackModalOpen =
@@ -650,6 +678,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
               units={myTeamUnits}
               selectedUnitId={selectedUnit?.id}
               onSelectUnit={setSelectedUnitId}
+              activeOperativeId={state.firefight?.activeOperativeId}
             />
           ) : (
             <LogsWindow
@@ -670,6 +699,12 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
           />
 
           <main className="kt-detail">
+            {phase === "STRATEGY" && !isStrategyReady && (
+              <div className="kt-setup-warning">
+                Setup not complete. Lock rosters and deploy operatives before
+                Strategy Phase. (Stop trying to cheat.)
+              </div>
+            )}
             {selectedUnit ? (
               <>
                 <UnitCard
@@ -677,6 +712,26 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
                   unit={selectedUnit}
                   dispatch={dispatchIntent}
                   onLog={logEntry}
+                />
+                <StrategicPloys
+                  armyKey={myTeamKey}
+                  isVisible={
+                    phase === "STRATEGY" &&
+                    state.strategy?.operativesReadiedThisTP === true
+                  }
+                  currentPlayerId={state.strategy?.turn}
+                  localPlayerId={playerSlot}
+                  usedPloyIds={state.strategy?.usedStrategicGambits?.[playerSlot] || []}
+                  passedByPlayer={state.strategy?.passed}
+                  onUsePloy={(ploy) =>
+                    dispatchGameEvent("USE_STRATEGIC_GAMBIT", {
+                      playerId: playerSlot,
+                      gambitId: ploy.id,
+                    })
+                  }
+                  onPass={() =>
+                    dispatchGameEvent("PASS_STRATEGY", { playerId: playerSlot })
+                  }
                 />
                 {isFirefight && (
                   <Actions
@@ -694,6 +749,9 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
                       });
                     }}
                     showActionButtons={showActionButtons}
+                    onEndActivation={() =>
+                      dispatchIntent({ type: "END_ACTIVATION" })
+                    }
                     onAction={(actionKey) => {
                       if (!selectedUnit?.id) return;
 
@@ -748,7 +806,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode }) {
         isOpen={showInitiativeModal}
         isPlayerA={playerSlot === "A"}
         onSelectWinner={(playerId) =>
-          dispatchGameEvent("SET_INITIATIVE", { playerId })
+          dispatchGameEvent("SET_INITIATIVE", { winnerPlayerId: playerId })
         }
         onClose={() => {}}
       />
@@ -1818,6 +1876,7 @@ function ArmyOverlayRoute() {
       initialUnits={combinedUnits}
       playerSlot={slot}
       gameCode={gameCode}
+      teamKeys={{ alpha: teamA?.key, beta: teamB?.key }}
     />
   );
 }

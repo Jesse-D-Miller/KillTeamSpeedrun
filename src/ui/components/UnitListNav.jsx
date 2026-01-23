@@ -1,7 +1,7 @@
 import "./UnitListNav.css";
 import { isInjured, unitMove } from "../../engine/selectors/unitSelectors";
 
-function UnitListNav({ units, selectedUnitId, onSelectUnit }) {
+function UnitListNav({ units, selectedUnitId, onSelectUnit, activeOperativeId }) {
 	const orderedUnits = [...units].sort((a, b) => {
 		const aDead = Number(a.state.woundsCurrent) <= 0;
 		const bDead = Number(b.state.woundsCurrent) <= 0;
@@ -14,6 +14,8 @@ function UnitListNav({ units, selectedUnitId, onSelectUnit }) {
 			{orderedUnits.map((unit) => {
 					const isSelected = unit.id === selectedUnitId;
 					const isDead = Number(unit.state.woundsCurrent) <= 0;
+					const readyState = unit.state?.readyState;
+					const isActive = Boolean(activeOperativeId) && unit.id === activeOperativeId;
 					const woundsPct =
 						unit.stats.woundsMax === 0
 							? 0
@@ -52,6 +54,25 @@ function UnitListNav({ units, selectedUnitId, onSelectUnit }) {
 
 											{unitIsInjured && (
 												<span className="kt-chip kt-chip--red">inj</span>
+											)}
+
+											{!isDead && (
+												<span
+													className={`kt-status-dot ${
+														isActive
+															? "kt-status-dot--active"
+															: readyState === "EXPENDED"
+																? "kt-status-dot--expended"
+																: "kt-status-dot--ready"
+													}`}
+													title={
+														isActive
+															? "Active"
+															: readyState === "EXPENDED"
+																? "Expended"
+																: "Ready"
+													}
+												/>
 											)}
 										</>
 									)}

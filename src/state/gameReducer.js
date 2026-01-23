@@ -180,6 +180,11 @@ function resetTpFlags(state) {
 			cpGrantedThisTP: false,
 			operativesReadiedThisTP: false,
 		},
+		firefight: {
+			...(state.firefight || {}),
+			activeOperativeId: null,
+			activePlayerId: null,
+		},
 		game: state.game.map((unit) => ({
 			...unit,
 			state: {

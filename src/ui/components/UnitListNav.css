@@ -43,6 +43,31 @@
 .kt-navitem__tags {
   display: flex;
   gap: 6px;
+  align-items: center;
+}
+
+.kt-status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  margin-left: auto;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.kt-status-dot--ready {
+  background: rgba(120, 255, 140, 0.9);
+  box-shadow: 0 0 6px rgba(120, 255, 140, 0.6);
+}
+
+.kt-status-dot--active {
+  background: rgba(255, 210, 90, 0.95);
+  box-shadow: 0 0 6px rgba(255, 210, 90, 0.7);
+}
+
+.kt-status-dot--expended {
+  background: rgba(255, 90, 90, 0.9);
+  box-shadow: 0 0 6px rgba(255, 90, 90, 0.7);
 }
 
 .kt-chip {
