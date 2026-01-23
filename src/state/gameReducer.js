@@ -92,10 +92,8 @@ function applyDamageNoLog(state, targetId, amount) {
 					state: {
 						...unit.state,
 						woundsCurrent: nextWounds,
-						},
-				awaitingOrder: false,
-				awaitingActions: false,
-					}
+					},
+				}
 			: unit,
 	);
 	return { nextGame, prevWounds, nextWounds, actualDamage };
@@ -155,6 +153,48 @@ function applyDamageToState(state, id, amount) {
 		game: nextGame,
 		log: pushLog(state.log, entry),
 	};
+}
+
+function endTurningPoint(state, nextGame = state.game) {
+	const nextTp = Number(state.turningPoint ?? 0) + 1;
+	const entry = createLogEntry({
+		type: "TURNING_POINT_END",
+		summary: `Turning Point ${state.turningPoint ?? 0} ended`,
+		meta: { turningPoint: state.turningPoint ?? 0 },
+		undo: state.game,
+		redo: nextGame,
+	});
+	const resetState = resetTpFlags({ ...state, game: nextGame });
+	return {
+		...state,
+		...resetState,
+		game: nextGame,
+		log: pushLog(state.log, entry),
+		phase: nextTp > 4 ? "GAME_OVER" : "STRATEGY",
+		turningPoint: nextTp > 4 ? 4 : nextTp,
+		initiativePlayerId: null,
+		ui: {
+			...(state.ui || {}),
+			actionFlow: null,
+		},
+	};
+}
+
+function canPlayerAct(game, playerId) {
+	if (!playerId) return false;
+	return (
+		getReadyOperatives(game, playerId).length > 0 ||
+		canCounteract(game, playerId)
+	);
+}
+
+function resolveNextActivePlayer(game, currentPlayerId) {
+	const otherPlayer = getOtherPlayerId(currentPlayerId);
+	const otherCanAct = canPlayerAct(game, otherPlayer);
+	const currentCanAct = canPlayerAct(game, currentPlayerId);
+	if (otherCanAct) return otherPlayer;
+	if (currentCanAct) return currentPlayerId;
+	return null;
 }
 
 function getOtherPlayerId(playerId) {
@@ -564,8 +604,7 @@ export function gameReducer(state, action) {
 			if (remainingAllowed > 0) return nextState;
 
 			const currentPlayer = state.firefight?.activePlayerId;
-			const otherPlayer = getOtherPlayerId(currentPlayer);
-			const nextPlayer = otherPlayer ?? currentPlayer;
+			const nextPlayer = resolveNextActivePlayer(nextGame, currentPlayer);
 
 			const endState = {
 				...nextState,
@@ -581,31 +620,8 @@ export function gameReducer(state, action) {
 				},
 			};
 
-			if (allOperativesExpended({ ...state, game: nextGame })) {
-				const nextTp = Number(state.turningPoint ?? 0) + 1;
-				const entry = createLogEntry({
-					type: "TURNING_POINT_END",
-					summary: `Turning Point ${state.turningPoint ?? 0} ended`,
-					meta: { turningPoint: state.turningPoint ?? 0 },
-					undo: state.game,
-					redo: nextGame,
-				});
-				return {
-					...endState,
-					log: pushLog(endState.log, entry),
-					phase: nextTp > 4 ? "GAME_OVER" : "STRATEGY",
-					turningPoint: nextTp > 4 ? 4 : nextTp,
-					initiativePlayerId: null,
-					firefight: {
-						...(endState.firefight || {}),
-						activeOperativeId: null,
-						activePlayerId: null,
-						orderChosenThisActivation: false,
-						awaitingOrder: false,
-						awaitingActions: false,
-						activation: null,
-					},
-				};
+			if (!nextPlayer || allOperativesExpended(nextGame)) {
+				return endTurningPoint(endState, nextGame);
 			}
 
 			return endState;
@@ -973,29 +989,6 @@ export function gameReducer(state, action) {
 			};
 		}
 
-		case "ACTIVATION_START": {
-			const { operativeId } = action.payload || {};
-			if (!operativeId) return state;
-			const target = state.game.find((unit) => unit.id === operativeId);
-			if (!target) return state;
-			const nextGame = state.game.map((unit) =>
-				unit.id === operativeId
-					? {
-							...unit,
-							state: {
-								...unit.state,
-								apCurrent: Number(unit.stats?.apl ?? 0),
-								actionMarks: {},
-							},
-						}
-					: unit,
-			);
-			return {
-				...state,
-				game: nextGame,
-			};
-		}
-
 		case "ACTIVATION_END": {
 			return {
 				...state,
@@ -1276,6 +1269,10 @@ export function gameReducer(state, action) {
 			const operativeId = state.firefight?.activeOperativeId;
 			if (!operativeId) return state;
 			if (!state.firefight?.orderChosenThisActivation) return state;
+			if (state.firefight?.activation?.isCounteract &&
+				(state.firefight?.activation?.actionsTaken || []).length === 0) {
+				return state;
+			}
 			const operative = state.game.find((unit) => unit.id === operativeId);
 			if (!operative) return state;
 			if (operative.owner !== state.firefight?.activePlayerId) return state;
@@ -1291,8 +1288,7 @@ export function gameReducer(state, action) {
 					: unit,
 			);
 			const currentPlayer = state.firefight?.activePlayerId;
-			const otherPlayer = getOtherPlayerId(currentPlayer);
-			const nextPlayer = otherPlayer ?? currentPlayer;
+			const nextPlayer = resolveNextActivePlayer(updatedGame, currentPlayer);
 
 			const nextState = {
 				...state,
@@ -1309,31 +1305,8 @@ export function gameReducer(state, action) {
 				},
 			};
 
-			if (allOperativesExpended({ ...state, game: updatedGame })) {
-				const nextTp = Number(state.turningPoint ?? 0) + 1;
-				const entry = createLogEntry({
-					type: "TURNING_POINT_END",
-					summary: `Turning Point ${state.turningPoint ?? 0} ended`,
-					meta: { turningPoint: state.turningPoint ?? 0 },
-					undo: state.game,
-					redo: updatedGame,
-				});
-				return {
-					...nextState,
-					log: pushLog(nextState.log, entry),
-					phase: nextTp > 4 ? "GAME_OVER" : "STRATEGY",
-					turningPoint: nextTp > 4 ? 4 : nextTp,
-					initiativePlayerId: null,
-					firefight: {
-						...(nextState.firefight || {}),
-						activeOperativeId: null,
-						activePlayerId: null,
-						orderChosenThisActivation: false,
-						awaitingOrder: false,
-						awaitingActions: false,
-						activation: null,
-					},
-				};
+			if (!nextPlayer || allOperativesExpended(updatedGame)) {
+				return endTurningPoint(nextState, updatedGame);
 			}
 
 			return nextState;
@@ -1391,8 +1364,7 @@ export function gameReducer(state, action) {
 			if (getReadyOperatives(state, playerId).length > 0) return state;
 			if (canCounteract(state, playerId)) return state;
 
-			const otherPlayer = getOtherPlayerId(playerId);
-			const nextPlayer = otherPlayer ?? playerId;
+			const nextPlayer = resolveNextActivePlayer(state.game, playerId);
 
 			const entry = createLogEntry({
 				type: "ACTIVATION_SKIPPED",
@@ -1416,62 +1388,16 @@ export function gameReducer(state, action) {
 				},
 			};
 
-			if (allOperativesExpended(state)) {
-				const nextTp = Number(state.turningPoint ?? 0) + 1;
-				const entry = createLogEntry({
-					type: "TURNING_POINT_END",
-					summary: `Turning Point ${state.turningPoint ?? 0} ended`,
-					meta: { turningPoint: state.turningPoint ?? 0 },
-					undo: state.game,
-					redo: state.game,
-				});
-				return {
-					...nextState,
-					log: pushLog(nextState.log, entry),
-					phase: nextTp > 4 ? "GAME_OVER" : "STRATEGY",
-					turningPoint: nextTp > 4 ? 4 : nextTp,
-					initiativePlayerId: null,
-					firefight: {
-						...(nextState.firefight || {}),
-						activeOperativeId: null,
-						activePlayerId: null,
-						orderChosenThisActivation: false,
-						awaitingOrder: false,
-						awaitingActions: false,
-						activation: null,
-					},
-				};
+			if (!nextPlayer || allOperativesExpended(state.game)) {
+				return endTurningPoint(nextState, state.game);
 			}
 
 			return nextState;
 		}
 
 		case "END_FIREFIGHT_PHASE": {
-			if (!allOperativesExpended(state)) return state;
-			const nextTp = Number(state.turningPoint ?? 0) + 1;
-			const entry = createLogEntry({
-				type: "TURNING_POINT_END",
-				summary: `Turning Point ${state.turningPoint ?? 0} ended`,
-				meta: { turningPoint: state.turningPoint ?? 0 },
-				undo: state.game,
-				redo: state.game,
-			});
-			return {
-				...state,
-				log: pushLog(state.log, entry),
-				phase: nextTp > 4 ? "GAME_OVER" : "STRATEGY",
-				turningPoint: nextTp > 4 ? 4 : nextTp,
-				initiativePlayerId: null,
-				firefight: {
-					...(state.firefight || {}),
-					activeOperativeId: null,
-					activePlayerId: null,
-					orderChosenThisActivation: false,
-					awaitingOrder: false,
-					awaitingActions: false,
-					activation: null,
-				},
-			};
+			if (!allOperativesExpended(state.game)) return state;
+			return endTurningPoint(state, state.game);
 		}
 
 		case "TURNING_POINT_END": {

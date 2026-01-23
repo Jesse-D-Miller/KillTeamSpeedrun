@@ -268,6 +268,64 @@ function UnitSelector() {
 		return Array.isArray(data?.equipment) ? data.equipment : [];
 	}, [selectedFactionKey]);
 
+	const getDefaultRoster = (armyKey, units, equipmentList = []) => {
+		if (!armyKey) return null;
+		const key = String(armyKey).toLowerCase();
+		if (key === "kommandos") {
+			const excluded = new Set([
+				"kommando-super-boy",
+				"kommando-grot",
+				"kommando-bomb-squig",
+			]);
+			const unitIds = units
+				.filter((unit) => !excluded.has(unit.id))
+				.map((unit) => unit.id);
+			const weaponSelections = units.reduce((acc, unit) => {
+				if (!unitIds.includes(unit.id)) return acc;
+				const weaponNames = Array.isArray(unit.weapons)
+					? unit.weapons.map((weapon) => weapon.name)
+					: [];
+				if (unit.id === "kommando-boss-nob") {
+					const desired = ["Slugga", "Power klaw"];
+					acc[unit.id] = desired.filter((name) => weaponNames.includes(name));
+					return acc;
+				}
+				acc[unit.id] = weaponNames;
+				return acc;
+			}, {});
+			const equipmentIds = equipmentList.map((item) => item.id);
+			return { unitIds, weaponSelections, equipmentIds };
+		}
+		if (key === "hernkynyaegirs") {
+			const unitIds = units.map((unit) => unit.id);
+			const weaponSelections = units.reduce((acc, unit) => {
+				if (!unit?.id) return acc;
+				const weaponNames = Array.isArray(unit.weapons)
+					? unit.weapons.map((weapon) => weapon.name)
+					: [];
+				if (unit.id === "yaegir-warrior-1") {
+					const desired = [
+						"Bolt shotgun (short range)",
+						"Bolt shotgun (long range)",
+						"Fists",
+					];
+					acc[unit.id] = desired.filter((name) => weaponNames.includes(name));
+					return acc;
+				}
+				if (unit.id === "yaegir-warrior-2" || unit.id === "yaegir-warrior-3") {
+					const desired = ["Bolt revolver", "Plasma knife"];
+					acc[unit.id] = desired.filter((name) => weaponNames.includes(name));
+					return acc;
+				}
+				acc[unit.id] = weaponNames;
+				return acc;
+			}, {});
+			const equipmentIds = equipmentList.map((item) => item.id);
+			return { unitIds, weaponSelections, equipmentIds };
+		}
+		return null;
+	};
+
 	const canSelectUnits = isSingleSelect
 		? selectedUnitIdsA.length > 0 && !waitingForOpponent
 		: selectedUnitIdsA.length > 0 && selectedUnitIdsB.length > 0;
@@ -275,15 +333,23 @@ function UnitSelector() {
 	const hasNavigatedRef = useRef(false);
 	const isRosterLocked = Boolean(gameCode && isReadyClicked);
 
-	const navigateToArmy = () => {
+	const navigateToArmy = (override = {}) => {
+		const {
+			selectedUnitIds = selectedUnitIdsA,
+			selectedWeaponsByUnitId = weaponSelectionsA,
+			selectedUnitIdsAlpha = selectedUnitIdsA,
+			selectedUnitIdsBeta = selectedUnitIdsB,
+			selectedWeaponsByUnitIdA = weaponSelectionsA,
+			selectedWeaponsByUnitIdB = weaponSelectionsB,
+		} = override;
 		navigate(`/${username}/army`, {
 			state: isSingleSelect
 				? {
 						armyKey,
 						armyKeyA: resolvedArmyKeyA,
 						armyKeyB: resolvedArmyKeyB,
-						selectedUnitIds: selectedUnitIdsA,
-						selectedWeaponsByUnitId: weaponSelectionsA,
+						selectedUnitIds,
+						selectedWeaponsByUnitId,
 						slot,
 						gameCode,
 						bothReady,
@@ -291,10 +357,10 @@ function UnitSelector() {
 				: {
 						armyKeyA: resolvedArmyKeyA,
 						armyKeyB: resolvedArmyKeyB,
-						selectedUnitIdsA,
-						selectedUnitIdsB,
-						selectedWeaponsByUnitIdA: weaponSelectionsA,
-						selectedWeaponsByUnitIdB: weaponSelectionsB,
+						selectedUnitIdsA: selectedUnitIdsAlpha,
+						selectedUnitIdsB: selectedUnitIdsBeta,
+						selectedWeaponsByUnitIdA,
+						selectedWeaponsByUnitIdB,
 						bothReady,
 					},
 		});
@@ -442,6 +508,43 @@ function UnitSelector() {
 	const modalWeaponCount = Array.isArray(modalUnit?.weapons)
 		? modalUnit.weapons.length
 		: 0;
+	const defaultRoster = useMemo(
+		() => getDefaultRoster(selectedFactionKey, activeUnits, factionEquipment),
+		[selectedFactionKey, activeUnits, factionEquipment],
+	);
+	const canUseDefault = Boolean(defaultRoster?.unitIds?.length);
+
+	useEffect(() => {
+		if (!canUseDefault || isRosterLocked) return;
+		if (isSingleSelect) {
+			if (selectedUnitIdsA.length === 0) {
+				setSelectedUnitIdsA(defaultRoster.unitIds);
+				setWeaponSelectionsA(defaultRoster.weaponSelections);
+			}
+		} else if (activeTeam === "alpha") {
+			if (selectedUnitIdsA.length === 0) {
+				setSelectedUnitIdsA(defaultRoster.unitIds);
+				setWeaponSelectionsA(defaultRoster.weaponSelections);
+			}
+		} else if (activeTeam === "beta") {
+			if (selectedUnitIdsB.length === 0) {
+				setSelectedUnitIdsB(defaultRoster.unitIds);
+				setWeaponSelectionsB(defaultRoster.weaponSelections);
+			}
+		}
+		if (selectedEquipmentIds.length === 0 && defaultRoster.equipmentIds.length > 0) {
+			setSelectedEquipmentIds(defaultRoster.equipmentIds);
+		}
+	}, [
+		activeTeam,
+		canUseDefault,
+		defaultRoster,
+		isRosterLocked,
+		isSingleSelect,
+		selectedEquipmentIds.length,
+		selectedUnitIdsA.length,
+		selectedUnitIdsB.length,
+	]);
 
 	return (
 		<div className="unit-selector">
@@ -680,8 +783,43 @@ function UnitSelector() {
 					<button
 						className="unit-selector__next"
 						type="button"
-						disabled={!canSelectUnits || isReadyClicked}
+						disabled={(!canSelectUnits && !canUseDefault) || isReadyClicked}
 						onClick={() => {
+							let resolvedUnitIdsA = selectedUnitIdsA;
+							let resolvedWeaponsA = weaponSelectionsA;
+							let resolvedUnitIdsB = selectedUnitIdsB;
+							let resolvedWeaponsB = weaponSelectionsB;
+							let resolvedEquipmentIds = selectedEquipmentIds;
+
+							if (canUseDefault) {
+								if (isSingleSelect) {
+									if (resolvedUnitIdsA.length === 0) {
+										resolvedUnitIdsA = defaultRoster.unitIds;
+										resolvedWeaponsA = defaultRoster.weaponSelections;
+										setSelectedUnitIdsA(resolvedUnitIdsA);
+										setWeaponSelectionsA(resolvedWeaponsA);
+									}
+								} else if (activeTeam === "alpha") {
+									if (resolvedUnitIdsA.length === 0) {
+										resolvedUnitIdsA = defaultRoster.unitIds;
+										resolvedWeaponsA = defaultRoster.weaponSelections;
+										setSelectedUnitIdsA(resolvedUnitIdsA);
+										setWeaponSelectionsA(resolvedWeaponsA);
+									}
+								} else if (activeTeam === "beta") {
+									if (resolvedUnitIdsB.length === 0) {
+										resolvedUnitIdsB = defaultRoster.unitIds;
+										resolvedWeaponsB = defaultRoster.weaponSelections;
+										setSelectedUnitIdsB(resolvedUnitIdsB);
+										setWeaponSelectionsB(resolvedWeaponsB);
+									}
+								}
+								if (resolvedEquipmentIds.length === 0) {
+									resolvedEquipmentIds = defaultRoster.equipmentIds;
+									setSelectedEquipmentIds(resolvedEquipmentIds);
+								}
+							}
+
 							if (gameCode && slot) {
 								const unitsKey = storageKeyForUnits(slot);
 								const weaponsKey = storageKeyForWeapons(slot);
@@ -689,19 +827,19 @@ function UnitSelector() {
 								if (unitsKey) {
 									localStorage.setItem(
 										unitsKey,
-										JSON.stringify(selectedUnitIdsA),
+										JSON.stringify(resolvedUnitIdsA),
 									);
 								}
 								if (weaponsKey) {
 									localStorage.setItem(
 										weaponsKey,
-										JSON.stringify(weaponSelectionsA),
+										JSON.stringify(resolvedWeaponsA),
 									);
 								}
 								if (equipmentKey) {
 									localStorage.setItem(
 										equipmentKey,
-										JSON.stringify(selectedEquipmentIds),
+										JSON.stringify(resolvedEquipmentIds),
 									);
 								}
 								if (socketRef.current?.readyState === WebSocket.OPEN) {
@@ -716,9 +854,9 @@ function UnitSelector() {
 												slot,
 												kind: "ROSTER_SELECTED",
 												payload: {
-													selectedUnitIds: selectedUnitIdsA,
-													selectedWeaponsByUnitId: weaponSelectionsA,
-													selectedEquipmentIds,
+													selectedUnitIds: resolvedUnitIdsA,
+													selectedWeaponsByUnitId: resolvedWeaponsA,
+													selectedEquipmentIds: resolvedEquipmentIds,
 												},
 											},
 										}),
@@ -752,7 +890,14 @@ function UnitSelector() {
 							}
 
 							if (canNavigate) {
-								navigateToArmy();
+								navigateToArmy({
+									selectedUnitIds: resolvedUnitIdsA,
+									selectedWeaponsByUnitId: resolvedWeaponsA,
+									selectedUnitIdsAlpha: resolvedUnitIdsA,
+									selectedUnitIdsBeta: resolvedUnitIdsB,
+									selectedWeaponsByUnitIdA: resolvedWeaponsA,
+									selectedWeaponsByUnitIdB: resolvedWeaponsB,
+								});
 							}
 						}}
 					>
@@ -762,7 +907,7 @@ function UnitSelector() {
 								Waiting for opponent...
 							</>
 						) : (
-							"Next"
+							"Start"
 						)}
 					</button>
 				</div>

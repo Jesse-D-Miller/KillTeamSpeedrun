@@ -31,6 +31,7 @@ const PHASE_ALLOWED_EVENTS = {
     "USE_STRATEGIC_GAMBIT",
     "PASS_STRATEGY",
     "END_STRATEGY_PHASE",
+    "TURNING_POINT_START",
     "TOGGLE_ORDER",
     "SET_ORDER_OVERRIDE",
     "SET_SELECTED_WEAPON",
@@ -44,9 +45,7 @@ const PHASE_ALLOWED_EVENTS = {
     "SKIP_ACTIVATION",
     "END_FIREFIGHT_PHASE",
     "ACTION_USE",
-    "ACTIVATION_START",
     "ACTIVATION_END",
-    "TURNING_POINT_START",
     "FLOW_START_SHOOT",
     "FLOW_START_FIGHT",
     "FLOW_CANCEL",
@@ -73,6 +72,7 @@ const PHASE_ALLOWED_EVENTS = {
     "TOGGLE_ORDER",
     "SET_ORDER_OVERRIDE",
     "SET_SELECTED_WEAPON",
+    "TURNING_POINT_END",
   ]),
   GAME_OVER: new Set(["RESET_GAME"]),
 };
@@ -514,15 +514,6 @@ export const validateGameIntent = (state, event) => {
         if (!Number.isFinite(ap) || ap < cost) {
           pushIssue(issues, "Not enough APL for this action.");
         }
-      }
-      break;
-    }
-
-    case "ACTIVATION_START": {
-      const { operativeId } = event.payload || {};
-      if (!operativeId) pushIssue(issues, "Missing operativeId.");
-      if (operativeId && !hasUnit(state, operativeId)) {
-        pushIssue(issues, "Unit not found.", { unitId: operativeId });
       }
       break;
     }
