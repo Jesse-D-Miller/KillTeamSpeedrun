@@ -1,6 +1,16 @@
 import "./Actions.css";
 
-function Actions({ attacker, actionMarks, onAction }) {
+function Actions({
+  attacker,
+  actionMarks,
+  onAction,
+  showActivate,
+  onActivate,
+  showActionButtons,
+  showCounteract,
+  onCounteract,
+  statusMessage,
+}) {
   const getActionClass = (actionKey, baseClass) =>
     actionMarks?.[actionKey]
       ? `${baseClass} kt-action-btn--dark`
@@ -10,6 +20,31 @@ function Actions({ attacker, actionMarks, onAction }) {
     <section className="kt-action-card kt-action-card--vertical-label">
       <div className="kt-action-card__label">Actions</div>
       <div className="kt-action-card__body kt-action-card__body--wrap">
+        {statusMessage && (
+          <div className="kt-action-card__status">{statusMessage}</div>
+        )}
+        {showActivate && (
+          <button
+            className="kt-action-btn"
+            type="button"
+            onClick={onActivate}
+            disabled={!attacker}
+          >
+            Activate
+          </button>
+        )}
+        {showCounteract && (
+          <button
+            className="kt-action-btn"
+            type="button"
+            onClick={onCounteract}
+            disabled={!attacker}
+          >
+            Counteract
+          </button>
+        )}
+        {showActionButtons && (
+          <>
         <button
           className={getActionClass(
             "reposition",
@@ -95,6 +130,8 @@ function Actions({ attacker, actionMarks, onAction }) {
         >
           Place Marker
         </button>
+          </>
+        )}
       </div>
     </section>
   );

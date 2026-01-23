@@ -1,5 +1,10 @@
 import { createLogEntry } from "./actionCreator";
 import { ACTION_CONFIG } from "../engine/rules/actionsCore";
+import {
+	allOperativesExpended,
+	canCounteract,
+	getReadyOperatives,
+} from "./gameLoopSelectors";
 
 export const COMBAT_STAGES = {
 	ATTACK_ROLLING: "ATTACK_ROLLING",
@@ -147,6 +152,43 @@ function applyDamageToState(state, id, amount) {
 		...state,
 		game: nextGame,
 		log: pushLog(state.log, entry),
+	};
+}
+
+function getOtherPlayerId(playerId) {
+	return playerId === "A" ? "B" : playerId === "B" ? "A" : null;
+}
+
+function resetApForAllUnits(game) {
+	return game.map((unit) => ({
+		...unit,
+		state: {
+			...unit.state,
+			apCurrent: Number(unit.stats?.apl ?? 0),
+			actionMarks: {},
+		},
+	}));
+}
+
+function resetTpFlags(state) {
+	return {
+		strategy: {
+			...(state.strategy || {}),
+			passed: { A: false, B: false },
+			usedStrategicGambits: { A: [], B: [] },
+			turn: null,
+			cpGrantedThisTP: false,
+			operativesReadiedThisTP: false,
+		},
+		game: state.game.map((unit) => ({
+			...unit,
+			state: {
+				...unit.state,
+				hasCounteractedThisTP: false,
+				apCurrent: Number(unit.stats?.apl ?? 0),
+				actionMarks: {},
+			},
+		})),
 	};
 }
 
@@ -872,6 +914,388 @@ export function gameReducer(state, action) {
 					...(state.ui || {}),
 					actionFlow: null,
 				},
+			};
+		}
+
+		case "TURNING_POINT_START": {
+			return {
+				...state,
+				...resetTpFlags(state),
+			};
+		}
+
+		case "LOCK_TEAMS": {
+			return {
+				...state,
+				setup: {
+					...(state.setup || {}),
+					teamsLocked: true,
+				},
+			};
+		}
+
+		case "DEPLOY_OPERATIVES": {
+			return {
+				...state,
+				setup: {
+					...(state.setup || {}),
+					deploymentComplete: true,
+				},
+			};
+		}
+
+		case "BEGIN_BATTLE": {
+			return {
+				...state,
+				phase: "STRATEGY",
+				turningPoint: 1,
+				initiativePlayerId: null,
+				cp: { A: 2, B: 2 },
+				...resetTpFlags(state),
+			};
+		}
+
+		case "ROLL_INITIATIVE":
+		case "SET_INITIATIVE": {
+			const winnerPlayerId = action.payload?.winnerPlayerId || action.payload?.playerId;
+			if (!winnerPlayerId) return state;
+			return {
+				...state,
+				initiativePlayerId: winnerPlayerId,
+				strategy: {
+					...(state.strategy || {}),
+					passed: { A: false, B: false },
+					turn: winnerPlayerId,
+				},
+			};
+		}
+
+		case "GAIN_CP": {
+			const initiative = state.initiativePlayerId;
+			if (!initiative) return state;
+			if (state.strategy?.cpGrantedThisTP) return state;
+			const other = getOtherPlayerId(initiative);
+			const addA = state.turningPoint === 1
+				? 1
+				: initiative === "A"
+					? 1
+					: 2;
+			const addB = state.turningPoint === 1
+				? 1
+				: initiative === "B"
+					? 1
+					: 2;
+			return {
+				...state,
+				cp: {
+					A: (state.cp?.A ?? 0) + addA,
+					B: (state.cp?.B ?? 0) + addB,
+				},
+				strategy: {
+					...(state.strategy || {}),
+					cpGrantedThisTP: true,
+				},
+			};
+		}
+
+		case "READY_ALL_OPERATIVES": {
+			if (!state.strategy?.cpGrantedThisTP) return state;
+			if (state.strategy?.operativesReadiedThisTP) return state;
+			return {
+				...state,
+				game: state.game.map((unit) => ({
+					...unit,
+					state: {
+						...unit.state,
+						readyState:
+							Number(unit.state?.woundsCurrent ?? 0) > 0 ? "READY" : unit.state?.readyState,
+						},
+				})),
+				firefight: {
+					...(state.firefight || {}),
+					activeOperativeId: null,
+					activePlayerId: null,
+				},
+				strategy: {
+					...(state.strategy || {}),
+					operativesReadiedThisTP: true,
+				},
+			};
+		}
+
+		case "USE_STRATEGIC_GAMBIT": {
+			const { playerId, gambitId } = action.payload || {};
+			if (!playerId || !gambitId) return state;
+			if (state.strategy?.turn !== playerId) return state;
+			const used = state.strategy?.usedStrategicGambits?.[playerId] || [];
+			if (used.includes(gambitId)) return state;
+			const other = getOtherPlayerId(playerId);
+			return {
+				...state,
+				strategy: {
+					...(state.strategy || {}),
+					usedStrategicGambits: {
+						...(state.strategy?.usedStrategicGambits || {}),
+						[playerId]: [...used, gambitId],
+					},
+					passed: {
+						...(state.strategy?.passed || {}),
+						[playerId]: false,
+					},
+					turn: other ?? state.strategy?.turn ?? null,
+				},
+			};
+		}
+
+		case "PASS_STRATEGY": {
+			const { playerId } = action.payload || {};
+			if (!playerId) return state;
+			if (state.strategy?.turn !== playerId) return state;
+			const nextPassed = {
+				...(state.strategy?.passed || {}),
+				[playerId]: true,
+			};
+			const bothPassed = Boolean(nextPassed.A) && Boolean(nextPassed.B);
+			if (bothPassed) {
+				return {
+					...state,
+					phase: "FIREFIGHT",
+					firefight: {
+						...(state.firefight || {}),
+						activePlayerId: state.initiativePlayerId,
+						activeOperativeId: null,
+					},
+					strategy: {
+						...(state.strategy || {}),
+						passed: nextPassed,
+						turn: null,
+					},
+				};
+			}
+			return {
+				...state,
+				strategy: {
+					...(state.strategy || {}),
+					passed: nextPassed,
+					turn: getOtherPlayerId(playerId),
+				},
+			};
+		}
+
+		case "END_STRATEGY_PHASE": {
+			if (!state.strategy?.passed?.A || !state.strategy?.passed?.B) return state;
+			return {
+				...state,
+				phase: "FIREFIGHT",
+				firefight: {
+					...(state.firefight || {}),
+					activePlayerId: state.initiativePlayerId,
+					activeOperativeId: null,
+					orderChosenThisActivation: false,
+				},
+				strategy: {
+					...(state.strategy || {}),
+					turn: null,
+				},
+			};
+		}
+
+		case "SET_ACTIVE_OPERATIVE": {
+			const { playerId, operativeId } = action.payload || {};
+			if (state.phase !== "FIREFIGHT") return state;
+			if (state.firefight?.activeOperativeId) return state;
+			if (playerId !== state.firefight?.activePlayerId) return state;
+			const operative = state.game.find((unit) => unit.id === operativeId);
+			if (!operative || operative.owner !== playerId) return state;
+			if (operative.state?.readyState !== "READY") return state;
+			return {
+				...state,
+				firefight: {
+					...(state.firefight || {}),
+					activeOperativeId: operativeId,
+					orderChosenThisActivation: false,
+				},
+			};
+		}
+
+		case "SET_ORDER": {
+			const { operativeId, order } = action.payload || {};
+			if (state.phase !== "FIREFIGHT") return state;
+			if (operativeId !== state.firefight?.activeOperativeId) return state;
+			if (order !== "conceal" && order !== "engage") return state;
+			if (state.firefight?.orderChosenThisActivation) return state;
+			return {
+				...state,
+				game: state.game.map((unit) =>
+					unit.id === operativeId
+						? {
+								...unit,
+								state: {
+									...unit.state,
+									order,
+								},
+							}
+						: unit,
+					),
+				firefight: {
+					...(state.firefight || {}),
+					orderChosenThisActivation: true,
+				},
+			};
+		}
+
+		case "END_ACTIVATION": {
+			if (state.phase !== "FIREFIGHT") return state;
+			const operativeId = state.firefight?.activeOperativeId;
+			if (!operativeId) return state;
+			if (!state.firefight?.orderChosenThisActivation) return state;
+			const operative = state.game.find((unit) => unit.id === operativeId);
+			if (!operative) return state;
+			const updatedGame = state.game.map((unit) =>
+				unit.id === operativeId
+					? {
+							...unit,
+							state: {
+								...unit.state,
+								readyState: "EXPENDED",
+							},
+						}
+					: unit,
+			);
+			const currentPlayer = state.firefight?.activePlayerId;
+			const otherPlayer = getOtherPlayerId(currentPlayer);
+			const otherHasReady = getReadyOperatives(
+				{ ...state, game: updatedGame },
+				otherPlayer,
+			).length;
+			const otherCanCounteract = otherPlayer
+				? canCounteract({ ...state, game: updatedGame }, otherPlayer)
+				: false;
+			const nextPlayer = otherHasReady > 0 || otherCanCounteract
+				? otherPlayer
+				: currentPlayer;
+
+			const nextState = {
+				...state,
+				game: updatedGame,
+				firefight: {
+					...(state.firefight || {}),
+					activeOperativeId: null,
+					activePlayerId: nextPlayer,
+					orderChosenThisActivation: false,
+				},
+			};
+
+			if (allOperativesExpended({ ...state, game: updatedGame })) {
+				const nextTp = Number(state.turningPoint ?? 0) + 1;
+				return {
+					...nextState,
+					phase: nextTp > 4 ? "GAME_OVER" : "STRATEGY",
+					turningPoint: nextTp > 4 ? 4 : nextTp,
+				};
+			}
+
+			return nextState;
+		}
+
+		case "COUNTERACT": {
+			const { playerId, operativeId } = action.payload || {};
+			if (state.phase !== "FIREFIGHT") return state;
+			if (playerId !== state.firefight?.activePlayerId) return state;
+			if (getReadyOperatives(state, playerId).length > 0) return state;
+			const operative = state.game.find((unit) => unit.id === operativeId);
+			if (!operative || operative.owner !== playerId) return state;
+			if (operative.state?.readyState !== "EXPENDED") return state;
+			if (operative.state?.order !== "engage") return state;
+			if (operative.state?.hasCounteractedThisTP) return state;
+
+			const updatedGame = state.game.map((unit) =>
+				unit.id === operativeId
+					? {
+							...unit,
+							state: {
+								...unit.state,
+								hasCounteractedThisTP: true,
+							},
+						}
+					: unit,
+			);
+			const nextPlayer = getOtherPlayerId(playerId);
+			const nextState = {
+				...state,
+				game: updatedGame,
+				firefight: {
+					...(state.firefight || {}),
+					activePlayerId: nextPlayer,
+				},
+			};
+
+			if (allOperativesExpended({ ...state, game: updatedGame })) {
+				const nextTp = Number(state.turningPoint ?? 0) + 1;
+				return {
+					...nextState,
+					phase: nextTp > 4 ? "GAME_OVER" : "STRATEGY",
+					turningPoint: nextTp > 4 ? 4 : nextTp,
+				};
+			}
+
+			return nextState;
+		}
+
+		case "END_FIREFIGHT_PHASE": {
+			if (!allOperativesExpended(state)) return state;
+			const nextTp = Number(state.turningPoint ?? 0) + 1;
+			return {
+				...state,
+				phase: nextTp > 4 ? "GAME_OVER" : "STRATEGY",
+				turningPoint: nextTp > 4 ? 4 : nextTp,
+				firefight: {
+					...(state.firefight || {}),
+					activeOperativeId: null,
+					activePlayerId: null,
+					orderChosenThisActivation: false,
+				},
+			};
+		}
+
+		case "TURNING_POINT_END": {
+			const { turningPoint: tp } = action.payload || {};
+			if (!Number.isFinite(Number(tp))) return state;
+			if (Number(state.turningPoint ?? 0) !== Number(tp)) return state;
+			if (tp === 4) {
+				return {
+					...state,
+					phase: "GAME_OVER",
+					endedAt: state.endedAt ?? new Date().toISOString(),
+					winner: state.winner ?? null,
+				};
+			}
+			return {
+				...state,
+				turningPoint: tp + 1,
+				initiativePlayerId: null,
+				phase: "STRATEGY",
+				...resetTpFlags(state),
+			};
+		}
+
+		case "GAME_END": {
+			if (Number(state.turningPoint ?? 0) !== 4) return state;
+			return {
+				...state,
+				phase: "GAME_OVER",
+				endedAt: state.endedAt ?? new Date().toISOString(),
+				winner: state.winner ?? null,
+				log: pushLog(
+					state.log,
+					createLogEntry({
+						type: "GAME_END",
+						summary: "Game over",
+						meta: { winner: state.winner ?? null },
+						undo: state.game,
+						redo: state.game,
+					}),
+				),
 			};
 		}
 

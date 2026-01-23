@@ -40,6 +40,20 @@ function UnitSelector() {
 		B: readArmySelection("B"),
 	}));
 
+	const storageKeyForReady = (slotId) =>
+		gameCode ? `kt_game_${gameCode}_ready_${slotId}` : null;
+
+	const readReadyState = (slotId) => {
+		const key = storageKeyForReady(slotId);
+		if (!key) return false;
+		return localStorage.getItem(key) === "true";
+	};
+
+	const [readySlots, setReadySlots] = useState(() => ({
+		A: readReadyState("A"),
+		B: readReadyState("B"),
+	}));
+
 	const applyArmyEvent = (event) => {
 		if (!event || event.kind !== "ARMY_SELECTED") return;
 		const eventSlot = event.slot;
@@ -52,6 +66,17 @@ function UnitSelector() {
 		setSyncedArmies((prev) => ({ ...prev, [eventSlot]: selectedKey }));
 	};
 
+	const applyReadyEvent = (event) => {
+		if (!event || event.kind !== "SETUP_READY") return;
+		const eventSlot = event.slot;
+		if (!eventSlot) return;
+		const storageKey = storageKeyForReady(eventSlot);
+		if (storageKey) {
+			localStorage.setItem(storageKey, "true");
+		}
+		setReadySlots((prev) => ({ ...prev, [eventSlot]: true }));
+	};
+
 	useEffect(() => {
 		if (!gameCode || !slot) return undefined;
 
@@ -61,10 +86,12 @@ function UnitSelector() {
 			onMessage: (message) => {
 				if (message.type === "SNAPSHOT" && Array.isArray(message.eventLog)) {
 					message.eventLog.forEach(applyArmyEvent);
+					message.eventLog.forEach(applyReadyEvent);
 					return;
 				}
 				if (message.type === "EVENT" && message.event) {
 					applyArmyEvent(message.event);
+					applyReadyEvent(message.event);
 				}
 			},
 		});
@@ -92,6 +119,9 @@ function UnitSelector() {
 	const opponentArmyKey = slot === "B" ? resolvedArmyKeyA : resolvedArmyKeyB;
 	const waitingForOpponent =
 		Boolean(gameCode) && (!playerArmyKey || !opponentArmyKey);
+	const bothReady = Boolean(gameCode)
+		? Boolean(readySlots.A && readySlots.B)
+		: true;
 
 	const armyUnitsA = useMemo(() => {
 		const key = isSingleSelect ? playerArmyKey : resolvedArmyKeyA;
@@ -202,7 +232,31 @@ function UnitSelector() {
 								? selectedUnitIdsA.length === 0 || waitingForOpponent
 								: selectedUnitIdsA.length === 0 || selectedUnitIdsB.length === 0
 						}
-						onClick={() =>
+						onClick={() => {
+							if (gameCode && slot) {
+								const readyKey = storageKeyForReady(slot);
+								if (readyKey) {
+									localStorage.setItem(readyKey, "true");
+								}
+								setReadySlots((prev) => ({ ...prev, [slot]: true }));
+								if (socketRef.current?.readyState === WebSocket.OPEN) {
+									socketRef.current.send(
+										JSON.stringify({
+											type: "EVENT",
+											code: gameCode,
+											slot,
+											event: {
+												id: getOrCreatePlayerId(),
+												ts: Date.now(),
+												slot,
+												kind: "SETUP_READY",
+												payload: {},
+											},
+										}),
+									);
+								}
+							}
+
 							navigate(`/${username}/army`, {
 								state: isSingleSelect
 									? {
@@ -212,15 +266,17 @@ function UnitSelector() {
 											selectedUnitIds: selectedUnitIdsA,
 											slot,
 											gameCode,
+											bothReady,
 										}
 									: {
 											armyKeyA: resolvedArmyKeyA,
 											armyKeyB: resolvedArmyKeyB,
 											selectedUnitIdsA,
 											selectedUnitIdsB,
+											bothReady,
 										},
-							})
-						}
+							});
+						}}
 					>
 						Next
 					</button>

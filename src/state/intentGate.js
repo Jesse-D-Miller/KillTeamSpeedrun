@@ -7,12 +7,78 @@ const pushIssue = (issues, message, detail = {}) => {
 const hasUnit = (state, id) =>
   Boolean(state?.game?.some((unit) => unit.id === id));
 
+const ALWAYS_ALLOWED = new Set(["UNDO", "REDO", "LOG_PUSH"]);
+
+const PHASE_ALLOWED_EVENTS = {
+  SETUP: new Set([
+    "GAME_CREATE",
+    "LOCK_TEAMS",
+    "SETUP_KILLZONE",
+    "DEPLOY_OPERATIVES",
+    "BEGIN_BATTLE",
+  ]),
+  STRATEGY: new Set([
+    "ROLL_INITIATIVE",
+    "SET_INITIATIVE",
+    "GAIN_CP",
+    "READY_ALL_OPERATIVES",
+    "USE_STRATEGIC_GAMBIT",
+    "PASS_STRATEGY",
+    "END_STRATEGY_PHASE",
+  ]),
+  FIREFIGHT: new Set([
+    "SET_ACTIVE_OPERATIVE",
+    "SET_ORDER",
+    "PERFORM_ACTION",
+    "END_ACTIVATION",
+    "COUNTERACT",
+    "END_FIREFIGHT_PHASE",
+    "ACTION_USE",
+    "ACTIVATION_START",
+    "ACTIVATION_END",
+    "TURNING_POINT_START",
+    "FLOW_START_SHOOT",
+    "FLOW_START_FIGHT",
+    "FLOW_CANCEL",
+    "FLOW_SET_TARGET",
+    "FLOW_SET_WEAPON",
+    "FLOW_LOCK_WEAPON",
+    "FLOW_ROLL_DICE",
+    "FLOW_RESOLVE_ACTION",
+    "START_RANGED_ATTACK",
+    "SET_ATTACK_ROLL",
+    "SET_COMBAT_INPUTS",
+    "SET_COMBAT_MODIFIERS",
+    "LOCK_ATTACK_ROLL",
+    "SET_DEFENSE_ROLL",
+    "LOCK_DEFENSE_ROLL",
+    "SET_BLOCKS_RESULT",
+    "RESOLVE_COMBAT",
+    "CLEAR_COMBAT_STATE",
+    "SET_COMBAT_STAGE",
+    "ADVANCE_ATTACK_QUEUE",
+    "APPLY_DAMAGE",
+    "DAMAGE_UNIT",
+    "HEAL_UNIT",
+    "TOGGLE_ORDER",
+    "SET_ORDER_OVERRIDE",
+    "SET_SELECTED_WEAPON",
+  ]),
+  GAME_OVER: new Set(["RESET_GAME"]),
+};
+
 export const validateGameIntent = (state, event) => {
   const issues = [];
 
   if (!event || typeof event.type !== "string") {
     pushIssue(issues, "Missing or invalid event type.");
     return { ok: false, issues };
+  }
+
+  const phase = state?.phase ?? "SETUP";
+  const allowed = PHASE_ALLOWED_EVENTS[phase];
+  if (allowed && !ALWAYS_ALLOWED.has(event.type) && !allowed.has(event.type)) {
+    pushIssue(issues, `Event not allowed during ${phase} phase.`);
   }
 
   switch (event.type) {
@@ -149,6 +215,192 @@ export const validateGameIntent = (state, event) => {
     case "CLEAR_COMBAT_STATE":
       break;
 
+    case "LOCK_TEAMS":
+    case "DEPLOY_OPERATIVES":
+    case "SETUP_KILLZONE":
+      break;
+
+    case "BEGIN_BATTLE": {
+      if (state?.phase !== "SETUP") {
+        pushIssue(issues, "BEGIN_BATTLE only allowed in SETUP.");
+      }
+      if (!state?.setup?.teamsLocked) {
+        pushIssue(issues, "Teams must be locked before battle begins.");
+      }
+      if (!state?.setup?.deploymentComplete) {
+        pushIssue(issues, "Deployment must be complete before battle begins.");
+      }
+      break;
+    }
+
+    case "ROLL_INITIATIVE":
+    case "SET_INITIATIVE": {
+      if (state?.phase !== "STRATEGY") {
+        pushIssue(issues, "Initiative only allowed in STRATEGY.");
+      }
+      if (state?.initiativePlayerId != null) {
+        pushIssue(issues, "Initiative already set.");
+      }
+      const winnerPlayerId = event.payload?.winnerPlayerId || event.payload?.playerId;
+      if (!winnerPlayerId) pushIssue(issues, "Missing winnerPlayerId.");
+      break;
+    }
+
+    case "GAIN_CP": {
+      if (state?.phase !== "STRATEGY") {
+        pushIssue(issues, "GAIN_CP only allowed in STRATEGY.");
+      }
+      if (state?.initiativePlayerId == null) {
+        pushIssue(issues, "Initiative must be set before GAIN_CP.");
+      }
+      if (state?.strategy?.cpGrantedThisTP) {
+        pushIssue(issues, "CP already granted this turning point.");
+      }
+      break;
+    }
+
+    case "READY_ALL_OPERATIVES": {
+      if (state?.phase !== "STRATEGY") {
+        pushIssue(issues, "READY_ALL_OPERATIVES only allowed in STRATEGY.");
+      }
+      if (!state?.strategy?.cpGrantedThisTP) {
+        pushIssue(issues, "CP must be granted before readying operatives.");
+      }
+      if (state?.strategy?.operativesReadiedThisTP) {
+        pushIssue(issues, "Operatives already readied this turning point.");
+      }
+      break;
+    }
+
+    case "USE_STRATEGIC_GAMBIT": {
+      const { playerId, gambitId } = event.payload || {};
+      if (state?.phase !== "STRATEGY") {
+        pushIssue(issues, "Strategic gambits only allowed in STRATEGY.");
+      }
+      if (!playerId) pushIssue(issues, "Missing playerId.");
+      if (!gambitId) pushIssue(issues, "Missing gambitId.");
+      if (playerId && state?.strategy?.turn !== playerId) {
+        pushIssue(issues, "Not this player's strategy turn.");
+      }
+      if (
+        playerId &&
+        state?.strategy?.usedStrategicGambits?.[playerId]?.includes(gambitId)
+      ) {
+        pushIssue(issues, "Strategic gambit already used.");
+      }
+      break;
+    }
+
+    case "PASS_STRATEGY": {
+      const { playerId } = event.payload || {};
+      if (state?.phase !== "STRATEGY") {
+        pushIssue(issues, "PASS_STRATEGY only allowed in STRATEGY.");
+      }
+      if (!playerId) pushIssue(issues, "Missing playerId.");
+      if (playerId && state?.strategy?.turn !== playerId) {
+        pushIssue(issues, "Not this player's strategy turn.");
+      }
+      break;
+    }
+
+    case "END_STRATEGY_PHASE": {
+      if (state?.phase !== "STRATEGY") {
+        pushIssue(issues, "END_STRATEGY_PHASE only allowed in STRATEGY.");
+      }
+      if (!state?.strategy?.passed?.A || !state?.strategy?.passed?.B) {
+        pushIssue(issues, "Both players must pass to end strategy phase.");
+      }
+      break;
+    }
+
+    case "SET_ACTIVE_OPERATIVE": {
+      const { playerId, operativeId } = event.payload || {};
+      if (state?.phase !== "FIREFIGHT") {
+        pushIssue(issues, "SET_ACTIVE_OPERATIVE only allowed in FIREFIGHT.");
+      }
+      if (!playerId) pushIssue(issues, "Missing playerId.");
+      if (!operativeId) pushIssue(issues, "Missing operativeId.");
+      if (state?.firefight?.activeOperativeId) {
+        pushIssue(issues, "Active operative already set.");
+      }
+      if (playerId && state?.firefight?.activePlayerId !== playerId) {
+        pushIssue(issues, "Not this player's turn.");
+      }
+      break;
+    }
+
+    case "SET_ORDER": {
+      const { operativeId, order } = event.payload || {};
+      if (state?.phase !== "FIREFIGHT") {
+        pushIssue(issues, "SET_ORDER only allowed in FIREFIGHT.");
+      }
+      if (!operativeId) pushIssue(issues, "Missing operativeId.");
+      if (order !== "conceal" && order !== "engage") {
+        pushIssue(issues, "Order must be conceal or engage.");
+      }
+      if (operativeId && state?.firefight?.activeOperativeId !== operativeId) {
+        pushIssue(issues, "Order can only be set for active operative.");
+      }
+      if (state?.firefight?.orderChosenThisActivation) {
+        pushIssue(issues, "Order already chosen this activation.");
+      }
+      break;
+    }
+
+    case "END_ACTIVATION": {
+      if (state?.phase !== "FIREFIGHT") {
+        pushIssue(issues, "END_ACTIVATION only allowed in FIREFIGHT.");
+      }
+      if (!state?.firefight?.activeOperativeId) {
+        pushIssue(issues, "No active operative to end.");
+      }
+      if (!state?.firefight?.orderChosenThisActivation) {
+        pushIssue(issues, "Order must be chosen before ending activation.");
+      }
+      break;
+    }
+
+    case "COUNTERACT": {
+      const { playerId, operativeId } = event.payload || {};
+      if (state?.phase !== "FIREFIGHT") {
+        pushIssue(issues, "COUNTERACT only allowed in FIREFIGHT.");
+      }
+      if (!playerId) pushIssue(issues, "Missing playerId.");
+      if (!operativeId) pushIssue(issues, "Missing operativeId.");
+      if (playerId && state?.firefight?.activePlayerId !== playerId) {
+        pushIssue(issues, "Not this player's turn.");
+      }
+      break;
+    }
+
+    case "END_FIREFIGHT_PHASE": {
+      if (state?.phase !== "FIREFIGHT") {
+        pushIssue(issues, "END_FIREFIGHT_PHASE only allowed in FIREFIGHT.");
+      }
+      break;
+    }
+
+    case "TURNING_POINT_END": {
+      const { turningPoint: tp } = event.payload || {};
+      if (state?.phase !== "FIREFIGHT") {
+        pushIssue(issues, "TURNING_POINT_END only allowed after FIREFIGHT.");
+      }
+      if (!Number.isFinite(tp)) {
+        pushIssue(issues, "Missing turningPoint.");
+      }
+      if (Number.isFinite(tp) && Number(state?.turningPoint ?? 0) !== Number(tp)) {
+        pushIssue(issues, "turningPoint does not match current state.");
+      }
+      break;
+    }
+
+    case "GAME_END": {
+      if (Number(state?.turningPoint ?? 0) !== 4) {
+        pushIssue(issues, "GAME_END only allowed at turning point 4.");
+      }
+      break;
+    }
+
     case "ACTION_USE": {
       const { operativeId, actionKey } = event.payload || {};
       if (!operativeId) pushIssue(issues, "Missing operativeId.");
@@ -171,6 +423,20 @@ export const validateGameIntent = (state, event) => {
     case "ACTIVATION_END":
     case "FLOW_CANCEL":
       break;
+
+    case "TURNING_POINT_START": {
+      const { turningPoint: tp } = event.payload || {};
+      if (state?.phase !== "STRATEGY") {
+        pushIssue(issues, "TURNING_POINT_START only allowed in STRATEGY.");
+      }
+      if (!Number.isFinite(tp)) {
+        pushIssue(issues, "Missing turningPoint.");
+      }
+      if (Number.isFinite(tp) && Number(state?.turningPoint ?? 0) !== Number(tp)) {
+        pushIssue(issues, "turningPoint does not match current state.");
+      }
+      break;
+    }
 
     case "FLOW_START_SHOOT":
     case "FLOW_START_FIGHT": {
