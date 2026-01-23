@@ -1,9 +1,19 @@
-export function createLogEntry({ type, summary, meta = {}, undo = null, redo = null }) {
+export function createLogEntry({
+	type,
+	summary,
+	meta = {},
+	undo = null,
+	redo = null,
+	eventId = null,
+	ts = null,
+}) {
 	return {
-		id: typeof crypto !== "undefined" && crypto.randomUUID
-			? crypto.randomUUID()
-			: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-		ts: Date.now(),
+		id: eventId
+			? `LOG:${eventId}`
+			: typeof crypto !== "undefined" && crypto.randomUUID
+				? crypto.randomUUID()
+				: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+		ts: Number.isFinite(Number(ts)) ? Number(ts) : Date.now(),
 		type,
 		summary,
 		meta,

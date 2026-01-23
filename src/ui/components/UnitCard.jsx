@@ -10,7 +10,6 @@ import {
 function UnitCard({
   unit,
   dispatch,
-  onLog,
   canChooseOrder = false,
   onChooseOrder = null,
 }) {

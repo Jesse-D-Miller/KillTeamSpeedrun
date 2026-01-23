@@ -1,10 +1,10 @@
-import { createLogEntry } from "./actionCreator";
 import { ACTION_CONFIG } from "../engine/rules/actionsCore";
 import {
 	allOperativesExpended,
 	canCounteract,
 	getReadyOperatives,
 } from "./gameLoopSelectors";
+import { buildLogEntriesForEvent } from "./logTemplates";
 
 export const COMBAT_STAGES = {
 	ATTACK_ROLLING: "ATTACK_ROLLING",
@@ -111,7 +111,13 @@ function pushLog(log, entry) {
 	};
 }
 
-function applyDamageToState(state, id, amount) {
+function appendLogs(log, entries = []) {
+	if (!entries.length) return log;
+	return entries.reduce((nextLog, entry) => pushLog(nextLog, entry), log);
+}
+
+
+function applyDamageToState(state, id, amount, action) {
 	const targetUnit = state.game.find((unit) => unit.id === id);
 	if (!targetUnit) return state;
 
@@ -137,39 +143,19 @@ function applyDamageToState(state, id, amount) {
 			: unit,
 	);
 
-	const entry = createLogEntry({
-		type: "DAMAGE_APPLIED",
-		summary: `${targetUnit.name} took ${actualDamage} dmg (${prevWounds}→${nextWounds})`,
-		meta: {
-			unitId: id,
-			amount: actualDamage,
-		},
-		undo: state.game,
-		redo: nextGame,
-	});
-
 	return {
 		...state,
 		game: nextGame,
-		log: pushLog(state.log, entry),
 	};
 }
 
-function endTurningPoint(state, nextGame = state.game) {
+function endTurningPoint(state, nextGame = state.game, action = null) {
 	const nextTp = Number(state.turningPoint ?? 0) + 1;
-	const entry = createLogEntry({
-		type: "TURNING_POINT_END",
-		summary: `Turning Point ${state.turningPoint ?? 0} ended`,
-		meta: { turningPoint: state.turningPoint ?? 0 },
-		undo: state.game,
-		redo: nextGame,
-	});
 	const resetState = resetTpFlags({ ...state, game: nextGame });
 	return {
 		...state,
 		...resetState,
 		game: nextGame,
-		log: pushLog(state.log, entry),
 		phase: nextTp > 4 ? "GAME_OVER" : "STRATEGY",
 		turningPoint: nextTp > 4 ? 4 : nextTp,
 		initiativePlayerId: null,
@@ -241,7 +227,7 @@ function resetTpFlags(state) {
 	};
 }
 
-export function gameReducer(state, action) {
+function reduceGameState(state, action) {
 	switch (action.type) {
 		case "START_RANGED_ATTACK": {
 			const {
@@ -505,7 +491,7 @@ export function gameReducer(state, action) {
 
 		case "APPLY_DAMAGE": {
 			const { targetUnitId, damage } = action.payload;
-			return applyDamageToState(state, targetUnitId, damage);
+			return applyDamageToState(state, targetUnitId, damage, action);
 		}
 
 		case "ACTION_USE": {
@@ -554,17 +540,6 @@ export function gameReducer(state, action) {
 					: unit,
 			);
 
-			const entry = createLogEntry({
-				type: "ACTION_USE",
-				summary: `ACTION:${operative.name} - ${actionConfig.logLabel}`,
-				meta: {
-					operativeId,
-					actionKey,
-					apCost: cost,
-				},
-				undo: state.game,
-				redo: nextGame,
-			});
 
 			const nextActionFlow =
 				actionKey === "shoot"
@@ -585,7 +560,6 @@ export function gameReducer(state, action) {
 			const nextState = {
 				...state,
 				game: nextGame,
-				log: pushLog(state.log, entry),
 				firefight: {
 					...(state.firefight || {}),
 					activation: nextActivation,
@@ -621,7 +595,7 @@ export function gameReducer(state, action) {
 			};
 
 			if (!nextPlayer || allOperativesExpended(nextGame)) {
-				return endTurningPoint(endState, nextGame);
+				return endTurningPoint(endState, nextGame, action);
 			}
 
 			return endState;
@@ -817,7 +791,6 @@ export function gameReducer(state, action) {
 			const damage = dieType === "crit" ? safeCrit : safeNormal;
 
 			let nextGame = state.game;
-			let nextLog = state.log;
 
 			const nextActorRemaining = {
 				...actorRemaining,
@@ -832,20 +805,6 @@ export function gameReducer(state, action) {
 					damage,
 				);
 				nextGame = updatedGame;
-				const entry = createLogEntry({
-					type: "FIGHT_STRIKE",
-					summary: `STRIKE:${actorUnit.name} -> ${opponentUnit.name} (${dieType}) dmg=${damage}`,
-					meta: {
-						actorId: actorUnit.id,
-						opponentId: opponentUnit.id,
-						dieType,
-						damage,
-						appliedDamage: actualDamage,
-					},
-					undo: state.game,
-					redo: nextGame,
-				});
-				nextLog = pushLog(nextLog, entry);
 			} else {
 				if (dieType === "norm") {
 					if ((nextOpponentRemaining.norm || 0) > 0) {
@@ -876,19 +835,6 @@ export function gameReducer(state, action) {
 							? "crit"
 							: "norm";
 
-				const entry = createLogEntry({
-					type: "FIGHT_BLOCK",
-					summary: `BLOCK:${actorUnit.name} blocked ${opponentUnit.name} (${blockedResolvedType}) with (${dieType})`,
-					meta: {
-						actorId: actorUnit.id,
-						opponentId: opponentUnit.id,
-						dieType,
-						blockedType: blockedResolvedType,
-					},
-					undo: state.game,
-					redo: nextGame,
-				});
-				nextLog = pushLog(nextLog, entry);
 			}
 
 			const attackerRemaining =
@@ -929,7 +875,7 @@ export function gameReducer(state, action) {
 
 			if (opponentHasNone && actorHasDice) {
 				let autoGame = nextGame;
-				let autoLog = nextLog;
+				let autoLog = state.log;
 				let autoRemaining =
 					actorRole === "attacker" ? attackerRemaining : defenderRemaining;
 				while (getRemainingCount(autoRemaining) > 0) {
@@ -945,20 +891,7 @@ export function gameReducer(state, action) {
 						autoDamage,
 					);
 					autoGame = updatedGame;
-					const entry = createLogEntry({
-						type: "FIGHT_STRIKE",
-						summary: `STRIKE:${actorUnit.name} -> ${opponentUnit.name} (${autoDieType}) dmg=${autoDamage}`,
-						meta: {
-							actorId: actorUnit.id,
-							opponentId: opponentUnit.id,
-							dieType: autoDieType,
-							damage: autoDamage,
-							appliedDamage: actualDamage,
-						},
-						undo: state.game,
-						redo: autoGame,
-					});
-					autoLog = pushLog(autoLog, entry);
+					autoLog = autoLog;
 				}
 
 				return {
@@ -976,7 +909,7 @@ export function gameReducer(state, action) {
 			return {
 				...state,
 				game: nextGame,
-				log: nextLog,
+				log: state.log,
 				ui: {
 					...(state.ui || {}),
 					actionFlow: {
@@ -1000,16 +933,8 @@ export function gameReducer(state, action) {
 		}
 
 		case "TURNING_POINT_START": {
-			const entry = createLogEntry({
-				type: "TURNING_POINT_START",
-				summary: `Turning Point ${state.turningPoint ?? "?"} start`,
-				meta: { turningPoint: state.turningPoint ?? null },
-				undo: state.game,
-				redo: state.game,
-			});
 			return {
 				...state,
-				log: pushLog(state.log, entry),
 				...resetTpFlags(state),
 			};
 		}
@@ -1091,16 +1016,8 @@ export function gameReducer(state, action) {
 		case "READY_ALL_OPERATIVES": {
 			if (!state.strategy?.cpGrantedThisTP) return state;
 			if (state.strategy?.operativesReadiedThisTP) return state;
-			const entry = createLogEntry({
-				type: "READY_ALL_OPERATIVES",
-				summary: `Ready all operatives (TP ${state.turningPoint ?? "?"})`,
-				meta: { turningPoint: state.turningPoint ?? null },
-				undo: state.game,
-				redo: state.game,
-			});
 			return {
 				...state,
-				log: pushLog(state.log, entry),
 				game: state.game.map((unit) => ({
 					...unit,
 					state: {
@@ -1322,7 +1239,7 @@ export function gameReducer(state, action) {
 			};
 
 			if (!nextPlayer || allOperativesExpended(updatedGame)) {
-				return endTurningPoint(nextState, updatedGame);
+				return endTurningPoint(nextState, updatedGame, action);
 			}
 
 			return nextState;
@@ -1338,13 +1255,6 @@ export function gameReducer(state, action) {
 			if (operative.state?.readyState !== "EXPENDED") return state;
 			if (operative.state?.order !== "engage") return state;
 			if (operative.state?.hasCounteractedThisTP) return state;
-			const entry = createLogEntry({
-				type: "COUNTERACT",
-				summary: `${operative?.name || "Operative"} counteracts`,
-				meta: { playerId, operativeId },
-				undo: state.game,
-				redo: state.game,
-			});
 
 			const updatedGame = state.game.map((unit) =>
 				unit.id === operativeId
@@ -1359,7 +1269,6 @@ export function gameReducer(state, action) {
 			);
 			return {
 				...state,
-				log: pushLog(state.log, entry),
 				game: updatedGame,
 				firefight: {
 					...(state.firefight || {}),
@@ -1389,17 +1298,8 @@ export function gameReducer(state, action) {
 
 			const nextPlayer = resolveNextActivePlayer(state.game, playerId);
 
-			const entry = createLogEntry({
-				type: "ACTIVATION_SKIPPED",
-				summary: `Player ${playerId} has no activations`,
-				meta: { playerId },
-				undo: state.game,
-				redo: state.game,
-			});
-
 			const nextState = {
 				...state,
-				log: pushLog(state.log, entry),
 				firefight: {
 					...(state.firefight || {}),
 					activeOperativeId: null,
@@ -1412,7 +1312,7 @@ export function gameReducer(state, action) {
 			};
 
 			if (!nextPlayer || allOperativesExpended(state.game)) {
-				return endTurningPoint(nextState, state.game);
+				return endTurningPoint(nextState, state.game, action);
 			}
 
 			return nextState;
@@ -1428,17 +1328,8 @@ export function gameReducer(state, action) {
 
 			const nextPlayer = resolveNextActivePlayer(state.game, playerId);
 
-			const entry = createLogEntry({
-				type: "COUNTERACT_PASSED",
-				summary: `Player ${playerId} passed counteract`,
-				meta: { playerId },
-				undo: state.game,
-				redo: state.game,
-			});
-
 			const nextState = {
 				...state,
-				log: pushLog(state.log, entry),
 				firefight: {
 					...(state.firefight || {}),
 					activeOperativeId: null,
@@ -1451,7 +1342,7 @@ export function gameReducer(state, action) {
 			};
 
 			if (!nextPlayer || allOperativesExpended(state.game)) {
-				return endTurningPoint(nextState, state.game);
+				return endTurningPoint(nextState, state.game, action);
 			}
 
 			return nextState;
@@ -1459,27 +1350,19 @@ export function gameReducer(state, action) {
 
 		case "END_FIREFIGHT_PHASE": {
 			if (!allOperativesExpended(state.game)) return state;
-			return endTurningPoint(state, state.game);
+			return endTurningPoint(state, state.game, action);
 		}
 
 		case "TURNING_POINT_END": {
 			const { turningPoint: tp } = action.payload || {};
 			if (!Number.isFinite(Number(tp))) return state;
 			if (Number(state.turningPoint ?? 0) !== Number(tp)) return state;
-			const entry = createLogEntry({
-				type: "TURNING_POINT_END",
-				summary: `Turning Point ${tp} end`,
-				meta: { turningPoint: tp },
-				undo: state.game,
-				redo: state.game,
-			});
 			if (tp === 4) {
 				return {
 					...state,
 					phase: "GAME_OVER",
 					endedAt: state.endedAt ?? new Date().toISOString(),
 					winner: state.winner ?? null,
-					log: pushLog(state.log, entry),
 				};
 			}
 			return {
@@ -1487,7 +1370,6 @@ export function gameReducer(state, action) {
 				turningPoint: tp + 1,
 				initiativePlayerId: null,
 				phase: "STRATEGY",
-				log: pushLog(state.log, entry),
 				...resetTpFlags(state),
 			};
 		}
@@ -1499,22 +1381,12 @@ export function gameReducer(state, action) {
 				phase: "GAME_OVER",
 				endedAt: state.endedAt ?? new Date().toISOString(),
 				winner: state.winner ?? null,
-				log: pushLog(
-					state.log,
-					createLogEntry({
-						type: "GAME_END",
-						summary: "Game over",
-						meta: { winner: state.winner ?? null },
-						undo: state.game,
-						redo: state.game,
-					}),
-				),
 			};
 		}
 
 		case "DAMAGE_UNIT": {
 			const { id, amount = 1 } = action.payload;
-			return applyDamageToState(state, id, amount);
+			return applyDamageToState(state, id, amount, action);
 		}
 
 		case "HEAL_UNIT": {
@@ -1559,22 +1431,9 @@ export function gameReducer(state, action) {
 					: unit,
 				);
 
-			const entry = createLogEntry({
-				type: "ORDER_CHANGED",
-				summary: `${targetUnit.name}: order ${prevOrder}→${nextOrder}`,
-				meta: {
-					unitId: id,
-					from: prevOrder,
-					to: nextOrder,
-				},
-				undo: state.game,
-				redo: nextGame,
-			});
-
 			return {
 				...state,
 				game: nextGame,
-				log: pushLog(state.log, entry),
 			};
 		}
 
@@ -1598,22 +1457,9 @@ export function gameReducer(state, action) {
 					: unit,
 			);
 
-			const entry = createLogEntry({
-				type: "ORDER_CHANGED",
-				summary: `${targetUnit.name}: order ${prevOrder}→${order}`,
-				meta: {
-					unitId: id,
-					from: prevOrder,
-					to: order,
-				},
-				undo: state.game,
-				redo: nextGame,
-			});
-
 			return {
 				...state,
 				game: nextGame,
-				log: pushLog(state.log, entry),
 			};
 		}
 
@@ -1638,4 +1484,25 @@ export function gameReducer(state, action) {
 		default:
 			return state;
 	}
+}
+
+export function gameReducer(state, action) {
+	const eventId = action?.meta?.eventId || null;
+	if (eventId && state.appliedEventIds?.has(eventId)) {
+		return state;
+	}
+	const nextState = reduceGameState(state, action);
+	const shouldLog = action?.type !== "UNDO" && action?.type !== "REDO";
+	const logEntries = shouldLog
+		? buildLogEntriesForEvent(state, nextState, action)
+		: [];
+	const nextLog = appendLogs(nextState.log, logEntries);
+	const withLogs = nextLog === nextState.log ? nextState : { ...nextState, log: nextLog };
+	if (!eventId) return withLogs;
+	const appliedEventIds = new Set(state.appliedEventIds || []);
+	appliedEventIds.add(eventId);
+	if (withLogs === state) {
+		return { ...state, appliedEventIds };
+	}
+	return { ...withLogs, appliedEventIds };
 }

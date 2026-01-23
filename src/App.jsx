@@ -18,7 +18,6 @@ import {
   initialCombatState,
   COMBAT_STAGES,
 } from "./state/gameReducer";
-import { createLogEntry } from "./state/actionCreator";
 import { resolveAttack } from "./engine/rules/resolveAttack";
 import {
   normalizeWeaponRules,
@@ -73,6 +72,7 @@ const armies = Object.entries(killteamModules).map(([path, data]) => ({
 function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   const [state, dispatch] = useReducer(gameReducer, {
     gameId: generateClientId(),
+    appliedEventIds: new Set(),
     phase: "SETUP",
     turningPoint: 0,
     initiativePlayerId: null,
@@ -108,10 +108,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
     },
   });
   const socketRef = useRef(null);
-  const seenLogIdsRef = useRef(new Set());
   const seenDamageIdsRef = useRef(new Set());
-  const seenCombatIdsRef = useRef(new Set());
-  const seenGameIdsRef = useRef(new Set());
   const [attackerId, setAttackerId] = useState(null);
   const [defenderId, setDefenderId] = useState(null);
   const [leftTab, setLeftTab] = useState("units");
@@ -130,89 +127,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   const skipToastRef = useRef(null);
   const [tpEndToast, setTpEndToast] = useState(null);
   const prevPhaseRef = useRef(null);
-
-  const logEntry = ({ type, summary, meta }) => {
-    const entry = createLogEntry({
-      type,
-      summary,
-      meta,
-      undo: state.game,
-      redo: state.game,
-    });
-    dispatchIntent({ type: "LOG_PUSH", payload: entry });
-  };
-
-  const formatDiceList = (dice = []) => dice.join(", ");
-
-  const logRollSequence = ({ attackBefore, defenseDice, ceaseless }) => {
-    const localPlayerId = getOrCreatePlayerId();
-    const attackRoller = playerSlot || localPlayerId;
-    const defenseRoller = playerSlot
-      ? playerSlot === "A"
-        ? "B"
-        : "A"
-      : "opponent";
-
-    logEntry({
-      type: "ATTACK_DICE",
-      summary: `${attackRoller} ATTACK: ${formatDiceList(attackBefore)}`,
-      meta: {
-        playerId: localPlayerId,
-        roller: attackRoller,
-        attackerId: selectedUnit?.id,
-        weaponName: selectedWeapon?.name,
-        dice: attackBefore,
-      },
-    });
-
-    if (ceaseless?.rerolled?.length) {
-      logEntry({
-        type: "CEASELESS_REROLL",
-        summary: `${attackRoller} CEASELESS: ${formatDiceList(ceaseless.after)} (${ceaseless.rerolled.length} die rerolled)`,
-        meta: {
-          playerId: localPlayerId,
-          roller: attackRoller,
-          attackerId: selectedUnit?.id,
-          weaponName: selectedWeapon?.name,
-          before: ceaseless.before,
-          after: ceaseless.after,
-          rerolled: ceaseless.rerolled,
-          value: ceaseless.value,
-        },
-      });
-    }
-
-    logEntry({
-      type: "DEFENSE_DICE",
-      summary: `${defenseRoller} DEFENSE: ${formatDiceList(defenseDice)}`,
-      meta: {
-        playerId: localPlayerId,
-        roller: defenseRoller,
-        defenderId: selectedTargetId,
-        dice: defenseDice,
-      },
-    });
-  };
-
-  const logDefenseRoll = (dice) => {
-    if (!Array.isArray(dice) || dice.length === 0) return;
-    const localPlayerId = getOrCreatePlayerId();
-    const defenseRoller = playerSlot
-      ? playerSlot === "A"
-        ? "B"
-        : "A"
-      : "opponent";
-    logEntry({
-      type: "DEFENSE_DICE",
-      summary: `${defenseRoller} DEFENSE: ${formatDiceList(dice)}`,
-      meta: {
-        playerId: localPlayerId,
-        roller: defenseRoller,
-        defenderId: combatState?.defendingOperativeId,
-        dice,
-      },
-    });
-  };
 
   const [selectedUnitId, setSelectedUnitId] = useState(
     initialUnits?.[0]?.id ?? null,
@@ -360,15 +274,13 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   }, [isFirefight, myTeamUnits, selectedUnitId, state.firefight?.activePlayerId]);
 
   const lastTpStartRef = useRef(null);
+  const lastReadyAllRef = useRef(null);
 
   useEffect(() => {
     if (phase !== "STRATEGY") return;
     if (!Number.isFinite(Number(turningPoint)) || turningPoint <= 0) return;
     if (lastTpStartRef.current === turningPoint) return;
-    dispatchIntent({
-      type: "TURNING_POINT_START",
-      payload: { turningPoint },
-    });
+    dispatchGameEvent("TURNING_POINT_START", { turningPoint });
     lastTpStartRef.current = turningPoint;
   }, [phase, turningPoint]);
 
@@ -376,14 +288,16 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
     if (phase !== "STRATEGY") return;
     if (!state.initiativePlayerId) return;
     if (state.strategy?.cpGrantedThisTP) return;
-    dispatchIntent({ type: "GAIN_CP" });
+    dispatchGameEvent("GAIN_CP");
   }, [phase, state.initiativePlayerId, state.strategy?.cpGrantedThisTP]);
 
   useEffect(() => {
     if (phase !== "STRATEGY") return;
     if (!state.strategy?.cpGrantedThisTP) return;
     if (state.strategy?.operativesReadiedThisTP) return;
-    dispatchIntent({ type: "READY_ALL_OPERATIVES" });
+    if (lastReadyAllRef.current === turningPoint) return;
+    dispatchGameEvent("READY_ALL_OPERATIVES");
+    lastReadyAllRef.current = turningPoint;
   }, [phase, state.strategy?.cpGrantedThisTP, state.strategy?.operativesReadiedThisTP]);
 
   useEffect(() => {
@@ -409,13 +323,13 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
     const readyB = localStorage.getItem(`kt_game_${gameCode}_ready_B`) === "true";
     if (!readyA || !readyB) return;
     if (!state.setup?.teamsLocked) {
-      dispatchIntent({ type: "LOCK_TEAMS" });
+      dispatchGameEvent("LOCK_TEAMS");
     }
     if (!state.setup?.deploymentComplete) {
-      dispatchIntent({ type: "DEPLOY_OPERATIVES" });
+      dispatchGameEvent("DEPLOY_OPERATIVES");
     }
     if (state.setup?.teamsLocked && state.setup?.deploymentComplete) {
-      dispatchIntent({ type: "BEGIN_BATTLE" });
+      dispatchGameEvent("BEGIN_BATTLE");
     }
   }, [state.phase, state.setup?.teamsLocked, state.setup?.deploymentComplete, gameCode]);
 
@@ -571,12 +485,19 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
     });
 
   const dispatchIntent = (event, options = {}) => {
-    const result = validateGameIntent(state, event);
+    const meta = event?.meta || {};
+    const eventId = meta.eventId || generateClientId();
+    const ts = Number.isFinite(Number(meta.ts)) ? Number(meta.ts) : Date.now();
+    const eventWithMeta = {
+      ...event,
+      meta: { ...meta, eventId, ts },
+    };
+    const result = validateGameIntent(state, eventWithMeta);
     if (result.ok || options.override) {
-      dispatch(event);
+      dispatch(eventWithMeta);
       return;
     }
-    showIssues(result, event);
+    showIssues(result, eventWithMeta);
   };
 
   useEffect(() => {
@@ -628,14 +549,16 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   const closeIntentGate = () =>
     setIntentGate({ open: false, issues: [], pending: null });
 
-  const sendMultiplayerEvent = (kind, payload = {}) => {
+  const sendMultiplayerEvent = (kind, payload = {}, eventId = null, ts = null) => {
     if (!gameCode || !playerSlot) return;
+    const eventTs = Number.isFinite(Number(ts)) ? Number(ts) : Date.now();
     const event = {
       id:
-        typeof crypto !== "undefined" && crypto.randomUUID
+        eventId ||
+        (typeof crypto !== "undefined" && crypto.randomUUID
           ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      ts: Date.now(),
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`),
+      ts: eventTs,
       slot: playerSlot,
       kind,
       payload,
@@ -656,28 +579,34 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   };
 
   const dispatchCombatEvent = (type, payload = {}) => {
-    dispatchIntent({ type, payload });
-    const event = sendMultiplayerEvent("COMBAT_EVENT", { type, payload });
-    if (event?.id) {
-      seenCombatIdsRef.current.add(event.id);
-    }
+    const eventId = generateClientId();
+    const ts = Date.now();
+    dispatchIntent({ type, payload, meta: { eventId, ts } });
+    sendMultiplayerEvent("COMBAT_EVENT", { type, payload, eventId, ts }, eventId, ts);
   };
 
   const dispatchGameEvent = (type, payload = {}) => {
-    dispatchIntent({ type, payload });
-    const event = sendMultiplayerEvent("GAME_EVENT", { type, payload });
-    if (event?.id) {
-      seenGameIdsRef.current.add(event.id);
-    }
+    const eventId = generateClientId();
+    const ts = Date.now();
+    dispatchIntent({ type, payload, meta: { eventId, ts } });
+    sendMultiplayerEvent("GAME_EVENT", { type, payload, eventId, ts }, eventId, ts);
   };
 
-  const applyRemoteLogEvent = (event) => {
-    if (!event || event.kind !== "LOG_ENTRY") return;
-    const entry = event.payload?.entry;
-    if (!entry?.id) return;
-    if (seenLogIdsRef.current.has(entry.id)) return;
-    seenLogIdsRef.current.add(entry.id);
-    dispatch({ type: "LOG_PUSH", payload: entry });
+  const dispatchDamageEvent = (targetUnitId, damage) => {
+    if (!targetUnitId || typeof damage !== "number") return;
+    const eventId = generateClientId();
+    const ts = Date.now();
+    dispatchIntent({
+      type: "APPLY_DAMAGE",
+      payload: { targetUnitId, damage },
+      meta: { eventId, ts },
+    });
+    sendMultiplayerEvent(
+      "DAMAGE_APPLIED",
+      { targetUnitId, damage },
+      eventId,
+      ts,
+    );
   };
 
   const applyRemoteDamageEvent = (event) => {
@@ -689,25 +618,24 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
     dispatch({
       type: "APPLY_DAMAGE",
       payload: { targetUnitId, damage },
+      meta: { eventId: event.id, ts: event.ts },
     });
   };
 
   const applyRemoteCombatEvent = (event) => {
     if (!event || event.kind !== "COMBAT_EVENT") return;
-    if (!event.id || seenCombatIdsRef.current.has(event.id)) return;
+    if (!event.id) return;
     const { type, payload } = event.payload || {};
     if (!type) return;
-    seenCombatIdsRef.current.add(event.id);
-    dispatch({ type, payload });
+    dispatch({ type, payload, meta: { eventId: event.id, ts: event.ts } });
   };
 
   const applyRemoteGameEvent = (event) => {
     if (!event || event.kind !== "GAME_EVENT") return;
-    if (!event.id || seenGameIdsRef.current.has(event.id)) return;
+    if (!event.id) return;
     const { type, payload } = event.payload || {};
     if (!type) return;
-    seenGameIdsRef.current.add(event.id);
-    dispatch({ type, payload });
+    dispatch({ type, payload, meta: { eventId: event.id, ts: event.ts } });
   };
 
   useEffect(() => {
@@ -719,7 +647,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
       onMessage: (message) => {
         if (message.type === "SNAPSHOT" && Array.isArray(message.eventLog)) {
           message.eventLog.forEach((event) => {
-            applyRemoteLogEvent(event);
             applyRemoteDamageEvent(event);
             applyRemoteCombatEvent(event);
             applyRemoteGameEvent(event);
@@ -727,7 +654,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
           return;
         }
         if (message.type === "EVENT" && message.event) {
-          applyRemoteLogEvent(message.event);
           applyRemoteDamageEvent(message.event);
           applyRemoteCombatEvent(message.event);
           applyRemoteGameEvent(message.event);
@@ -742,22 +668,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
       socket.close();
     };
   }, [gameCode, playerSlot]);
-
-  useEffect(() => {
-    if (!gameCode || !playerSlot) return;
-    const entry = state.log.entries[state.log.cursor - 1];
-    if (!entry?.id) return;
-    if (seenLogIdsRef.current.has(entry.id)) return;
-    seenLogIdsRef.current.add(entry.id);
-
-    const sanitizedEntry = {
-      ...entry,
-      undo: null,
-      redo: null,
-    };
-
-    sendMultiplayerEvent("LOG_ENTRY", { entry: sanitizedEntry });
-  }, [state.log.cursor, state.log.entries, gameCode, playerSlot]);
 
   return (
     <div className="App">
@@ -814,6 +724,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
             <LogsWindow
               entries={state.log.entries}
               cursor={state.log.cursor}
+              units={state.game}
+              debug={false}
               onUndo={() => dispatchIntent({ type: "UNDO" })}
               onRedo={() => dispatchIntent({ type: "REDO" })}
             />
@@ -854,7 +766,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
                   key={selectedUnit.id}
                   unit={selectedUnit}
                   dispatch={dispatchIntent}
-                  onLog={logEntry}
                   canChooseOrder={canChooseOrder}
                   onChooseOrder={
                     isFirefight
@@ -923,14 +834,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
 
                       if (actionKey !== "shoot") return;
                       if (!canShoot) {
-                        logEntry({
-                          type: "ACTION_REJECTED",
-                          summary: `${selectedUnit?.name || "Unit"} cannot Shoot — selected weapon is not ranged`,
-                          meta: {
-                            unitId: selectedUnit?.id,
-                            weaponName: selectedWeapon?.name,
-                          },
-                        });
                         return;
                       }
                       if (opponentUnits.length === 0) return;
@@ -1029,14 +932,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
             : [];
           const firstTargetId = attackQueue[0]?.targetId ?? selectedTargetId;
           setDefenderId(selectedTargetId);
-          logEntry({
-            type: "SHOOT_DECLARED",
-            summary: `${selectedUnit?.name || "Attacker"} declared Shoot vs ${opponentUnits.find((u) => u.id === selectedTargetId)?.name || "defender"}`,
-            meta: {
-              attackerId: selectedUnit?.id,
-              defenderId: selectedTargetId,
-            },
-          });
           dispatchCombatEvent("START_RANGED_ATTACK", {
             attackerId: currentPlayerId,
             defenderId: otherPlayerId,
@@ -1065,15 +960,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
           dispatchIntent({
             type: "FLOW_SET_TARGET",
             payload: { defenderId: id },
-          });
-          const defenderUnit = fightTargets.find((unit) => unit.id === id);
-          logEntry({
-            type: "FIGHT_TARGET",
-            summary: `TARGET:${fightAttacker.name} -> ${defenderUnit?.name || "defender"}`,
-            meta: {
-              attackerId: fightAttacker.id,
-              defenderId: id,
-            },
           });
         }}
         onToggleSecondary={() => {}}
@@ -1593,11 +1479,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
         combatSummary={combatSummary}
         onSetCombatAttackRoll={(roll, inputs) => {
           dispatchCombatEvent("SET_ATTACK_ROLL", { roll, inputs });
-          logRollSequence({
-            attackBefore: roll,
-            defenseDice: [],
-            ceaseless: null,
-          });
         }}
         onSetCombatInputs={(inputs) => {
           dispatchCombatEvent("SET_COMBAT_INPUTS", { inputs });
@@ -1620,29 +1501,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
               ? Number(payload?.woundsCurrent)
               : Math.max(0, safeOldHealth - dmg);
 
-            dispatchIntent({
-              type: "APPLY_DAMAGE",
-              payload: { targetUnitId: defenderUnit.id, damage: dmg },
-            });
+            dispatchDamageEvent(defenderUnit.id, dmg);
 
-            sendMultiplayerEvent("DAMAGE_APPLIED", {
-              targetUnitId: defenderUnit.id,
-              damage: dmg,
-            });
-
-            logEntry({
-              type: "DEVASTATING_APPLIED",
-              summary: `DEVASTATING: ${defenderUnit?.name || "Defender"} took ${dmg} dmg (${safeOldHealth} -> ${newHealth})`,
-              meta: {
-                attackerId: attackingOperative?.id,
-                defenderId: defenderUnit?.id,
-                weaponName: selectedWeapon?.name,
-                damage: dmg,
-                woundsBefore: safeOldHealth,
-                woundsAfter: newHealth,
-                ruleLog: payload?.log ?? [],
-              },
-            });
           }
 
           // 2) If Devastating killed the target, end combat immediately
@@ -1680,7 +1540,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
                     : null
         }
         onAutoRoll={({ attackBefore, defenseDice, ceaseless }) => {
-          logRollSequence({ attackBefore, defenseDice, ceaseless });
         }}
         onClose={() => {
           dispatchCombatEvent("CLEAR_COMBAT_STATE");
@@ -1702,28 +1561,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
               remainingHits * safeNormalDmg + remainingCrits * safeCritDmg;
 
             if (defenderUnit?.id) {
-              dispatchIntent({
-                type: "APPLY_DAMAGE",
-                payload: { targetUnitId: defenderUnit.id, damage: totalDamage },
-              });
-              sendMultiplayerEvent("DAMAGE_APPLIED", {
-                targetUnitId: defenderUnit.id,
-                damage: totalDamage,
-              });
+              dispatchDamageEvent(defenderUnit.id, totalDamage);
             }
-
-            logEntry({
-              type: "ATTACK_RESOLVED",
-              summary: `${attackerUnit?.name || "Attacker"}: ${weapon?.name || "Weapon"} vs ${defenderUnit?.name || "defender"} — dmg ${totalDamage}`,
-              meta: {
-                attackerId: attackerUnit?.id,
-                defenderId: defenderUnit?.id,
-                weaponName: weapon?.name,
-                remainingHits,
-                remainingCrits,
-                damage: totalDamage,
-              },
-            });
 
             dispatchCombatEvent("RESOLVE_COMBAT");
             const queue = combatState?.attackQueue || [];
@@ -1743,14 +1582,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
             attackDice,
             defenseDice,
           });
-
-          if (!autoLogged) {
-            logRollSequence({
-              attackBefore: ceaseless?.before ?? attackDice,
-              defenseDice,
-              ceaseless,
-            });
-          }
 
           setAllocationModalOpen(true);
         }}
@@ -1783,7 +1614,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
         }
         onSetDefenseRoll={(roll) => {
           dispatchCombatEvent("SET_DEFENSE_ROLL", { roll });
-          logDefenseRoll(roll);
         }}
         onLockDefense={() => {
           dispatchCombatEvent("LOCK_DEFENSE_ROLL");
@@ -1854,32 +1684,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
           const savesUsed = defenseHits + defenseCrits;
 
           if (defender?.id) {
-            dispatchIntent({
-              type: "APPLY_DAMAGE",
-              payload: { targetUnitId: defender.id, damage: totalDamage },
-            });
-            sendMultiplayerEvent("DAMAGE_APPLIED", {
-              targetUnitId: defender.id,
-              damage: totalDamage,
-            });
+            dispatchDamageEvent(defender.id, totalDamage);
           }
-
-          logEntry({
-            type: "ATTACK_RESOLVED",
-            summary: `${attacker?.name || "Attacker"}: ${weapon?.name || "Weapon"} vs ${defender?.name || "defender"} — hits ${hits}, crits ${crits}, saves ${savesUsed}, dmg ${totalDamage}`,
-            meta: {
-              attackerId: attacker?.id,
-              defenderId: defender?.id,
-              weaponName: weapon?.name,
-              hits,
-              crits,
-              defenseHits,
-              defenseCrits,
-              remainingHits,
-              remainingCrits,
-              damage: totalDamage,
-            },
-          });
 
           setAllocationModalOpen(false);
           setPendingAttack(null);
