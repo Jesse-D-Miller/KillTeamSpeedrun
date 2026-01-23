@@ -1,0 +1,96 @@
+{
+  "game": "kill-team-2024",
+  "dataset": "faction-equipment",
+  "killTeam": "Hernkyn Yaegirs",
+  "source": {
+    "title": "HERNKYN YAEGIRS – Team Rules",
+    "language": "en",
+    "pdf": "assets.warhammer-community.com/killteam_teamrules_hernkynyaegirs_eng_20-lsfsvxcffk.pdf",
+    "section": "FACTION EQUIPMENT"
+  },
+  "rules": {
+    "selectionLimit": "You cannot select each option more than once per battle."
+  },
+  "equipment": [
+    {
+      "id": "yaegirs-eq-plasma-knives",
+      "name": "Plasma Knives",
+      "type": "weaponGrant",
+      "appliesTo": {
+        "friendlyKillTeam": "HERNKYN YAEGIR"
+      },
+      "effect": {
+        "grantsWeapon": {
+          "name": "Plasma knife",
+          "mode": "melee",
+          "profile": { "atk": 3, "hit": "4+", "dmg": "3/5" },
+          "wr": ["Lethal 5+"]
+        },
+        "notes": [
+          "Some operatives already have this weapon but with better stats; in that instance, use the better version."
+        ]
+      }
+    },
+    {
+      "id": "yaegirs-eq-stabilised-bolt-shells",
+      "name": "Stabilised Bolt Shells",
+      "type": "weaponModifier",
+      "limit": {
+        "scope": "perTurningPoint",
+        "uses": 2,
+        "sharedAcrossKillTeam": true
+      },
+      "trigger": {
+        "when": "shootAction",
+        "requirements": ["selectedWeaponIsBoltShotgunLongRange"]
+      },
+      "effect": {
+        "untilEndOfAction": true,
+        "modifyWeapon": {
+          "hit": { "operation": "improveBy", "amount": 1 },
+          "dmg": { "operation": "addToBoth", "amount": 1 }
+        }
+      }
+    },
+    {
+      "id": "yaegirs-eq-firestorm-bolt-shells",
+      "name": "Firestorm Bolt Shells",
+      "type": "weaponModifier",
+      "limit": {
+        "scope": "perTurningPoint",
+        "uses": 1,
+        "sharedAcrossKillTeam": true
+      },
+      "trigger": {
+        "when": "shootAction",
+        "requirements": ["selectedWeaponIsBoltShotgunShortRange"]
+      },
+      "effect": {
+        "untilEndOfAction": true,
+        "addWeaponRules": ["Blast 1\""]
+      }
+    },
+    {
+      "id": "yaegirs-eq-kv-ceramide-undersuit",
+      "name": "KV-Ceramide Undersuit",
+      "type": "passive",
+      "appliesTo": {
+        "friendlyKillTeam": "HERNKYN YAEGIR"
+      },
+      "effect": {
+        "defenceReroll": {
+          "when": "collectDefenceDice",
+          "requirements": [
+            "friendlyTargetIsHernkynYaegir",
+            "incomingRangedWeaponHasBlastOrTorrent"
+          ],
+          "reroll": { "dice": 1 }
+        },
+        "devastatingDistanceProtection": {
+          "rule": "Ignore x\" Devastating x unless you are the target",
+          "details": "Friendly HERNKYN YAEGIR operatives aren’t affected by Devastating that has a distance component unless they are the target during that shooting sequence."
+        }
+      }
+    }
+  ]
+}

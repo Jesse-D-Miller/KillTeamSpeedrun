@@ -1,0 +1,109 @@
+{
+  "game": "kill-team-2024",
+  "dataset": "firefight-ploys",
+  "killTeam": "Hernkyn Yaegirs",
+  "source": {
+    "pdf": "killteam_teamrules_hernkynyaegirs_eng_20-lsfsvxcffk.pdf",
+    "section": "FIREFIGHT PLOYS"
+  },
+  "ploys": [
+    {
+      "id": "yaegirs-ffp-sturdy",
+      "name": "Sturdy",
+      "type": "firefightPloy",
+      "cost": { "cp": 1 },
+      "trigger": {
+        "when": "collectDefenceDice",
+        "requirements": ["anOperativeIsShootingFriendlyTarget", "targetHasKeyword:HERNKYN_YAEGIR"]
+      },
+      "effect": {
+        "changeAttackersRetainedCritsToNormals": true,
+        "notes": ["Weapon rules already resolved aren’t affected (e.g. Piercing Crits)."]
+      }
+    },
+    {
+      "id": "yaegirs-ffp-bonds-that-bind",
+      "name": "Bonds That Bind",
+      "type": "firefightPloy",
+      "cost": { "cp": 1 },
+      "trigger": {
+        "when": "friendlyOperativeActivated",
+        "requirements": ["activatedOperativeHasKeyword:HERNKYN_YAEGIR"]
+      },
+      "effect": {
+        "selectOtherReadyFriendlyOperative": {
+          "match": { "keyword": "HERNKYN_YAEGIR", "visibleToActivated": true, "within": "3in" }
+        },
+        "then": {
+          "outOfSequenceActivation": {
+            "whenFirstBecomesExpended": "activateSelectedBeforeOpponent",
+            "whenSelectedBecomesExpended": "opponentActivatesAsNormal"
+          }
+        },
+        "restrictions": [
+          "Neither operative can be a BOMBAST if its Wroughtlock Negotiation strategic gambit has been used this turning point."
+        ]
+      }
+    },
+    {
+      "id": "yaegirs-ffp-no-kin-left-behind",
+      "name": "No Kin Left Behind",
+      "type": "firefightPloy",
+      "cost": { "cp": 1 },
+      "trigger": {
+        "when": "friendlyOperativeIncapacitated",
+        "requirements": ["operativeHasKeyword:HERNKYN_YAEGIR"]
+      },
+      "effect": [
+        {
+          "marker": "Fallen Kin",
+          "do": [
+            "removeExistingFallenKinMarkerIfAny",
+            "placeFallenKinMarkerWithinIncapacitatedOperativesControlRangeBeforeRemoval"
+          ]
+        },
+        {
+          "auraWhileMarkerInKillzone": {
+            "range": "3in",
+            "who": "friendlyOperatives",
+            "match": { "keyword": "HERNKYN_YAEGIR" },
+            "when": ["shooting", "fighting", "retaliating"],
+            "step": "rollAttackDiceStep",
+            "choice": [
+              "retainOneFailAsNormalSuccessInsteadOfDiscarding",
+              "retainOneNormalSuccessAsCriticalSuccessInstead"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "yaegirs-ffp-stalwart-defence",
+      "name": "Stalwart Defence",
+      "type": "firefightPloy",
+      "cost": { "cp": 1 },
+      "trigger": {
+        "when": "enemyEndsMoveWithinControlRangeOfFriendlyOperative",
+        "requirements": ["thatFriendlyOperativeHasKeyword:HERNKYN_YAEGIR"]
+      },
+      "effect": {
+        "selectOneOtherFriendlyOperative": {
+          "match": {
+            "keyword": "HERNKYN_YAEGIR",
+            "visibleToThatFriendlyOperative": true,
+            "within": "6in",
+            "notWithinControlRangeOfEnemy": true
+          }
+        },
+        "then": {
+          "performFreeShootAction": true,
+          "duringThatShootAction": {
+            "canTarget": "thatEnemyOperativeEvenIfWithinControlRangeOfFriendly",
+            "cannotTarget": "anyOtherEnemyOperative",
+            "worsenHitBy": 1
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "game": "kill-team-2024",
+  "dataset": "faction-equipment",
+  "killTeam": "Kommandos",
+  "source": {
+    "title": "KOMMANDOS – Team Rules",
+    "language": "en",
+    "versionDate": "2024-10-02",
+    "pdf": "assets.warhammer-community.com/rules-downloads/kill-team/team-rules/kommandos/killteam_teamrules_kommandos_eng_02.10.24.pdf"
+  },
+  "rules": {
+    "selectionLimit": "You cannot select each option more than once per battle."
+  },
+  "equipment": [
+    {
+      "id": "kommandos-eq-choppas",
+      "name": "Choppas",
+      "type": "passive",
+      "appliesTo": {
+        "friendlyKillTeam": "KOMMANDO",
+        "operativeExclusions": ["BOMB SQUIG", "GROT"]
+      },
+      "effect": {
+        "grantsWeapon": {
+          "name": "Choppa",
+          "mode": "melee",
+          "profile": { "atk": 3, "hit": "3+", "dmg": "4/5" },
+          "wr": []
+        },
+        "notes": [
+          "Some operatives already have this weapon but with better stats; in that instance, use the better version."
+        ]
+      },
+      "citations": ["FACTION EQUIPMENT: CHOPPAS"]
+    },
+    {
+      "id": "kommandos-eq-harpoon",
+      "name": "Harpoon",
+      "type": "rangedWeaponGrant",
+      "limit": {
+        "scope": "perTurningPoint",
+        "uses": 1,
+        "sharedAcrossKillTeam": true
+      },
+      "appliesTo": {
+        "friendlyKillTeam": "KOMMANDO",
+        "operativeExclusions": ["BOMB SQUIG", "GROT"]
+      },
+      "effect": {
+        "grantsWeapon": {
+          "name": "Harpoon",
+          "mode": "ranged",
+          "profile": { "atk": 4, "hit": "4+", "dmg": "4/5" },
+          "wr": ["Range 8\"", "Lethal 5+", "Stun"]
+        }
+      },
+      "citations": ["FACTION EQUIPMENT: HARPOON"]
+    },
+    {
+      "id": "kommandos-eq-dynamite",
+      "name": "Dynamite",
+      "type": "rangedWeaponGrant",
+      "limit": {
+        "scope": "perBattle",
+        "uses": 1,
+        "sharedAcrossKillTeam": true
+      },
+      "appliesTo": {
+        "friendlyKillTeam": "KOMMANDO",
+        "operativeExclusions": ["BOMB SQUIG", "GROT"]
+      },
+      "effect": {
+        "grantsWeapon": {
+          "name": "Dynamite",
+          "mode": "ranged",
+          "profile": { "atk": 5, "hit": "4+", "dmg": "4/5" },
+          "wr": ["Range 4\"", "Blast 1\"", "Heavy (Reposition only)", "Saturate"]
+        }
+      },
+      "citations": ["FACTION EQUIPMENT: DYNAMITE"]
+    },
+    {
+      "id": "kommandos-eq-collapsible-stocks",
+      "name": "Collapsible Stocks",
+      "type": "weaponModifier",
+      "appliesTo": {
+        "friendlyKillTeam": "KOMMANDO",
+        "operativeExclusions": []
+      },
+      "effect": {
+        "modifyWeaponRule": {
+          "rule": "Range",
+          "operation": "addToRangeValue",
+          "amountInches": 4,
+          "weapons": [
+            "Dakka shoota (short range)",
+            "Shokka pistol",
+            "Slugga"
+          ]
+        }
+      },
+      "citations": ["FACTION EQUIPMENT: COLLAPSIBLE STOCKS"]
+    }
+  ]
+}

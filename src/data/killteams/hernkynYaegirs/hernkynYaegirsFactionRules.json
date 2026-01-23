@@ -1,0 +1,84 @@
+{
+  "game": "kill-team-2024",
+  "dataset": "faction-rules",
+  "killTeam": "Hernkyn Yaegirs",
+  "source": {
+    "teamRulesPdf": "killteam_teamrules_hernkynyaegirs_eng_20-lsfsvxcffk.pdf",
+    "rulesUpdatesPdf": "eng_kill_team_wcw_rules_updates-xtziqwmxoj-gtbs3es80z.pdf",
+    "sections": ["FACTION RULES", "HERNKYN YAEGIR ERRATA – RESOURCEFUL"]
+  },
+  "rules": [
+    {
+      "id": "yaegirs-resourceful",
+      "name": "Resourceful",
+      "type": "factionRule",
+      "timing": [
+        {
+          "when": "strategyPhase.readyStep",
+          "conditions": ["turningPoint > 1"],
+          "effect": {
+            "gainResourcefulPoints": {
+              "countFriendlyOperatives": "HERNKYN_YAEGIR",
+              "filter": "notWithinControlRangeOfEnemy",
+              "table": [
+                { "friendlyCountMin": 5, "pointsGained": 2 },
+                { "friendlyCountMin": 1, "friendlyCountMax": 4, "pointsGained": 1 },
+                { "friendlyCountMin": 0, "friendlyCountMax": 0, "pointsGained": 0 }
+              ]
+            }
+          }
+        },
+        {
+          "when": "endOfTurningPoint",
+          "effect": { "discardResourcefulPoints": true }
+        }
+      ],
+      "spend": {
+        "currency": "resourcefulPoints",
+        "cost": 1,
+        "limit": "duringEachActivationOfEachFriendlyOperative",
+        "options": [
+          {
+            "id": "yaegirs-resourceful-apl-boost",
+            "name": "+1 APL (temporary)",
+            "when": "beforeOrAfterPerformsAction",
+            "conditions": ["operativeNotWithinControlRangeOfEnemy"],
+            "effect": { "modifyAPL": { "amount": 1, "duration": "untilEndOfActivation" } }
+          },
+          {
+            "id": "yaegirs-resourceful-heal",
+            "name": "Regain D3+1 wounds",
+            "when": "onActivation",
+            "conditions": ["operativeNotWithinControlRangeOfEnemy"],
+            "effect": { "heal": { "amount": "D3+1" } }
+          }
+        ]
+      }
+    },
+    {
+      "id": "yaegirs-dauntless-explorers",
+      "name": "Dauntless Explorers",
+      "type": "factionRule",
+      "timing": [
+        {
+          "when": "firstTurningPoint",
+          "kind": "strategicGambit",
+          "effect": {
+            "eachFriendlyOperative": {
+              "match": { "keyword": "HERNKYN_YAEGIR", "whollyWithin": "yourDropZone" },
+              "do": [
+                {
+                  "action": "Reposition",
+                  "cost": { "ap": 0 },
+                  "constraints": [
+                    "mustEndWhollyWithin4inOfYourDropZone"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

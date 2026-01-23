@@ -1,0 +1,76 @@
+{
+  "game": "kill-team-2024",
+  "dataset": "strategic-ploys",
+  "killTeam": "Kommandos",
+  "source": {
+    "title": "KOMMANDOS – Team Rules",
+    "pdf": "killteam_teamrules_kommandos_eng_02.10.24.pdf",
+    "section": "STRATEGY PLOYS"
+  },
+  "ploys": [
+    {
+      "id": "kommandos-sp-dakka-dakka-dakka",
+      "name": "DAKKA! DAKKA! DAKKA!",
+      "type": "strategicPloy",
+      "cost": { "cp": 1 },
+      "timing": "strategyPhase",
+      "duration": "untilStartOfNextTurningPoint",
+      "effect": {
+        "addWeaponRule": {
+          "to": "friendlyOperatives",
+          "match": { "keyword": "KOMMANDO", "weaponMode": "ranged" },
+          "weaponRule": "Punishing"
+        }
+      }
+    },
+    {
+      "id": "kommandos-sp-waaagh",
+      "name": "WAAAGH!",
+      "type": "strategicPloy",
+      "cost": { "cp": 1 },
+      "timing": "strategyPhase",
+      "duration": "untilStartOfNextTurningPoint",
+      "effect": {
+        "addWeaponRule": {
+          "to": "friendlyOperatives",
+          "match": { "keyword": "KOMMANDO", "weaponMode": "melee" },
+          "weaponRule": "Balanced"
+        }
+      }
+    },
+    {
+      "id": "kommandos-sp-skulk-about",
+      "name": "SKULK ABOUT",
+      "type": "strategicPloy",
+      "cost": { "cp": 1 },
+      "timing": "strategyPhase",
+      "duration": "untilStartOfNextTurningPoint",
+      "effect": {
+        "defenceDice": {
+          "when": "enemyShootsFriendly",
+          "if": ["targetHasKeyword:KOMMANDO", "targetHasOrder:Conceal"],
+          "then": "retainOneDefenceDieAsNormalSuccessWithoutRolling",
+          "notes": ["This is in addition to a cover save, if any."]
+        }
+      }
+    },
+    {
+      "id": "kommandos-sp-ssssh",
+      "name": "SSSSHHHH!",
+      "type": "strategicPloy",
+      "cost": { "cp": 1 },
+      "timing": "strategyPhase",
+      "restrictions": ["cannotUseDuringFirstTurningPoint"],
+      "effect": {
+        "freeDash": {
+          "who": "eachFriendlyOperative",
+          "ifAny": [
+            "operativeNotAValidTargetForEnemyOperatives",
+            "operativeHasOrder:Conceal AND operativeMoreThan6inFromEnemyOperatives"
+          ],
+          "then": "performFreeDashActionImmediately"
+        }
+      }
+    }
+  ]
+}

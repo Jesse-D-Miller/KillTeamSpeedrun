@@ -1,0 +1,321 @@
+{
+  "game": "kill-team-2024",
+  "dataset": "universal-equipment",
+  "source": {
+    "title": "Universal Equipment",
+    "lastUpdated": "2025-12-17",
+    "pdf": "assets.warhammer-community.com (Universal Equipment PDF)"
+  },
+  "rules": {
+    "selectionLimit": "You cannot select each option more than once per battle."
+  },
+  "equipment": [
+    {
+      "id": "ammo-cache",
+      "name": "Ammo Cache",
+      "type": "marker",
+      "quantity": 1,
+      "setup": {
+        "timing": "beforeBattle",
+        "constraints": ["whollyWithinYourTerritory"]
+      },
+      "actions": [
+        {
+          "id": "ammo-resupply",
+          "name": "Ammo Resupply",
+          "cost": { "ap": 0 },
+          "kind": "missionAction",
+          "target": "self",
+          "requirements": [
+            "activeOperativeControlsOneOfYourAmmoCacheMarkers",
+            "notWithinControlRangeOfEnemy",
+            "markerIsYours",
+            "markerNotUsedThisTurningPoint"
+          ],
+          "effect": {
+            "duration": "untilStartOfNextTurningPoint",
+            "text": "When shooting with a weapon from its datacard, you can re-roll one of your attack dice."
+          },
+          "limits": [{ "scope": "perTurningPointPerMarker", "value": 1 }]
+        }
+      ]
+    },
+    {
+      "id": "razor-wire",
+      "name": "Razor Wire",
+      "type": "terrain",
+      "quantity": 1,
+      "traits": ["exposed", "obstructing"],
+      "setup": {
+        "timing": "beforeBattle",
+        "constraints": [
+          "whollyWithinYourTerritory",
+          "onKillzoneFloor",
+          "moreThan2inFromOtherEquipmentTerrainFeatures",
+          "moreThan2inFromAccessPoints",
+          "moreThan2inFromAccessibleTerrain"
+        ]
+      },
+      "rulesText": [
+        {
+          "name": "Obstructing",
+          "effect": "When an operative would cross over it within 1\", treat the distance as an additional 1\"."
+        }
+      ]
+    },
+    {
+      "id": "comms-device",
+      "name": "Comms Device",
+      "type": "marker",
+      "quantity": 1,
+      "setup": {
+        "timing": "beforeBattle",
+        "constraints": ["whollyWithinYourTerritory"]
+      },
+      "passives": [
+        {
+          "name": "Boost SUPPORT ranges",
+          "while": "friendlyOperativeControlsThisMarker",
+          "effect": "Add 3\" to distance requirements of that operative’s SUPPORT rules that refer to friendly operatives.",
+          "notes": ["You cannot benefit from your opponent’s Comms Device markers."]
+        }
+      ]
+    },
+    {
+      "id": "mines",
+      "name": "Mines",
+      "type": "marker",
+      "quantity": 1,
+      "setup": {
+        "timing": "beforeBattle",
+        "constraints": [
+          "whollyWithinYourTerritory",
+          "moreThan2inFromOtherMarkers",
+          "moreThan2inFromAccessPoints",
+          "moreThan2inFromAccessibleTerrain"
+        ]
+      },
+      "triggers": [
+        {
+          "when": "firstTimeMarkerIsWithinAnyOperativesControlRange",
+          "then": [
+            { "effect": "removeMarker" },
+            { "effect": "dealDamage", "amount": "D3+3", "target": "thatOperative" }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "light-barricades",
+      "name": "Light Barricades",
+      "type": "terrain",
+      "quantity": 2,
+      "traits": ["light"],
+      "parts": [
+        { "part": "feet", "traits": ["insignificant", "exposed"] }
+      ],
+      "setup": {
+        "timing": "beforeBattle",
+        "constraints": [
+          "whollyWithinYourTerritory",
+          "onKillzoneFloor",
+          "moreThan2inFromOtherEquipmentTerrainFeatures",
+          "moreThan2inFromAccessPoints",
+          "moreThan2inFromAccessibleTerrain"
+        ]
+      }
+    },
+    {
+      "id": "heavy-barricade",
+      "name": "Heavy Barricade",
+      "type": "terrain",
+      "quantity": 1,
+      "traits": ["heavy"],
+      "setup": {
+        "timing": "beforeBattle",
+        "constraints": [
+          "whollyWithin4inOfYourDropZone",
+          "onKillzoneFloor",
+          "moreThan2inFromOtherEquipmentTerrainFeatures",
+          "moreThan2inFromAccessPoints",
+          "moreThan2inFromAccessibleTerrain"
+        ]
+      }
+    },
+    {
+      "id": "ladders",
+      "name": "Ladders",
+      "type": "terrain",
+      "quantity": 2,
+      "traits": ["insignificant", "exposed"],
+      "setup": {
+        "timing": "beforeBattle",
+        "constraints": [
+          "whollyWithinYourTerritory",
+          "uprightAgainstTerrainAtLeast2inTall",
+          "moreThan2inFromOtherEquipmentTerrainFeatures",
+          "moreThan1inFromDoorsAndAccessPoints"
+        ]
+      },
+      "rulesText": [
+        {
+          "name": "Climb assist",
+          "effect": "Once per action, when climbing the terrain feature the ladder is placed against: treat the vertical distance as 1\" if the ladder is within that operative’s control range for the entire climb."
+        }
+      ]
+    },
+    {
+      "id": "portable-barricade",
+      "name": "Portable Barricade",
+      "type": "terrain",
+      "quantity": 1,
+      "traits": ["light", "protective", "portable"],
+      "parts": [
+        { "part": "feet", "traits": ["insignificant", "exposed"] }
+      ],
+      "setup": {
+        "timing": "beforeBattle",
+        "constraints": [
+          "whollyWithinYourTerritory",
+          "onKillzoneFloor",
+          "moreThan2inFromOtherEquipmentTerrainFeatures",
+          "moreThan2inFromAccessPoints",
+          "moreThan2inFromAccessibleTerrain"
+        ]
+      },
+      "passives": [
+        {
+          "name": "Protective",
+          "while": "operativeIsInCoverFromThisTerrainFeature",
+          "effect": "Improve that operative’s Save by 1 (to a maximum of 2+)."
+        },
+        {
+          "name": "Portable (cover restriction)",
+          "effect": "Only provides cover while an operative is connected to it AND the shield is intervening (ignore its feet)."
+        }
+      ],
+      "actions": [
+        {
+          "id": "move-with-barricade",
+          "name": "Move With Barricade",
+          "cost": { "ap": 1 },
+          "treatedAs": "reposition",
+          "requirements": [
+            "operativeConnectedToInside",
+            "notWithinControlRangeOfEnemy",
+            "notSameActivationAsFallBackOrCharge"
+          ],
+          "effect": {
+            "text": "Like Reposition, but max distance is Move minus 2\"; cannot climb/drop/jump; cannot use rules that remove and set the operative back up again (examples listed in source). Then remove barricade, move, and set it back up connected again if legal.",
+            "placementAfterMoveConstraints": [
+              "notWithin2inOfOtherEquipmentTerrainFeatures",
+              "notWithin2inOfAccessPoints",
+              "notWithin2inOfAccessibleTerrain"
+            ],
+            "ifCannotPlace": "barricadeIsNotSetUpAgain"
+          }
+        }
+      ]
+    },
+    {
+      "id": "utility-grenades",
+      "name": "Utility Grenades",
+      "type": "grenadePackage",
+      "quantity": 1,
+      "selection": {
+        "pick": 2,
+        "options": ["smoke-grenade", "stun-grenade"],
+        "allowedCombos": [
+          ["smoke-grenade", "smoke-grenade"],
+          ["stun-grenade", "stun-grenade"],
+          ["smoke-grenade", "stun-grenade"]
+        ],
+        "usageLimit": "Your kill team can only perform each selected grenade action a number of times equal to how many of that grenade you selected."
+      },
+      "actions": [
+        {
+          "id": "smoke-grenade",
+          "name": "Smoke Grenade",
+          "cost": { "ap": 1 },
+          "requirements": [
+            "notWithinControlRangeOfEnemy",
+            "haveRemainingUsesForThisAction"
+          ],
+          "effect": {
+            "placeMarker": {
+              "distance": "within6in",
+              "mustBe": ["visibleToThisOperativeOrOnVantageOfVisibleTerrainFeature"]
+            },
+            "createsSmokeArea": {
+              "radiusHorizontal": "1in",
+              "heightVertical": "unlimitedUpwards",
+              "notBelowMarker": true
+            },
+            "smokeRules": [
+              "Operatives wholly within smoke are obscured to operatives more than 2\" away, and vice versa.",
+              "When shooting an enemy wholly within smoke: weapons with Piercing 2 / Piercing Crits 2 count as Piercing 1 / Piercing Crits 1 unless within 2\"."
+            ],
+            "removal": {
+              "when": "readyStepNextStrategyPhase",
+              "roll": "D3",
+              "removeAfter": "thatManyActivationsOrEndOfTurningPoint(whicheverFirst)"
+            }
+          }
+        },
+        {
+          "id": "stun-grenade",
+          "name": "Stun Grenade",
+          "cost": { "ap": 1 },
+          "requirements": [
+            "notWithinControlRangeOfEnemy",
+            "haveRemainingUsesForThisAction"
+          ],
+          "effect": {
+            "selectTarget": { "enemy": true, "visible": true, "within": "6in" },
+            "area": "targetAndEachOperativeWithin1inOfIt",
+            "stunTest": {
+              "roll": "D6",
+              "success": "3+",
+              "onSuccess": {
+                "effect": "-1 APL",
+                "duration": "untilEndOfItsNextActivation"
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "explosive-grenades",
+      "name": "Explosive Grenades",
+      "type": "grenadePackage",
+      "quantity": 1,
+      "selection": {
+        "pick": 2,
+        "options": ["frag-grenade", "krak-grenade"],
+        "allowedCombos": [
+          ["frag-grenade", "frag-grenade"],
+          ["krak-grenade", "krak-grenade"],
+          ["frag-grenade", "krak-grenade"]
+        ],
+        "usageLimit": "Your kill team can only use each selected grenade weapon a number of times equal to how many of that grenade you selected."
+      },
+      "weapons": [
+        {
+          "id": "frag-grenade",
+          "name": "Frag Grenade",
+          "mode": "ranged",
+          "profile": { "atk": 4, "hit": "4+", "dmg": "2/4" },
+          "wr": ["Range 6in", "Blast 2in", "Saturate"]
+        },
+        {
+          "id": "krak-grenade",
+          "name": "Krak Grenade",
+          "mode": "ranged",
+          "profile": { "atk": 4, "hit": "4+", "dmg": "4/5" },
+          "wr": ["Range 6in", "Piercing 1", "Saturate"]
+        }
+      ]
+    }
+  ]
+}

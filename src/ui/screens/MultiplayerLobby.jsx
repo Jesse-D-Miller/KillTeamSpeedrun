@@ -58,6 +58,7 @@ function MultiplayerLobby() {
     slot: null,
     me: initialMe,
     players: { A: null, B: null },
+    sessionCreated: false,
   });
   const [eventState, eventDispatch] = useReducer(eventReducer, {
     eventLog: [],
@@ -67,6 +68,24 @@ function MultiplayerLobby() {
   const [error, setError] = useState("");
   const socketRef = useRef(null);
   const [hasNavigated, setHasNavigated] = useState(false);
+
+  const applyPlayerJoinEvent = (event) => {
+    if (!event || event.kind !== "PLAYER_JOIN") return;
+    const slot = event.payload?.slot;
+    const playerId = event.payload?.playerId;
+    const displayName = event.payload?.displayName;
+    if (!slot || !playerId) return;
+    setUiState((prev) => ({
+      ...prev,
+      players: {
+        ...prev.players,
+        [slot]: {
+          id: playerId,
+          displayName: displayName || "",
+        },
+      },
+    }));
+  };
 
   const updateName = (name) => {
     saveName(name);
@@ -83,11 +102,28 @@ function MultiplayerLobby() {
     setError("");
     try {
       const result = await createGame();
+      eventDispatch({ type: "RESET" });
+      const gameCreateEvent = {
+        id: buildEventId(),
+        ts: Date.now(),
+        by: initialMe.playerId,
+        slot: "A",
+        kind: "GAME_CREATE",
+        payload: {
+          phase: "SETUP",
+          turningPoint: 0,
+          initiativePlayerId: null,
+          cp: { A: 0, B: 0 },
+          eventLog: [],
+        },
+      };
+      sendLocalEvent(gameCreateEvent);
       setUiState((prev) => ({
         ...prev,
         phase: "join",
         gameCode: result.code || "",
         slot: "A",
+        sessionCreated: true,
       }));
     } catch (err) {
       setError(err.message);
@@ -106,11 +142,21 @@ function MultiplayerLobby() {
       });
       setUiState((prev) => ({
         ...prev,
+        sessionCreated: true,
+      }));
+      emitEvent("PLAYER_JOIN", {
+        slot: uiState.slot,
+        playerId: uiState.me.playerId,
+        displayName: uiState.me.name.trim(),
+      });
+      setUiState((prev) => ({
+        ...prev,
         phase: "inGame",
         players: result.players || prev.players,
       }));
       if (Array.isArray(result.eventLog)) {
         eventDispatch({ type: "SET_EVENT_LOG", eventLog: result.eventLog });
+        result.eventLog.forEach(applyPlayerJoinEvent);
       }
     } catch (err) {
       setError(err.message);
@@ -124,6 +170,7 @@ function MultiplayerLobby() {
       gameCode: "",
       slot: null,
       players: { A: null, B: null },
+      sessionCreated: false,
     }));
     eventDispatch({ type: "RESET" });
     setConnectionStatus("disconnected");
@@ -150,12 +197,21 @@ function MultiplayerLobby() {
           }
           if (Array.isArray(message.eventLog)) {
             eventDispatch({ type: "SET_EVENT_LOG", eventLog: message.eventLog });
+            message.eventLog.forEach(applyPlayerJoinEvent);
+            const hasCreate = message.eventLog.some((event) => event.kind === "GAME_CREATE");
+            if (hasCreate) {
+              setUiState((prev) => ({
+                ...prev,
+                sessionCreated: true,
+              }));
+            }
           }
           return;
         }
 
         if (message.type === "EVENT" && message.event) {
           eventDispatch({ type: "APPLY_REMOTE_EVENT", event: message.event });
+          applyPlayerJoinEvent(message.event);
         }
       },
     });
@@ -205,6 +261,7 @@ function MultiplayerLobby() {
   };
 
   const emitEvent = (kind, payload = {}) => {
+    if (!uiState.sessionCreated && !["GAME_CREATE", "PLAYER_JOIN"].includes(kind)) return null;
     const event = {
       id: buildEventId(),
       ts: Date.now(),
@@ -322,10 +379,10 @@ function MultiplayerLobby() {
               </div>
               <div className="lobby-players">
                 <div>
-                  <strong>Player A:</strong> {uiState.players.A?.name || "—"}
+                  <strong>Player A:</strong> {uiState.players.A?.displayName || uiState.players.A?.name || "—"}
                 </div>
                 <div>
-                  <strong>Player B:</strong> {uiState.players.B?.name || "—"}
+                  <strong>Player B:</strong> {uiState.players.B?.displayName || uiState.players.B?.name || "—"}
                 </div>
               </div>
               <div className="lobby-sub">

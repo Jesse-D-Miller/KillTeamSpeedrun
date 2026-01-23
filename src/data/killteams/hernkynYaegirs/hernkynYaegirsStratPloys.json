@@ -1,0 +1,79 @@
+{
+  "game": "kill-team-2024",
+  "dataset": "strategic-ploys",
+  "killTeam": "Hernkyn Yaegirs",
+  "source": {
+    "pdf": "killteam_teamrules_hernkynyaegirs_eng_20-lsfsvxcffk.pdf",
+    "section": "STRATEGY PLOYS"
+  },
+  "ploys": [
+    {
+      "id": "yaegirs-sp-hidden-engagement",
+      "name": "Hidden Engagement",
+      "type": "strategicPloy",
+      "cost": { "cp": 1 },
+      "duration": "untilStartOfNextTurningPoint",
+      "effect": {
+        "when": "friendlyOperativeShooting",
+        "conditions": ["shooterHasKeyword:HERNKYN_YAEGIR", "shooterIsInCoverFromTargetsPerspective"],
+        "then": { "grantWeaponRule": { "weapons": "all", "weaponRule": "Balanced" } },
+        "notes": [
+          "Opponent determines targeting lines for whether you are in cover from the target’s perspective."
+        ]
+      }
+    },
+    {
+      "id": "yaegirs-sp-masterful-bladework",
+      "name": "Masterful Bladework",
+      "type": "strategicPloy",
+      "cost": { "cp": 1 },
+      "duration": "untilStartOfNextTurningPoint",
+      "effect": {
+        "whenAny": ["friendlyOperativeFighting", "friendlyOperativeRetaliating"],
+        "conditionsAny": [
+          ["operativeHasKeyword:HERNKYN_YAEGIR", "modeIs:fighting"],
+          ["operativeHasKeyword:HERNKYN_YAEGIR", "modeIs:retaliating", "operativeHasOrder:Conceal"]
+        ],
+        "then": { "grantWeaponRule": { "weapons": "all", "weaponRule": "Balanced" } }
+      }
+    },
+    {
+      "id": "yaegirs-sp-tough-survivalists",
+      "name": "Tough Survivalists",
+      "type": "strategicPloy",
+      "cost": { "cp": 1 },
+      "duration": "untilStartOfNextTurningPoint",
+      "effect": {
+        "when": "resolveAttackDiceStep",
+        "limit": { "scope": "perTurningPointPerFriendlyOperative", "uses": 1 },
+        "conditions": ["targetHasKeyword:HERNKYN_YAEGIR", "attackDiceInflictsDamageOnTarget"],
+        "then": {
+          "modifyInflictedDamage": {
+            "operation": "halveRoundingUp",
+            "minimum": 2
+          }
+        }
+      }
+    },
+    {
+      "id": "yaegirs-sp-in-position",
+      "name": "In Position",
+      "type": "strategicPloy",
+      "cost": { "cp": 1 },
+      "duration": "untilStartOfNextTurningPoint",
+      "effect": {
+        "when": "enemySelectsValidTargetsForShooting",
+        "conditions": [
+          "targetHasKeyword:HERNKYN_YAEGIR",
+          "targetHasOrder:Conceal",
+          "targetIsInCover"
+        ],
+        "then": {
+          "cannotBeSelectedAsValidTarget": true,
+          "takesPrecedenceOver": ["Seek", "Vantage", "allOtherRules"],
+          "exceptIf": ["attackerWithin2inOfTarget"]
+        }
+      }
+    }
+  ]
+}

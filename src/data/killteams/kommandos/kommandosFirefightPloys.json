@@ -1,0 +1,77 @@
+{
+  "game": "kill-team-2024",
+  "dataset": "firefight-ploys",
+  "killTeam": "Kommandos",
+  "source": {
+    "title": "KOMMANDOS – Team Rules",
+    "pdf": "killteam_teamrules_kommandos_eng_02.10.24.pdf",
+    "section": "FIREFIGHT PLOYS"
+  },
+  "ploys": [
+    {
+      "id": "kommandos-ffp-just-a-scratch",
+      "name": "JUST A SCRATCH",
+      "type": "firefightPloy",
+      "cost": { "cp": 1 },
+      "timing": "firefightPhase",
+      "trigger": {
+        "when": "attackDieInflictsNormalDamage",
+        "target": "friendlyOperative",
+        "requirements": [
+          "targetHasKeyword:KOMMANDO",
+          "targetIsNot:BOMB_SQUIG",
+          "targetIsNot:GROT"
+        ]
+      },
+      "effect": {
+        "ignore": "thatInflictedNormalDamage"
+      }
+    },
+    {
+      "id": "kommandos-ffp-krump-em",
+      "name": "KRUMP ’EM!",
+      "type": "firefightPloy",
+      "cost": { "cp": 1 },
+      "timing": "endOfFirefightPhase",
+      "effect": {
+        "select": { "friendlyOperative": { "keyword": "KOMMANDO" } },
+        "then": "selectedOperativePerformsFreeFightActionImmediately"
+      }
+    },
+    {
+      "id": "kommandos-ffp-kunnin-but-brutal",
+      "name": "KUNNIN’ BUT BRUTAL",
+      "type": "firefightPloy",
+      "cost": { "cp": 1 },
+      "timing": "fightSequence",
+      "trigger": {
+        "when": "friendlyOperativeIsFighting",
+        "requirements": [
+          "operativeHasKeyword:KOMMANDO",
+          "operativeHasOrder:Conceal",
+          "operativePerformedChargeThisActivation",
+          "resolvingFirstAttackDie",
+          "firstAttackDieIsStrikeWithNormalSuccess"
+        ]
+      },
+      "effect": {
+        "treat": "thatNormalSuccessAsCriticalSuccessInstead"
+      }
+    },
+    {
+      "id": "kommandos-ffp-shake-it-off",
+      "name": "SHAKE IT OFF",
+      "type": "firefightPloy",
+      "cost": { "cp": 1 },
+      "timing": "whenOperativeActivatedOrWhenAplChanged",
+      "trigger": {
+        "whenAny": ["friendlyOperativeActivated", "friendlyOperativeAplStatChanged"],
+        "requirements": ["operativeHasKeyword:KOMMANDO"]
+      },
+      "duration": "untilStartOfNextTurningPoint",
+      "effect": {
+        "ignore": "anyChangesToItsAPLStat"
+      }
+    }
+  ]
+}

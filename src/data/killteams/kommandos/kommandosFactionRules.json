@@ -1,0 +1,26 @@
+{
+  "game": "kill-team-2024",
+  "dataset": "faction-rules",
+  "killTeam": "Kommandos",
+  "rules": [
+    {
+      "id": "kommandos-throat-slittas",
+      "name": "Throat Slittas",
+      "type": "factionRule",
+      "appliesTo": {
+        "friendlyKillTeam": "KOMMANDO",
+        "operativeExclusions": ["BOMB SQUIG"]
+      },
+      "effect": {
+        "description": "While it has a Conceal order, each friendly KOMMANDO operative (excluding Bomb Squig) can perform the Charge action.",
+        "grantExtraAllowedAction": {
+          "action": "Charge",
+          "condition": {
+            "operativeHasOrder": "Conceal"
+          }
+        }
+      },
+      "citations": ["FACTION RULE — Kommandos: Throat Slittas"]
+    }
+  ]
+}
