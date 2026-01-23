@@ -3,15 +3,33 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import "./UnitSelector.css";
 import { getOrCreatePlayerId } from "../../lib/playerIdentity";
 import { connectWS } from "../../lib/multiplayer";
+import universalEquipmentData from "../../data/universalEquipment.json";
 
 const killteamModules = import.meta.glob("../../data/killteams/*.json", {
 	eager: true,
 });
 
+const factionEquipmentModules = import.meta.glob(
+	"../../data/killteams/**/**/*FactionEquipment.json",
+	{ eager: true },
+);
+
 function normalizeKillteamData(moduleData) {
 	if (Array.isArray(moduleData)) return moduleData;
 	if (Array.isArray(moduleData?.default)) return moduleData.default;
 	return [];
+}
+
+function normalizeEquipmentData(moduleData) {
+	if (!moduleData) return null;
+	return moduleData?.default || moduleData;
+}
+
+function formatFactionName(key) {
+	if (!key) return "Unknown";
+	return String(key)
+		.replace(/[-_]+/g, " ")
+		.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function UnitSelector() {
@@ -153,6 +171,32 @@ function UnitSelector() {
 		team: "alpha",
 		unitId: null,
 	});
+	const [selectedEquipmentIds, setSelectedEquipmentIds] = useState([]);
+
+	const selectedFactionKey = isSingleSelect
+		? playerArmyKey
+		: activeTeam === "alpha"
+			? resolvedArmyKeyA
+			: resolvedArmyKeyB;
+
+	const universalEquipment = useMemo(() => {
+		const data = normalizeEquipmentData(universalEquipmentData);
+		return Array.isArray(data?.equipment) ? data.equipment : [];
+	}, []);
+
+	const factionEquipment = useMemo(() => {
+		if (!selectedFactionKey) return [];
+		const keyLower = String(selectedFactionKey).toLowerCase();
+		const entry = Object.entries(factionEquipmentModules).find(([path]) => {
+			const normalized = path.toLowerCase();
+			return (
+				normalized.includes(`/${keyLower}/`) ||
+				normalized.includes(`${keyLower}factionequipment`)
+			);
+		});
+		const data = normalizeEquipmentData(entry?.[1]);
+		return Array.isArray(data?.equipment) ? data.equipment : [];
+	}, [selectedFactionKey]);
 
 	const canSelectUnits = isSingleSelect
 		? selectedUnitIdsA.length > 0 && !waitingForOpponent
@@ -288,6 +332,19 @@ function UnitSelector() {
 			.join(", ") || "-";
 	};
 
+	const toggleEquipmentSelection = (equipmentId) => {
+		if (!equipmentId) return;
+		setSelectedEquipmentIds((prev) => {
+			if (prev.includes(equipmentId)) {
+				return prev.filter((id) => id !== equipmentId);
+			}
+			if (prev.length >= 4) return prev;
+			return [...prev, equipmentId];
+		});
+	};
+
+	const isEquipmentAtLimit = selectedEquipmentIds.length >= 4;
+
 	const activeUnits = isSingleSelect
 		? armyUnitsA
 		: activeTeam === "alpha"
@@ -339,27 +396,114 @@ function UnitSelector() {
 					</div>
 				)}
 
-				<div className="unit-selector__grid">
-					{activeUnits.map((unit) => {
-						const isSelected = selectedIds.includes(unit.id);
-						return (
-							<button
-								key={unit.id}
-								className={`unit-selector__tile ${
-									isSelected ? "unit-selector__tile--selected" : ""
-								}`}
-								type="button"
-								onClick={() =>
-									openUnitModal(
-										unit,
-										isSingleSelect ? "alpha" : activeTeam,
-									)
-								}
-							>
-								<span className="unit-selector__tile-name">{unit.name}</span>
-							</button>
-						);
-					})}
+				<div className="unit-selector__sections">
+					<div className="unit-selector__section">
+						<div className="unit-selector__section-title">
+							Units
+							<span className="unit-selector__section-count">
+								{selectedIds.length} selected
+							</span>
+						</div>
+						<div className="unit-selector__section-list">
+							{activeUnits.map((unit) => {
+								const isSelected = selectedIds.includes(unit.id);
+								return (
+									<button
+										key={unit.id}
+										className={`unit-selector__tile ${
+											isSelected ? "unit-selector__tile--selected" : ""
+										}`}
+										type="button"
+										onClick={() =>
+											openUnitModal(
+												unit,
+												isSingleSelect ? "alpha" : activeTeam,
+											)
+										}
+									>
+										<span className="unit-selector__tile-name">{unit.name}</span>
+									</button>
+								);
+							})}
+						</div>
+					</div>
+
+					<div className="unit-selector__section">
+						<div className="unit-selector__section-title">
+							Universal Equipment
+							<span className="unit-selector__section-count">
+								{selectedEquipmentIds.length}/4 selected
+							</span>
+						</div>
+						{universalEquipment.length === 0 ? (
+							<div className="unit-selector__equipment-empty">
+								No universal equipment found.
+							</div>
+						) : (
+							<div className="unit-selector__section-list">
+								{universalEquipment.map((item) => {
+									const isSelected = selectedEquipmentIds.includes(item.id);
+									const isDisabled = !isSelected && isEquipmentAtLimit;
+									return (
+										<button
+											key={item.id || item.name}
+											className={`unit-selector__tile unit-selector__equipment-tile ${
+												isSelected ? "unit-selector__tile--selected" : ""
+											}`}
+											type="button"
+											onClick={() => {
+												if (isDisabled) return;
+												toggleEquipmentSelection(item.id);
+											}}
+										>
+											<div className="unit-selector__equipment-name">{item.name}</div>
+										</button>
+									);
+								})}
+							</div>
+						)}
+					</div>
+					<div className="unit-selector__section">
+						<div className="unit-selector__section-title">
+							Faction Equipment — {formatFactionName(selectedFactionKey)}
+							<span className="unit-selector__section-count">
+								{selectedEquipmentIds.length}/4 selected
+							</span>
+						</div>
+						{selectedFactionKey ? (
+							factionEquipment.length === 0 ? (
+								<div className="unit-selector__equipment-empty">
+									No faction equipment found for this team.
+								</div>
+							) : (
+								<div className="unit-selector__section-list">
+									{factionEquipment.map((item) => {
+										const isSelected = selectedEquipmentIds.includes(item.id);
+										const isDisabled = !isSelected && isEquipmentAtLimit;
+										return (
+											<button
+												key={item.id || item.name}
+												className={`unit-selector__tile unit-selector__equipment-tile ${
+													isSelected ? "unit-selector__tile--selected" : ""
+												}`}
+												type="button"
+												onClick={() => {
+													if (isDisabled) return;
+													toggleEquipmentSelection(item.id);
+												}}
+											>
+												<div className="unit-selector__equipment-name">{item.name}</div>
+											</button>
+										);
+									})}
+								</div>
+							)
+						) : (
+							<div className="unit-selector__equipment-empty">
+								Select a faction to view equipment.
+							</div>
+						)}
+					</div>
 				</div>
 
 				{unitModal.open && modalUnit && (
