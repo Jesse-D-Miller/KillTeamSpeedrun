@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import "./DefenseRollModal.css";
 
 function buildInitialDice(count) {
@@ -23,6 +23,9 @@ function DefenseRollModal({
   const [defenseDice, setDefenseDice] = useState(() =>
     buildInitialDice(defenseDiceCount || 0),
   );
+  const [isRolling, setIsRolling] = useState(false);
+  const rollIntervalRef = useRef(null);
+  const rollTimeoutRef = useRef(null);
 
   const rollDiceNumbers = (count) =>
     Array.from({ length: count }, () => 1 + Math.floor(Math.random() * 6));
@@ -44,8 +47,6 @@ function DefenseRollModal({
       resetDice();
     }
   }, [open, stage, resetDice]);
-
-  if (!open) return null;
 
   const normalizeWeaponRulesList = (wr) => {
     if (!wr || wr === "-") return [];
@@ -99,13 +100,31 @@ function DefenseRollModal({
   const hasDefenseRoll = parseDice(defenseDice).length > 0;
 
   const handleRollClick = () => {
-    if (readOnly) return;
+    if (readOnly || isRolling) return;
     const rolled = rollDiceNumbers(defenseDiceCount || 0);
-    setDefenseDice(rolled.map(String));
-    onSetDefenseRoll?.(rolled);
+    setIsRolling(true);
+    rollIntervalRef.current = setInterval(() => {
+      setDefenseDice(rollDiceNumbers(defenseDiceCount || 0).map(String));
+    }, 100);
+    rollTimeoutRef.current = setTimeout(() => {
+      if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
+      rollIntervalRef.current = null;
+      setIsRolling(false);
+      setDefenseDice(rolled.map(String));
+      onSetDefenseRoll?.(rolled);
+    }, 2000);
   };
 
+  useEffect(() => {
+    return () => {
+      if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
+      if (rollTimeoutRef.current) clearTimeout(rollTimeoutRef.current);
+    };
+  }, []);
+
   const isSummaryStage = stage === "READY_TO_RESOLVE_DAMAGE" || stage === "DONE";
+
+  if (!open) return null;
 
   return (
     <div className="kt-modal">
@@ -131,7 +150,7 @@ function DefenseRollModal({
                 className="kt-modal__btn kt-modal__btn--success"
                 type="button"
                 onClick={handleRollClick}
-                disabled={readOnly}
+                disabled={readOnly || isRolling}
               >
                 Roll
               </button>
@@ -140,7 +159,7 @@ function DefenseRollModal({
               <button
                 className="kt-modal__btn kt-modal__btn--primary"
                 type="button"
-                disabled={readOnly || !hasDefenseRoll}
+                disabled={readOnly || isRolling || !hasDefenseRoll}
                 onClick={() => {
                   const parsed = parseDice(defenseDice);
                   onSetDefenseRoll?.(parsed);
@@ -231,7 +250,7 @@ function DefenseRollModal({
                           className="defense-roll__field"
                           inputMode="numeric"
                           value={value}
-                          disabled={readOnly}
+                          disabled={readOnly || isRolling}
                           onChange={(event) => {
                             const next = [...defenseDice];
                             next[index] = event.target.value;

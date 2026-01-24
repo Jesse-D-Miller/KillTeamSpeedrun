@@ -40,6 +40,9 @@ function DiceInputModal({
   const [defenseDice, setDefenseDice] = useState(() =>
     buildInitialDice(defenseDiceCount),
   );
+  const [isRolling, setIsRolling] = useState(false);
+  const rollIntervalRef = useRef(null);
+  const rollTimeoutRef = useRef(null);
   const [ceaselessApplied, setCeaselessApplied] = useState(false);
   const [accurateSpent, setAccurateSpent] = useState(
     Math.max(
@@ -153,35 +156,55 @@ function DiceInputModal({
   };
 
   const handleRollClick = () => {
-    if (readOnly) return;
+    if (readOnly || isRolling) return;
     const remainingCount = Math.max(
       0,
       Number(attackDiceCount || 0) - Math.max(0, Number(accurateSpent || 0)),
     );
     if (remainingCount <= 0) return;
-    if (combatStage === "ATTACK_ROLLING") {
-      const retained = buildRetainedDice(accurateSpent);
-      const rolled = rollDiceNumbers(remainingCount);
-      const initialAttack = [...retained, ...rolled];
-      const attackAfterCeaseless = initialAttack;
+    setIsRolling(true);
+    const previewDefenseCount = Math.max(0, Number(defenseDiceCount || 0));
+    rollIntervalRef.current = setInterval(() => {
+      setAttackDice(rollDiceNumbers(remainingCount).map(String));
+      if (previewDefenseCount > 0) {
+        setDefenseDice(rollDiceNumbers(previewDefenseCount).map(String));
+      }
+    }, 100);
+    rollTimeoutRef.current = setTimeout(() => {
+      if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
+      rollIntervalRef.current = null;
+      setIsRolling(false);
+      if (combatStage === "ATTACK_ROLLING") {
+        const retained = buildRetainedDice(accurateSpent);
+        const rolled = rollDiceNumbers(remainingCount);
+        const initialAttack = [...retained, ...rolled];
+        const attackAfterCeaseless = initialAttack;
 
-      setAttackDice(rolled.map(String));
-      onSetCombatAttackRoll?.(attackAfterCeaseless, { accurateSpent });
-      setCeaselessApplied(false);
-      lastCeaselessRef.current = null;
-      autoLoggedRef.current = true;
+        setAttackDice(rolled.map(String));
+        onSetCombatAttackRoll?.(attackAfterCeaseless, { accurateSpent });
+        setCeaselessApplied(false);
+        lastCeaselessRef.current = null;
+        autoLoggedRef.current = true;
 
-      onAutoRoll?.({
-        attackBefore: initialAttack,
-        attackAfter: attackAfterCeaseless,
-        defenseDice: [],
-        ceaseless: null,
-      });
-      return;
-    }
+        onAutoRoll?.({
+          attackBefore: initialAttack,
+          attackAfter: attackAfterCeaseless,
+          defenseDice: [],
+          ceaseless: null,
+        });
+        return;
+      }
 
-    applyAutoRoll();
+      applyAutoRoll();
+    }, 2000);
   };
+
+  useEffect(() => {
+    return () => {
+      if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
+      if (rollTimeoutRef.current) clearTimeout(rollTimeoutRef.current);
+    };
+  }, []);
 
   const handleAccurateClick = () => {
     const max = Number(accurateMax || 0);
@@ -539,7 +562,7 @@ function DiceInputModal({
                 className="kt-modal__btn kt-modal__btn--success"
                 type="button"
                 onClick={handleRollClick}
-                disabled={readOnly || hasAttackRoll || remainingAttackDiceCount <= 0}
+                disabled={readOnly || isRolling || hasAttackRoll || remainingAttackDiceCount <= 0}
               >
                 Roll
               </button>
@@ -655,7 +678,7 @@ function DiceInputModal({
                           className="defense-roll__field"
                           inputMode="numeric"
                           value={value}
-                          disabled={readOnly}
+                          disabled={readOnly || isRolling}
                           onChange={(event) => {
                             const next = [...attackDice];
                             next[index] = event.target.value;

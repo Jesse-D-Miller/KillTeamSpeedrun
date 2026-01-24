@@ -34,7 +34,9 @@ function Actions({
       <div className="kt-action-card__label">Actions</div>
       <div className="kt-action-card__body kt-action-card__body--wrap">
         {statusMessage && (
-          <div className="kt-action-card__status">{statusMessage}</div>
+          <div className="kt-action-card__status kt-action-card__status--vertical">
+            {statusMessage}
+          </div>
         )}
         {showActivate && (
           <div className="kt-action-card__activate">

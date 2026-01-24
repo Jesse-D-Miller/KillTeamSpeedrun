@@ -207,6 +207,11 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   });
   const [fightDraggedDie, setFightDraggedDie] = useState(null);
   const [fightSelectedDie, setFightSelectedDie] = useState(null);
+  const [isFightRolling, setIsFightRolling] = useState(false);
+  const [fightRollPreview, setFightRollPreview] = useState({ attacker: [], defender: [] });
+  const fightRollIntervalRef = useRef(null);
+  const fightRollTimeoutRef = useRef(null);
+  const fightRollingRef = useRef(false);
   const [skipToast, setSkipToast] = useState(null);
   const skipToastRef = useRef(null);
   const [tpEndToast, setTpEndToast] = useState(null);
@@ -769,53 +774,94 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   }, [actionFlow?.mode, actionFlow?.step]);
 
   useEffect(() => {
-    if (actionFlow?.mode !== "fight" || actionFlow?.step !== "rollDice") return;
-    if (!bothDiceReady || actionFlow?.locked?.diceRolled) return;
-    if (fightAttacker?.owner !== playerSlot) return;
+    const shouldAnimate =
+      actionFlow?.mode === "fight" &&
+      actionFlow?.step === "rollDice" &&
+      bothDiceReady &&
+      !actionFlow?.locked?.diceRolled;
 
-    const attackerHit = Number(fightAttackerWeapon?.hit ?? 6);
-    const defenderHit = Number(fightDefenderWeapon?.hit ?? 6);
+    if (!shouldAnimate) {
+      setIsFightRolling(false);
+      setFightRollPreview({ attacker: [], defender: [] });
+      fightRollingRef.current = false;
+      if (fightRollIntervalRef.current) clearInterval(fightRollIntervalRef.current);
+      if (fightRollTimeoutRef.current) clearTimeout(fightRollTimeoutRef.current);
+      fightRollIntervalRef.current = null;
+      fightRollTimeoutRef.current = null;
+      return;
+    }
+
+    if (fightRollingRef.current) return;
+    fightRollingRef.current = true;
+    setIsFightRolling(true);
     const attackerAtk = Number(fightAttackerWeapon?.atk ?? 0);
     const defenderAtk = Number(fightDefenderWeapon?.atk ?? 0);
-    const roll = (count) =>
-      Array.from({ length: Math.max(0, count) }, () =>
-        1 + Math.floor(Math.random() * 6),
+    fightRollIntervalRef.current = setInterval(() => {
+      setFightRollPreview({
+        attacker: Array.from({ length: Math.max(0, attackerAtk) }, () => 1 + Math.floor(Math.random() * 6)),
+        defender: Array.from({ length: Math.max(0, defenderAtk) }, () => 1 + Math.floor(Math.random() * 6)),
+      });
+    }, 100);
+
+    fightRollTimeoutRef.current = setTimeout(() => {
+      if (fightRollIntervalRef.current) clearInterval(fightRollIntervalRef.current);
+      fightRollIntervalRef.current = null;
+      fightRollingRef.current = false;
+      setIsFightRolling(false);
+      if (fightAttacker?.owner !== playerSlot) return;
+
+      const attackerHit = Number(fightAttackerWeapon?.hit ?? 6);
+      const defenderHit = Number(fightDefenderWeapon?.hit ?? 6);
+      const roll = (count) =>
+        Array.from({ length: Math.max(0, count) }, () =>
+          1 + Math.floor(Math.random() * 6),
+        );
+      const countResults = (raw, hit) => {
+        const crit = raw.filter((v) => v === 6).length;
+        const norm = raw.filter((v) => v >= hit && v !== 6).length;
+        return { raw, crit, norm };
+      };
+
+      const attackerRaw = roll(attackerAtk);
+      const defenderRaw = roll(defenderAtk);
+      const attackerResults = countResults(attackerRaw, attackerHit);
+      const defenderResults = countResults(defenderRaw, defenderHit);
+      const attackerSuccesses = attackerRaw.filter(
+        (value) => value === 6 || (value >= attackerHit && value !== 6),
       );
-    const countResults = (raw, hit) => {
-      const crit = raw.filter((v) => v === 6).length;
-      const norm = raw.filter((v) => v >= hit && v !== 6).length;
-      return { raw, crit, norm };
+      const defenderSuccesses = defenderRaw.filter(
+        (value) => value === 6 || (value >= defenderHit && value !== 6),
+      );
+
+      dispatchGameEvent("FLOW_ROLL_DICE", {
+        attacker: attackerResults,
+        defender: defenderResults,
+        attackerSuccesses,
+        defenderSuccesses,
+      });
+    }, 2000);
+
+    return () => {
+      if (fightRollIntervalRef.current) clearInterval(fightRollIntervalRef.current);
+      if (fightRollTimeoutRef.current) clearTimeout(fightRollTimeoutRef.current);
+      fightRollIntervalRef.current = null;
+      fightRollTimeoutRef.current = null;
+      fightRollingRef.current = false;
     };
-
-    const attackerRaw = roll(attackerAtk);
-    const defenderRaw = roll(defenderAtk);
-    const attackerResults = countResults(attackerRaw, attackerHit);
-    const defenderResults = countResults(defenderRaw, defenderHit);
-    const attackerSuccesses = attackerRaw.filter(
-      (value) => value === 6 || (value >= attackerHit && value !== 6),
-    );
-    const defenderSuccesses = defenderRaw.filter(
-      (value) => value === 6 || (value >= defenderHit && value !== 6),
-    );
-
-    dispatchGameEvent("FLOW_ROLL_DICE", {
-      attacker: attackerResults,
-      defender: defenderResults,
-      attackerSuccesses,
-      defenderSuccesses,
-    });
   }, [
     actionFlow?.mode,
     actionFlow?.step,
     actionFlow?.locked?.diceRolled,
     bothDiceReady,
-    fightAttacker?.owner,
-    fightAttackerWeapon?.hit,
     fightAttackerWeapon?.atk,
-    fightDefenderWeapon?.hit,
     fightDefenderWeapon?.atk,
+    fightAttackerWeapon?.hit,
+    fightDefenderWeapon?.hit,
+    fightAttacker?.owner,
     playerSlot,
   ]);
+
+  // fight roll handled in animated roll effect
 
   useEffect(() => {
     if (combatState?.stage !== COMBAT_STAGES.DEFENSE_LOCKED) return;
@@ -1440,8 +1486,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
                 <div className="defense-roll__section">
                   <div className="defense-roll__label">Attacker Dice</div>
                   <div className="defense-roll__dice">
-                    {(actionFlow?.dice?.attacker?.raw || []).length > 0
-                      ? actionFlow.dice.attacker.raw.map((value, index) => (
+                    {(isFightRolling ? fightRollPreview.attacker : actionFlow?.dice?.attacker?.raw || []).length > 0
+                      ? (isFightRolling ? fightRollPreview.attacker : actionFlow.dice.attacker.raw).map((value, index) => (
                           <span key={`atk-${index}`} className="defense-roll__die">
                             {value}
                           </span>
@@ -1462,8 +1508,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
                 <div className="defense-roll__section">
                   <div className="defense-roll__label">Defender Dice</div>
                   <div className="defense-roll__dice">
-                    {(actionFlow?.dice?.defender?.raw || []).length > 0
-                      ? actionFlow.dice.defender.raw.map((value, index) => (
+                    {(isFightRolling ? fightRollPreview.defender : actionFlow?.dice?.defender?.raw || []).length > 0
+                      ? (isFightRolling ? fightRollPreview.defender : actionFlow.dice.defender.raw).map((value, index) => (
                           <span key={`def-${index}`} className="defense-roll__die">
                             {value}
                           </span>

@@ -30,6 +30,19 @@
   justify-content: space-between;
 }
 
+.kt-action-card__status {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+.kt-action-card__status--vertical {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  align-self: center;
+}
+
 .kt-action-card__activate {
   display: flex;
   gap: 8px;
