@@ -198,7 +198,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   const [shootModalOpen, setShootModalOpen] = useState(false);
   const [selectedTargetId, setSelectedTargetId] = useState(null);
   const [selectedSecondaryIds, setSelectedSecondaryIds] = useState([]);
-  const autoSelectTargetRef = useRef(false);
   const [allocationModalOpen, setAllocationModalOpen] = useState(false);
   const [pendingAttack, setPendingAttack] = useState(null);
   const [intentGate, setIntentGate] = useState({
@@ -285,6 +284,9 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
     isMyTurn &&
     state.firefight?.activeOperativeId === selectedUnit?.id &&
     !state.firefight?.orderChosenThisActivation;
+  const showTurnGlow =
+    (phase === "FIREFIGHT" && isMyTurn) ||
+    (phase === "STRATEGY" && state.strategy?.turn === loopPlayerId);
   const showActivate =
     isFirefight &&
     isMyTurn &&
@@ -418,22 +420,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
     }
   }, [state.phase, state.setup?.teamsLocked, state.setup?.deploymentComplete, gameCode]);
 
-  useEffect(() => {
-    if (!shootModalOpen) return;
-    if (
-      opponentUnits.length > 0 &&
-      !selectedTargetId &&
-      !autoSelectTargetRef.current
-    ) {
-      setSelectedTargetId(opponentUnits[0].id);
-      autoSelectTargetRef.current = true;
-    }
-  }, [shootModalOpen, opponentUnits, selectedTargetId]);
-
-  useEffect(() => {
-    if (shootModalOpen) return;
-    autoSelectTargetRef.current = false;
-  }, [shootModalOpen]);
 
   useEffect(() => {
     if (!isFirefight) return;
@@ -992,7 +978,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
 
   return (
     <div className="App">
-      <div className="kt-shell">
+      <div className={`kt-shell ${showTurnGlow ? "kt-shell--turn-glow" : ""}`}>
         <aside className="kt-nav">
           <div className="kt-nav__tabs">
             <button
@@ -1064,23 +1050,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
           <main className="kt-detail">
             {tpEndToast && <div className="kt-toast">{tpEndToast}</div>}
             {skipToast && <div className="kt-toast">{skipToast}</div>}
-            {phase === "STRATEGY" && !isStrategyReady && (
-              <div className="kt-setup-warning">
-                Setup not complete. Lock rosters and deploy operatives before
-                Strategy Phase. (Stop trying to cheat.)
-              </div>
-            )}
-            {phase === "FIREFIGHT" && !isFirefightReady && (
-              <div className="kt-setup-warning">
-                Firefight cannot begin yet. Finish Strategy and ready all operatives.
-              </div>
-            )}
-            {phase === "FIREFIGHT" && state.firefight?.activePlayerId && (
-              <div className="kt-firefight-banner">
-                <div>Firefight Phase — TP {turningPoint}</div>
-                <div>Player {state.firefight.activePlayerId} to activate</div>
-              </div>
-            )}
             {selectedUnit ? (
               <>
                 <UnitCard
@@ -1520,7 +1489,13 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
 
       {actionFlow?.mode === "fight" &&
         (actionFlow?.step === "resolve" || actionFlow?.step === "summary") && (
-        <div className="kt-modal">
+        <div
+          className={`kt-modal ${
+            actionFlow?.step === "resolve" && actionFlow?.resolve?.turn
+              ? "kt-modal--turn-glow"
+              : ""
+          }`}
+        >
           <div className="kt-modal__backdrop" />
           <div className="kt-modal__panel">
             <div className="kt-modal__layout">
@@ -1953,6 +1928,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
         stage={combatState?.stage}
         attacker={attackingOperative}
         defender={defendingOperative}
+        weaponProfile={combatState?.weaponProfile || selectedWeapon}
         attackRoll={combatState?.attackRoll}
         combatSummary={combatSummary}
         defenseDiceCount={3}

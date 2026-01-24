@@ -17,6 +17,12 @@
   text-align: left;
 }
 
+.kt-navitem:focus,
+.kt-navitem:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 .kt-navitem--selected {
   border-color: rgba(255, 120, 60, 0.6);
   background: rgba(255, 120, 60, 0.12);

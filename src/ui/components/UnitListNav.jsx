@@ -12,12 +12,21 @@ function UnitListNav({
 	isCounteractActivation = false,
 	canSelectUnit = true,
 }) {
-	const orderedUnits = [...units].sort((a, b) => {
-		const aDead = Number(a.state.woundsCurrent) <= 0;
-		const bDead = Number(b.state.woundsCurrent) <= 0;
-		if (aDead === bDead) return 0;
-		return aDead ? 1 : -1;
-	});
+	const orderedUnits = [...units]
+		.map((unit, index) => ({ unit, index }))
+		.sort((a, b) => {
+			const aDead = Number(a.unit.state.woundsCurrent) <= 0;
+			const bDead = Number(b.unit.state.woundsCurrent) <= 0;
+			const aReady = a.unit.state?.readyState === "READY";
+			const bReady = b.unit.state?.readyState === "READY";
+			const aExpended = a.unit.state?.readyState === "EXPENDED";
+			const bExpended = b.unit.state?.readyState === "EXPENDED";
+			if (aDead !== bDead) return aDead ? 1 : -1;
+			if (aReady !== bReady) return aReady ? -1 : 1;
+			if (aExpended !== bExpended) return aExpended ? -1 : 1;
+			return a.index - b.index;
+		})
+		.map(({ unit }) => unit);
 
 	return (
 		<div className="kt-nav__list">

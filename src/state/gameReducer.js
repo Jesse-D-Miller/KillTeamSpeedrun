@@ -815,6 +815,7 @@ function reduceGameState(state, action) {
 				const safeNormal = Number.isFinite(dmgNormal) ? dmgNormal : 0;
 				const safeCrit = Number.isFinite(dmgCrit) ? dmgCrit : 0;
 				let nextGame = state.game;
+				let autoLog = flow.log || [];
 				let remainingCrit = actorRole === "attacker" ? attacker.crit || 0 : defender.crit || 0;
 				let remainingNorm = actorRole === "attacker" ? attacker.norm || 0 : defender.norm || 0;
 				while (remainingCrit > 0 || remainingNorm > 0) {
@@ -826,6 +827,14 @@ function reduceGameState(state, action) {
 						damage,
 					);
 					nextGame = updatedGame;
+					autoLog = [
+						...autoLog,
+						{
+							id: `${action.meta?.eventId || "auto"}-${actorRole}-auto-${useCrit ? "crit" : "norm"}-${autoLog.length}`,
+							role: actorRole,
+							message: `Auto strike ${useCrit ? "crit" : "norm"} for ${damage} dmg`,
+						},
+					];
 					const updatedOpponent = nextGame.find((unit) => unit.id === opponentUnit.id);
 					if ((updatedOpponent?.state?.woundsCurrent ?? 0) <= 0) break;
 					if (useCrit) remainingCrit -= 1;
@@ -837,7 +846,38 @@ function reduceGameState(state, action) {
 					log: state.log,
 					ui: {
 						...(state.ui || {}),
-						actionFlow: null,
+						actionFlow: {
+							...flow,
+							step: "summary",
+							log: autoLog,
+							locked: {
+								...(flow.locked || {}),
+								diceRolled: true,
+							},
+							dice: {
+								attacker: {
+									raw: attacker.raw || [],
+									crit: Number(attacker.crit || 0),
+									norm: Number(attacker.norm || 0),
+								},
+								defender: {
+									raw: defender.raw || [],
+									crit: Number(defender.crit || 0),
+									norm: Number(defender.norm || 0),
+								},
+							},
+							remainingDice: {
+								attacker: [],
+								defender: [],
+							},
+							remaining: {
+								attacker: { crit: 0, norm: 0 },
+								defender: { crit: 0, norm: 0 },
+							},
+							resolve: {
+								turn: null,
+							},
+						},
 					},
 				};
 			}
@@ -961,13 +1001,16 @@ function reduceGameState(state, action) {
 			const nextActorRemaining = countDiceTypes(nextActorDice);
 			let nextOpponentRemaining = countDiceTypes(nextOpponentDice);
 
+			let opponentIncapacitated = false;
 			if (actionType === "strike") {
-				const { nextGame: updatedGame, actualDamage } = applyDamageNoLog(
+				const { nextGame: updatedGame } = applyDamageNoLog(
 					{ ...state, game: nextGame },
 					opponentUnit.id,
 					damage,
 				);
 				nextGame = updatedGame;
+				const updatedOpponent = nextGame.find((unit) => unit.id === opponentUnit.id);
+				opponentIncapacitated = (updatedOpponent?.state?.woundsCurrent ?? 0) <= 0;
 			}
 
 			const attackerRemaining =
@@ -994,7 +1037,7 @@ function reduceGameState(state, action) {
 				},
 			};
 
-			if (attackerCount === 0 && defenderCount === 0) {
+			if (opponentIncapacitated || (attackerCount === 0 && defenderCount === 0)) {
 				return {
 					...state,
 					game: nextGame,

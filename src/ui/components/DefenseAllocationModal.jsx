@@ -209,6 +209,51 @@ function DefenseAllocationModal({
     reset();
   };
 
+  const renderUnitTile = (unit, label) => {
+    if (!unit) return null;
+    const woundsMax = Number(unit.stats?.woundsMax ?? 0);
+    const woundsCurrent = Number(unit.state?.woundsCurrent ?? 0);
+    const pct =
+      woundsMax === 0 ? 0 : Math.max(0, Math.min(100, (woundsCurrent / woundsMax) * 100));
+    const injured = woundsCurrent < woundsMax / 2;
+    return (
+      <div className="kt-modal__tile">
+        <div className="kt-modal__tile-name">
+          {label}: {unit.name}
+        </div>
+        <div className="kt-modal__tile-sub">
+          W {woundsCurrent}/{woundsMax}
+        </div>
+        <div className="kt-modal__bar">
+          <div
+            className={`kt-modal__bar-fill ${injured ? "kt-modal__bar-fill--injured" : ""}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  const normalizeWeaponRulesList = (wr) => {
+    if (!wr || wr === "-") return [];
+    return Array.isArray(wr) ? wr : [wr];
+  };
+
+  const formatWeaponRules = (wr) => {
+    const list = normalizeWeaponRulesList(wr)
+      .map((rule) => {
+        if (!rule) return "";
+        if (typeof rule === "string") return rule;
+        const id = rule.id || "";
+        const value =
+          rule.value !== undefined && rule.value !== null ? ` ${rule.value}` : "";
+        const note = rule.note ? ` (${rule.note})` : "";
+        return `${id}${value}${note}`.trim();
+      })
+      .filter(Boolean);
+    return list.length ? list.join(", ") : "-";
+  };
+
   return (
     <div className="kt-modal">
       <div
@@ -261,6 +306,34 @@ function DefenseAllocationModal({
                 {attacker?.name || "Attacker"} — {weapon?.name || "Weapon"} vs {defender?.name || "Defender"}
               </div>
             </div>
+
+            <div className="kt-modal__grid">
+              {renderUnitTile(attacker, "Attacker")}
+              {renderUnitTile(defender, "Defender")}
+            </div>
+
+            {weapon && (
+              <table className="kt-table fight-weapon__table">
+                <thead>
+                  <tr>
+                    <th className="left">NAME</th>
+                    <th>ATK</th>
+                    <th>HIT</th>
+                    <th>DMG</th>
+                    <th className="left">WR</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="kt-row kt-row--selected">
+                    <td className="left">{weapon.name}</td>
+                    <td>{weapon.atk}</td>
+                    <td>{weapon.hit}+</td>
+                    <td>{weapon.dmg}</td>
+                    <td className="left">{formatWeaponRules(weapon.wr)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
 
             <div className="allocation">
               <div className="allocation__block">

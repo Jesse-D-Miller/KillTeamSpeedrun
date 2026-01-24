@@ -13,6 +13,7 @@ function DefenseRollModal({
   attackRoll,
   combatSummary,
   defenseDiceCount,
+  weaponProfile,
   onSetDefenseRoll,
   onLockDefense,
   onClose,
@@ -46,10 +47,56 @@ function DefenseRollModal({
 
   if (!open) return null;
 
+  const normalizeWeaponRulesList = (wr) => {
+    if (!wr || wr === "-") return [];
+    return Array.isArray(wr) ? wr : [wr];
+  };
+
+  const formatWeaponRules = (wr) => {
+    const list = normalizeWeaponRulesList(wr)
+      .map((rule) => {
+        if (!rule) return "";
+        if (typeof rule === "string") return rule;
+        const id = rule.id || "";
+        const value =
+          rule.value !== undefined && rule.value !== null ? ` ${rule.value}` : "";
+        const note = rule.note ? ` (${rule.note})` : "";
+        return `${id}${value}${note}`.trim();
+      })
+      .filter(Boolean);
+    return list.length ? list.join(", ") : "-";
+  };
+
+  const renderUnitTile = (unit, label) => {
+    if (!unit) return null;
+    const woundsMax = Number(unit.stats?.woundsMax ?? 0);
+    const woundsCurrent = Number(unit.state?.woundsCurrent ?? 0);
+    const pct =
+      woundsMax === 0 ? 0 : Math.max(0, Math.min(100, (woundsCurrent / woundsMax) * 100));
+    const injured = woundsCurrent < woundsMax / 2;
+    return (
+      <div className="kt-modal__tile">
+        <div className="kt-modal__tile-name">
+          {label}: {unit.name}
+        </div>
+        <div className="kt-modal__tile-sub">
+          W {woundsCurrent}/{woundsMax}
+        </div>
+        <div className="kt-modal__bar">
+          <div
+            className={`kt-modal__bar-fill ${injured ? "kt-modal__bar-fill--injured" : ""}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+    );
+  };
+
   const parseDice = (dice) =>
     dice
       .map((value) => Number(value))
       .filter((value) => Number.isFinite(value) && value >= 1 && value <= 6);
+  const hasDefenseRoll = parseDice(defenseDice).length > 0;
 
   const handleRollClick = () => {
     if (readOnly) return;
@@ -93,7 +140,7 @@ function DefenseRollModal({
               <button
                 className="kt-modal__btn kt-modal__btn--primary"
                 type="button"
-                disabled={readOnly}
+                disabled={readOnly || !hasDefenseRoll}
                 onClick={() => {
                   const parsed = parseDice(defenseDice);
                   onSetDefenseRoll?.(parsed);
@@ -112,6 +159,34 @@ function DefenseRollModal({
               </div>
               {statusMessage && <div className="kt-modal__subtitle">{statusMessage}</div>}
             </div>
+
+            <div className="kt-modal__grid">
+              {renderUnitTile(attacker, "Attacker")}
+              {renderUnitTile(defender, "Defender")}
+            </div>
+
+            {weaponProfile && (
+              <table className="kt-table fight-weapon__table">
+                <thead>
+                  <tr>
+                    <th className="left">NAME</th>
+                    <th>ATK</th>
+                    <th>HIT</th>
+                    <th>DMG</th>
+                    <th className="left">WR</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="kt-row kt-row--selected">
+                    <td className="left">{weaponProfile.name}</td>
+                    <td>{weaponProfile.atk}</td>
+                    <td>{weaponProfile.hit}+</td>
+                    <td>{weaponProfile.dmg}</td>
+                    <td className="left">{formatWeaponRules(weaponProfile.wr)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
 
             {isSummaryStage ? (
               <div className="defense-roll__section">

@@ -352,6 +352,73 @@ function DiceInputModal({
     Number(attackDiceCount || 0) - Math.max(0, Number(accurateSpent || 0)),
   );
 
+  const normalizeWeaponRulesList = (wr) => {
+    if (!wr || wr === "-") return [];
+    return Array.isArray(wr) ? wr : [wr];
+  };
+
+  const formatWeaponRules = (wr) => {
+    const list = normalizeWeaponRulesList(wr)
+      .map((rule) => {
+        if (!rule) return "";
+        if (typeof rule === "string") return rule;
+        const id = rule.id || "";
+        const value =
+          rule.value !== undefined && rule.value !== null ? ` ${rule.value}` : "";
+        const note = rule.note ? ` (${rule.note})` : "";
+        return `${id}${value}${note}`.trim();
+      })
+      .filter(Boolean);
+    return list.length ? list.join(", ") : "-";
+  };
+
+  const renderUnitTile = (unit, label, weapon) => {
+    if (!unit) return null;
+    const woundsMax = Number(unit.stats?.woundsMax ?? 0);
+    const woundsCurrent = Number(unit.state?.woundsCurrent ?? 0);
+    const pct =
+      woundsMax === 0 ? 0 : Math.max(0, Math.min(100, (woundsCurrent / woundsMax) * 100));
+    const injured = woundsCurrent < woundsMax / 2;
+    return (
+      <div className="kt-modal__tile">
+        <div className="kt-modal__tile-name">
+          {label}: {unit.name}
+        </div>
+        {weapon ? (
+          <table className="kt-table fight-weapon__table">
+            <thead>
+              <tr>
+                <th className="left">NAME</th>
+                <th>ATK</th>
+                <th>HIT</th>
+                <th>DMG</th>
+                <th className="left">WR</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="kt-row kt-row--selected">
+                <td className="left">{weapon.name}</td>
+                <td>{weapon.atk}</td>
+                <td>{weapon.hit}+</td>
+                <td>{weapon.dmg}</td>
+                <td className="left">{formatWeaponRules(weapon.wr)}</td>
+              </tr>
+            </tbody>
+          </table>
+        ) : null}
+        <div className="kt-modal__tile-sub">
+          W {woundsCurrent}/{woundsMax}
+        </div>
+        <div className="kt-modal__bar">
+          <div
+            className={`kt-modal__bar-fill ${injured ? "kt-modal__bar-fill--injured" : ""}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+    );
+  };
+
   // ✅ NEW: lock-in handler that procs Devastating (and any future lock-in rules)
   const handleLockInAttackClick = () => {
     if (readOnly) return;
@@ -526,7 +593,7 @@ function DiceInputModal({
                 <button
                   className="kt-modal__btn kt-modal__btn--primary"
                   type="button"
-                  disabled={combatStage !== "ATTACK_ROLLING"}
+                  disabled={combatStage !== "ATTACK_ROLLING" || !hasAttackRoll}
                   onClick={handleLockInAttackClick}
                 >
                   Lock In Attack
@@ -543,6 +610,11 @@ function DiceInputModal({
               {statusMessage && (
                 <div className="kt-modal__subtitle">{statusMessage}</div>
               )}
+            </div>
+
+            <div className="kt-modal__grid">
+              {renderUnitTile(attacker, "Attacker", weaponProfile)}
+              {renderUnitTile(defender, "Defender", null)}
             </div>
 
             {isSummaryStage && combatSummary && (
