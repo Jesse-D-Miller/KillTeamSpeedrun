@@ -21,7 +21,7 @@ body,
 
 .kt-shell {
   display: grid;
-  grid-template-columns: minmax(240px, 320px) 1fr;
+  grid-template-columns: 1fr;
   gap: 12px;
   height: 100%;
 }
@@ -43,7 +43,7 @@ body,
 
 .kt-main {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr;
   gap: 12px;
   min-height: 0;
 }
@@ -117,6 +117,19 @@ body,
 .kt-detail {
   min-height: 0;
   overflow: auto;
+}
+
+
+.kt-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 900px) {
+  .kt-card-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .kt-empty {

@@ -12,6 +12,7 @@ function UnitCard({
   dispatch,
   canChooseOrder = false,
   onChooseOrder = null,
+  onCardClick = null,
 }) {
   if (!unit) return null;
 
@@ -40,7 +41,16 @@ function UnitCard({
     return Number.isNaN(parsed) ? null : parsed;
   };
 
-  const { name, stats, state, weapons = [], rules = [], abilities = [] } = unit;
+  const resolveUnitImage = (image) => {
+    if (!image) return null;
+    if (typeof image !== "string") return null;
+    if (image.startsWith("http://") || image.startsWith("https://")) return image;
+    if (image.startsWith("/")) return image;
+    if (image.startsWith("public/")) return `/${image.slice("public/".length)}`;
+    return `/${image}`;
+  };
+
+  const { name, stats, state, weapons = [], rules = [], abilities = [], image } = unit;
 
   const isUnitInjured = isInjured(unit);
   const baseMove = toNumber(stats.move);
@@ -58,12 +68,53 @@ function UnitCard({
   const selectedWeapon =
     weapons.find((w) => w.name === selectedWeaponName) || weapons[0];
 
+  const unitImage = resolveUnitImage(image);
+  const readyState = unit.state?.readyState;
+  const isActive = unit.state?.isActive === true || readyState === "ACTIVE";
+  const statusClass = isActive
+    ? "active"
+    : readyState === "EXPENDED"
+      ? "expended"
+      : readyState === "READY"
+        ? "ready"
+        : "idle";
+
+  const handleCardClick = (event) => {
+    if (!onCardClick) return;
+    if (event.defaultPrevented) return;
+    const interactive = event.target.closest(
+      "button, a, input, select, textarea, [role='button']",
+    );
+    if (interactive) return;
+    onCardClick(unit);
+  };
+
   return (
-    <article className={`kt-card ${isUnitInjured ? "kt-card--injured" : ""}`}>
+    <article
+      className={`kt-card ${isUnitInjured ? "kt-card--injured" : ""} ${
+        onCardClick ? "kt-card--clickable" : ""
+      }`}
+      onClick={handleCardClick}
+    >
       {/* Header */}
       <header className="kt-card__header">
         <div className="kt-card__title">
-          <div className="kt-card__name">{name.toUpperCase()}</div>
+          <div className="kt-card__portrait">
+            {unitImage ? (
+              <img
+                className="kt-card__portrait-img"
+                src={unitImage}
+                alt={name}
+                loading="lazy"
+              />
+            ) : (
+              <div className="kt-card__portrait-fallback" aria-hidden="true" />
+            )}
+
+            <div className="kt-card__namebar">
+              <div className="kt-card__name">{name.toUpperCase()}</div>
+            </div>
+          </div>
         </div>
 
         <div className="kt-card__stats">
@@ -92,48 +143,7 @@ function UnitCard({
             <div className="statbox__sub">/ {stats.woundsMax}</div>
           </div>
         </div>
-      </header>
-
-      {/* Wounds bar */}
-      <div className="wounds">
-        <div className="wounds__top">
-          <span className="wounds__label">Wounds</span>
-          <span className="wounds__value">
-            {state.woundsCurrent}/{stats.woundsMax}
-          </span>
-        </div>
-
-        <div className="wounds__bar">
-          <div
-            className="wounds__fill"
-            style={{ width: `${safeWoundsPct}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Wounds controls */}
-      <section className="kt-card__controls">
-        <button
-          className="btn"
-          onClick={() =>
-            dispatch({
-              type: "DAMAGE_UNIT",
-              payload: { id: unit.id, amount: 1 },
-            })
-          }
-        >
-          -1
-        </button>
-        <button
-          className="btn"
-          onClick={() =>
-            dispatch({ type: "HEAL_UNIT", payload: { id: unit.id, amount: 1 } })
-          }
-        >
-          +1
-        </button>
-
-        <div className="kt-card__status">
+        <div className="kt-dark-header-meta">
           <button
             className={`pill pill--clickable ${
               state.order === "conceal" ? "pill--blue" : "pill--orange"
@@ -157,8 +167,22 @@ function UnitCard({
           >
             {state.order.toUpperCase()}
           </button>
-          {isUnitInjured && <span className="pill pill--red">INJURED</span>}
+          <span className={`kt-dark-status-light kt-dark-status-light--${statusClass}`} />
         </div>
+      </header>
+
+      {/* Wounds bar */}
+      <div className="wounds">
+        <div className="wounds__bar">
+          <div className="wounds__fill" style={{ width: `${safeWoundsPct}%` }} />
+          <span className="wounds__value">
+            {state.woundsCurrent}/{stats.woundsMax}
+          </span>
+        </div>
+      </div>
+      
+      <section className="kt-card__controls">
+        {isUnitInjured && <span className="pill pill--red">INJURED</span>}
       </section>
 
       {/* Weapons table */}
@@ -182,14 +206,6 @@ function UnitCard({
                 <tr
                   key={w.name}
                   className={`kt-row ${isSelected ? "kt-row--selected" : ""}`}
-                  onClick={() =>
-                    dispatch({
-                      type: "SET_SELECTED_WEAPON",
-                      payload: { id: unit.id, weaponName: w.name },
-                    })
-                  }
-                  role="button"
-                  tabIndex={0}
                 >
                   <td className="left">{w.name}</td>
                   <td>{w.atk}</td>
@@ -201,9 +217,7 @@ function UnitCard({
                       effectiveHit,
                     );
                     return (
-                      <td className={hitDeltaClass}>
-                        {effectiveHit ?? w.hit}+
-                      </td>
+                      <td className={hitDeltaClass}>{effectiveHit ?? w.hit}+</td>
                     );
                   })()}
                   <td>{w.dmg}</td>

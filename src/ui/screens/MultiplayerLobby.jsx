@@ -286,10 +286,12 @@ function MultiplayerLobby() {
 
   return (
     <div className="lobby-screen">
+        <div className="lobby-logo">
+          <img src="public/killteamSpeedrunLogo.png" alt="Kill Team Speedrun" />
+        </div>
       <div className="lobby-panel">
         {uiState.phase === "start" && (
           <>
-            <h1 className="lobby-title">Multiplayer</h1>
             <div className="lobby-actions">
               <button className="lobby-btn lobby-btn--primary" onClick={handleCreate}>
                 Create game
@@ -300,6 +302,7 @@ function MultiplayerLobby() {
                   setUiState((prev) => ({
                     ...prev,
                     phase: "join",
+                    slot: "B",
                   }))
                 }
               >
@@ -311,7 +314,9 @@ function MultiplayerLobby() {
 
         {uiState.phase === "join" && (
           <>
-            <h1 className="lobby-title">Join game</h1>
+            <h1 className="lobby-title">
+              {uiState.slot === "A" ? "Create game" : "Join game"}
+            </h1>
             <div className="lobby-field">
               <label htmlFor="game-code">Game code</label>
               <input
@@ -325,25 +330,6 @@ function MultiplayerLobby() {
                 }
                 placeholder="K7F3"
               />
-            </div>
-            <div className="lobby-field">
-              <label>Slot</label>
-              <div className="lobby-slot-row">
-                {["A", "B"].map((slot) => (
-                  <button
-                    key={slot}
-                    className={`lobby-slot ${uiState.slot === slot ? "lobby-slot--active" : ""}`}
-                    onClick={() =>
-                      setUiState((prev) => ({
-                        ...prev,
-                        slot,
-                      }))
-                    }
-                  >
-                    Player {slot}
-                  </button>
-                ))}
-              </div>
             </div>
             <div className="lobby-field">
               <label htmlFor="player-name">Display name</label>

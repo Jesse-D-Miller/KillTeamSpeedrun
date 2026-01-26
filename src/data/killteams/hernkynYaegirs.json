@@ -2,6 +2,7 @@
   {
     "id": "yaegir-theyn",
     "name": "Yaegir Theyn",
+    "image": "public/unitTitleYaegirTheyn.png",
     "role": "Leader",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 9 },
     "state": {
@@ -60,6 +61,7 @@
   {
     "id": "yaegir-bladekyn",
     "name": "Yaegir Bladekyn",
+    "image": "public/unitTitleYaegirBladekyn.png",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
     "state": {
@@ -102,6 +104,7 @@
   {
     "id": "yaegir-bombast",
     "name": "Yaegir Bombast",
+    "image": "public/unitTitleYaegirBombast.png",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
     "state": {
@@ -144,6 +147,7 @@
   {
     "id": "yaegir-gunner",
     "name": "Yaegir Gunner",
+    "image": "public/unitTitleYaegirGunner.png",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
     "state": {
@@ -198,6 +202,7 @@
   {
     "id": "yaegir-ironbraek",
     "name": "Yaegir Ironbraek",
+    "image": "public/unitTitleYaegirIronbraek.png",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
     "state": {
@@ -240,6 +245,7 @@
   {
     "id": "yaegir-riflekyn",
     "name": "Yaegir Riflekyn",
+    "image": "public/unitTitleYaegirRiflekyn.png",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
     "state": {
@@ -298,6 +304,7 @@
   {
     "id": "yaegir-tracker",
     "name": "Yaegir Tracker",
+    "image": "public/unitTitleYaegirTracker.png",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
     "state": {
@@ -348,6 +355,7 @@
   {
     "id": "yaegir-warrior-1",
     "name": "Yaegir Warrior",
+    "image": "public/unitTitleYaegirWarrior.png",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
     "state": {
@@ -409,6 +417,7 @@
   {
     "id": "yaegir-warrior-2",
     "name": "Yaegir Warrior",
+    "image": "public/unitTitleYaegirWarrior.png",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
     "state": {
@@ -470,6 +479,7 @@
   {
     "id": "yaegir-warrior-3",
     "name": "Yaegir Warrior",
+    "image": "public/unitTitleYaegirWarrior.png",
     "role": "Operative",
     "stats": { "apl": 2, "move": 5, "save": 4, "woundsMax": 8 },
     "state": {

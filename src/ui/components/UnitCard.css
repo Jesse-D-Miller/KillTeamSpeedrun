@@ -1,93 +1,230 @@
-/* UnitCard.css */
+/* UnitCard.css — Dark Datacard Style */
 
 :root {
-  --kt-border: rgba(255, 255, 255, 0.12);
-  --kt-text: rgba(255, 255, 255, 0.92);
-  --kt-dim: rgba(255, 255, 255, 0.7);
+  --kt-bg-1: #1a1c21;
+  --kt-bg-2: #121317;
 
-  --kt-accent: rgba(255, 120, 60, 0.85);
-  --kt-accent-soft: rgba(255, 120, 60, 0.18);
+  --kt-surface: #1f2229;
+  --kt-surface-2: #262a33;
 
-  --kt-radius: 12px;
+  --kt-border: rgba(255, 255, 255, 0.08);
+  --kt-border-strong: rgba(255, 255, 255, 0.16);
 
-  /* tighter type for grid */
-  --fs-name: clamp(0.95rem, 1.2vw, 1.05rem);
-  --fs-base: clamp(0.78rem, 1vw, 0.9rem);
-  --fs-small: clamp(0.68rem, 0.9vw, 0.78rem);
+  --kt-text: rgba(242, 244, 248, 0.92);
+  --kt-text-strong: rgba(255, 255, 255, 0.98);
+  --kt-dim: rgba(200, 205, 214, 0.72);
+
+  --kt-accent: #f05a2b;
+  --kt-accent-soft: rgba(240, 90, 43, 0.18);
+  --kt-accent-strong: rgba(240, 90, 43, 0.45);
+
+  --kt-green: rgba(92, 220, 135, 0.9);
+  --kt-red: rgba(255, 95, 95, 0.95);
+
+  --kt-radius: 10px;
+
+  --fs-name: clamp(0.95rem, 1.4vw, 1.15rem);
+  --fs-base: clamp(0.8rem, 1.1vw, 0.95rem);
+  --fs-small: clamp(0.7rem, 1vw, 0.82rem);
+
+  /* “Datacard” header sizing */
+  --kt-header-h: 100px;
+  --kt-portrait-h: 75%; 
 }
+
+/* ---------- Card Shell ---------- */
 
 .kt-card {
   width: 100%;
   margin: 0;
-  min-width: 0; /* crucial in grid */
+  min-width: 0;
   border-radius: var(--kt-radius);
   border: 1px solid var(--kt-border);
-  background: linear-gradient(
-    180deg,
-    rgba(20, 20, 22, 0.92),
-    rgba(14, 14, 16, 0.92)
-  );
+  background: linear-gradient(180deg, var(--kt-bg-1) 0%, var(--kt-bg-2) 100%);
   color: var(--kt-text);
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.52);
   overflow: hidden;
 
-  /* Make the card behave in a grid */
   display: flex;
   flex-direction: column;
 }
 
-/* ---------- Header ---------- */
+.kt-card--clickable {
+  cursor: pointer;
+}
+
+/* ---------- Header (Datacard vibe) ---------- */
 
 .kt-card__header {
+  height: var(--kt-header-h);
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 8px;
-  padding: 10px 10px 8px;
-  border-bottom: 2px solid var(--kt-accent);
+   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 2px;
+  padding: 0;
+  background: #0f1116;
+  border-bottom: none;
+  position: relative;
+}
+
+.kt-dark-header-meta {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 2;
+}
+
+.kt-dark-status-light {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.2);
+}
+
+.kt-dark-status-light--ready {
+  background: rgba(92, 220, 135, 0.95);
+  box-shadow: 0 0 8px rgba(92, 220, 135, 0.6);
+}
+
+.kt-dark-status-light--active {
+  background: rgba(120, 200, 255, 0.95);
+  box-shadow: 0 0 8px rgba(120, 200, 255, 0.6);
+}
+
+.kt-dark-status-light--expended {
+  background: rgba(255, 170, 80, 0.95);
+  box-shadow: 0 0 8px rgba(255, 170, 80, 0.6);
+}
+
+.kt-dark-status-light--idle {
+  background: rgba(180, 180, 180, 0.6);
+  box-shadow: 0 0 6px rgba(180, 180, 180, 0.35);
+}
+
+/* Left title/portrait block */
+.kt-card__title {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.kt-card__portrait {
+  position: relative;
+  height: 100%;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--kt-border-strong);
+  background: radial-gradient(
+      120% 120% at 20% 10%,
+      rgba(240, 90, 43, 0.18),
+      transparent 55%
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.18));
+}
+
+.kt-card__portrait-img {
+  position: absolute;
+  inset: 0;
+  height: var(--kt-portrait-h);
+  width: 100%;
+  object-fit: cover;
+  object-position: 95% 20%; /* center X, bias up so heads don’t get guillotined */
+  display: block;
+}
+
+
+/* Fallback if no image (still looks intentional) */
+.kt-card__portrait-fallback {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+      90% 90% at 30% 20%,
+      rgba(255, 255, 255, 0.08),
+      transparent 60%
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(0, 0, 0, 0.22));
+}
+
+/* Name bar overlays bottom of portrait area (KT card vibe) */
+.kt-card__namebar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(100% - var(--kt-portrait-h));
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  background: linear-gradient(
+    180deg,
+    rgba(10, 12, 16, 0.25),
+    rgba(10, 12, 16, 0.92)
+  );
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .kt-card__name {
+  min-width: 0;
   font-weight: 950;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
   font-size: var(--fs-name);
   line-height: 1.05;
   text-transform: uppercase;
+  color: var(--kt-text-strong);
 
-  /* stop long names wrecking the grid */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+
+  /* subtle “print” feel */
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
 }
 
-/* Stats: wrap instead of forcing one long row */
+/* Stats block */
 .kt-card__stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
+  gap: 2px;
+  align-content: end;
 }
 
 @media (max-width: 360px) {
+  .kt-card__header {
+    height: 132px;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
   .kt-card__stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
+/* ---------- Stat Boxes ---------- */
+
 .statbox {
   min-width: 0;
-  padding: 6px 6px 5px;
-  border-radius: 10px;
-  table-layout: fixed;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 6px 2px 6px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(0, 0, 0, 0.12));
+  border: 1px solid var(--kt-border-strong);
   text-align: center;
+  color: var(--kt-text-strong);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
 }
 
 .statbox__label {
   overflow-wrap: anywhere;
   font-size: var(--fs-small);
-  opacity: 0.75;
-  font-weight: 800;
-  letter-spacing: 0.04em;
+  opacity: 0.88;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: rgba(240, 200, 188, 0.9);
+  text-transform: uppercase;
 }
 
 .statbox__value {
@@ -98,61 +235,55 @@
 
 .statbox__sub {
   font-size: var(--fs-small);
-  opacity: 0.75;
+  opacity: 0.82;
   margin-top: 1px;
 }
 
 .stat--up {
-  color: rgba(120, 255, 140, 0.95);
+  color: var(--kt-green);
 }
 .stat--down {
-  color: rgba(255, 110, 110, 0.95);
+  color: var(--kt-red);
 }
 
 /* ---------- Wounds ---------- */
 
 .wounds {
-  padding: 8px 10px 10px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.wounds__top {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 6px;
-  font-size: var(--fs-base);
-  opacity: 0.95;
-}
-
-.wounds__label {
-  opacity: 0.75;
-  font-weight: 800;
-  letter-spacing: 0.02em;
+  padding: 0.25rem;
+  border-bottom: none;
 }
 
 .wounds__value {
   font-weight: 950;
+  position: relative;
+  z-index: 2;
+  font-size: var(--fs-small);
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
 }
 
 .wounds__bar {
-  height: 9px;
-  border-radius: 999px;
+  height: 18px;
   background: rgba(255, 255, 255, 0.08);
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--kt-text-strong);
 }
 
 .wounds__fill {
-  height: 100%;
+  position: absolute;
+  inset: 0;
   width: 0%;
-  background: rgba(120, 255, 140, 0.75);
-  transition:
-    width 140ms ease-out,
-    filter 140ms ease-out;
+  background: var(--kt-green);
+  transition: width 140ms ease-out, filter 140ms ease-out;
 }
 
 .kt-card--injured .wounds__fill {
-  background: rgba(255, 90, 90, 0.8);
+  background: var(--kt-red);
 }
 
 /* ---------- Controls ---------- */
@@ -161,17 +292,19 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 8px 10px;
+  padding: 10px 14px;
   align-items: center;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--kt-border);
+  margin-top: auto;
+  order: 10;
 }
 
 .btn {
-  border-radius: 10px;
+  border-radius: 8px;
   padding: 7px 9px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--kt-border-strong);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.12));
+  color: var(--kt-text);
   cursor: pointer;
   font-size: var(--fs-small);
   font-weight: 900;
@@ -181,13 +314,14 @@
 }
 
 .btn:hover {
-  background: rgba(255, 255, 255, 0.12);
+  filter: brightness(1.08);
 }
+
 .btn--ghost {
   background: transparent;
 }
 
-/* status pills tucked to the right */
+/* Status pills */
 .kt-card__status {
   display: flex;
   gap: 6px;
@@ -201,69 +335,40 @@
   font-size: var(--fs-small);
   font-weight: 950;
   letter-spacing: 0.05em;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid var(--kt-border-strong);
   background: rgba(255, 255, 255, 0.06);
   white-space: nowrap;
 }
+
 .pill--clickable {
   cursor: pointer;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.12);
 }
+
 .pill--clickable:hover {
-  filter: brightness(1.1);
+  filter: brightness(1.12);
 }
 
 .pill--blue {
-  border-color: rgba(80, 180, 255, 0.35);
-  background: rgba(80, 180, 255, 0.14);
+  border-color: rgba(96, 140, 220, 0.7);
+  background: rgba(96, 140, 220, 0.2);
 }
+
 .pill--orange {
-  border-color: rgba(255, 170, 80, 0.35);
-  background: rgba(255, 170, 80, 0.14);
+  border-color: rgba(240, 90, 43, 0.8);
+  background: rgba(240, 90, 43, 0.24);
 }
+
 .pill--red {
-  border-color: rgba(255, 80, 80, 0.35);
-  background: rgba(255, 80, 80, 0.14);
-}
-
-/* ---------- The "loose buttons" fix ---------- */
-/* These are the 3 buttons you render directly under controls.
-   In a grid layout, they need structure. This turns them into a neat row. */
-.kt-card > .btn {
-  margin: 0 10px 8px;
-  width: calc(100% - 20px);
-}
-
-/* make them 3-up when there's room */
-@media (min-width: 520px) {
-  .kt-card > .btn {
-    width: auto;
-    margin: 0;
-  }
-  /* Wrap them as a row using a pseudo container effect */
-  .kt-card > .btn:nth-of-type(1),
-  .kt-card > .btn:nth-of-type(2),
-  .kt-card > .btn:nth-of-type(3) {
-    /* these are your first 3 direct-child buttons */
-    display: inline-flex;
-  }
-
-  /* add spacing around the "actions row" area */
-  .kt-card > .btn:nth-of-type(1) {
-    margin: 8px 0 8px 10px;
-  }
-  .kt-card > .btn:nth-of-type(2),
-  .kt-card > .btn:nth-of-type(3) {
-    margin: 8px 0 8px 6px;
-  }
+  border-color: rgba(255, 95, 95, 0.72);
+  background: rgba(255, 95, 95, 0.2);
 }
 
 /* ---------- Weapons / Rules / Abilities ---------- */
 
-/* Key trick: cap the “info area” so cards stay similar height in a grid */
 .kt-card__section {
-  padding: 10px;
+  padding: 12px 4px;
   font-size: var(--fs-base);
   line-height: 1.25;
   overflow: auto;
@@ -271,10 +376,9 @@
 }
 
 .kt-card__sectionline {
-  height: 2px;
-  background: var(--kt-accent);
-  margin-bottom: 8px;
-  opacity: 0.9;
+  height: 0;
+  margin-bottom: 0;
+  opacity: 0;
 }
 
 .kt-table {
@@ -282,16 +386,19 @@
   border-collapse: collapse;
   font-size: var(--fs-base);
   table-layout: fixed;
+  color: var(--kt-text);
 }
 
 .kt-table th {
   font-size: var(--fs-small);
-  opacity: 0.8;
+  opacity: 0.92;
   text-align: center;
   padding: 6px 5px;
   font-weight: 900;
   letter-spacing: 0.03em;
   overflow-wrap: anywhere;
+  text-transform: uppercase;
+  color: var(--kt-dim);
 }
 
 .kt-table td {
@@ -315,8 +422,12 @@
 }
 
 .kt-row--selected {
-  background: rgba(255, 120, 60, 0.14);
-  box-shadow: inset 0 0 0 1px rgba(255, 120, 60, 0.35);
+  background: transparent;
+  box-shadow: none;
+}
+
+.kt-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .kt-card__rules {
@@ -326,16 +437,18 @@
 .ruleline {
   margin: 6px 0;
 }
+
 .ruleline__name {
   font-weight: 950;
 }
 
+/* Abilities */
 .kt-card__ability {
-  margin: 8px 10px 10px;
-  border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  margin: 8px 4px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--kt-border-strong);
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--kt-surface);
 }
 
 .ability__bar {
@@ -343,32 +456,28 @@
   justify-content: space-between;
   align-items: center;
   padding: 7px 9px;
-  background: var(--kt-accent-soft);
+  background: linear-gradient(
+    90deg,
+    rgba(240, 90, 43, 0.22),
+    rgba(240, 90, 43, 0.12)
+  );
   font-weight: 950;
   font-size: var(--fs-small);
+  color: var(--kt-text-strong);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .ability__text {
   padding: 8px 9px;
-  opacity: 0.92;
+  opacity: 0.95;
   font-size: var(--fs-base);
   line-height: 1.25;
+  color: var(--kt-text);
 }
 
+/* Injured emphasis */
 .kt-card--injured {
   box-shadow:
-    0 0 0 2px rgba(249, 49, 49, 0.6),
-    0 14px 40px rgba(0, 0, 0, 0.45);
-}
-
-.kt-card__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 8px 10px 0;
-}
-
-.kt-card__actions .btn {
-  flex: 1;
-  min-width: 120px;
+    0 0 0 2px rgba(255, 95, 95, 0.75),
+    0 10px 28px rgba(0, 0, 0, 0.52);
 }

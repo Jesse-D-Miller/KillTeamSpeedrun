@@ -1,11 +1,8 @@
 import "./App.css";
 import UnitCard from "./ui/components/UnitCard";
-import UnitListNav from "./ui/components/UnitListNav";
-import LogsWindow from "./ui/components/LogsWindow";
-import Actions from "./ui/components/Actions";
 import TopBar from "./ui/components/TopBar";
+import LogNotice from "./ui/components/LogNotice";
 import InitiativeModal from "./ui/components/InitiativeModal";
-import StrategicPloys from "./ui/components/strategicPloys";
 import TargetSelectModal from "./ui/components/TargetSelectModal";
 import DiceInputModal from "./ui/components/DiceInputModal";
 import DefenseAllocationModal from "./ui/components/DefenseAllocationModal";
@@ -13,6 +10,7 @@ import DefenseRollModal from "./ui/components/DefenseRollModal";
 import ArmySelector from "./ui/screens/ArmySelector";
 import UnitSelector from "./ui/screens/UnitSelector";
 import MultiplayerLobby from "./ui/screens/MultiplayerLobby";
+import UnitCardFocused from "./ui/screens/UnitCardFocused";
 import {
   gameReducer,
   initialCombatState,
@@ -31,7 +29,7 @@ import {
 } from "./state/gameLoopSelectors";
 import { ACTION_CONFIG } from "./engine/rules/actionsCore";
 import { useEffect, useReducer, useRef, useState } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { connectWS } from "./lib/multiplayer";
 import { getOrCreatePlayerId } from "./lib/playerIdentity";
 import { validateGameIntent } from "./state/intentGate";
@@ -153,6 +151,8 @@ const armies = Object.entries(killteamModules).map(([path, data]) => ({
 }));
 
 function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
+  const navigate = useNavigate();
+  const { username } = useParams();
   const [state, dispatch] = useReducer(gameReducer, {
     gameId: generateClientId(),
     appliedEventIds: new Set(),
@@ -194,7 +194,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   const seenDamageIdsRef = useRef(new Set());
   const [attackerId, setAttackerId] = useState(null);
   const [defenderId, setDefenderId] = useState(null);
-  const [leftTab, setLeftTab] = useState("units");
   const [shootModalOpen, setShootModalOpen] = useState(false);
   const [selectedTargetId, setSelectedTargetId] = useState(null);
   const [selectedSecondaryIds, setSelectedSecondaryIds] = useState([]);
@@ -242,6 +241,11 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   const vp = 0;
   const turningPoint = state.turningPoint ?? 0;
   const phase = state.phase ?? "SETUP";
+  const logEntries = state.log?.entries || [];
+  const latestLogEntry =
+    logEntries[state.log?.cursor - 1] || logEntries[logEntries.length - 1];
+  const latestLogSummary =
+    latestLogEntry?.summary || latestLogEntry?.type || "No log entries yet";
 
   const loopPlayerId = playerSlot || "A";
   const isFirefight = phase === "FIREFIGHT";
@@ -322,6 +326,25 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   const selectedWeapon =
     selectedUnit?.weapons?.find((w) => w.name === selectedWeaponName) ||
     selectedUnit?.weapons?.[0];
+
+  const handleOpenUnitCard = (unit) => {
+    if (!username) return;
+    navigate(`/${username}/army/unit/${unit.id}`, {
+      state: {
+        unit,
+        slot: playerSlot,
+        gameCode,
+        topBar: {
+          cp,
+          vp,
+          turningPoint,
+          phase,
+          initiativePlayerId: state.initiativePlayerId,
+        },
+        latestLogSummary,
+      },
+    });
+  };
   const getAttackCritThreshold = (weapon) => {
     const rules = normalizeWeaponRules(weapon);
     const lethalRule = rules.find((rule) => rule.id === "lethal");
@@ -1025,65 +1048,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   return (
     <div className="App">
       <div className={`kt-shell ${showTurnGlow ? "kt-shell--turn-glow" : ""}`}>
-        <aside className="kt-nav">
-          <div className="kt-nav__tabs">
-            <button
-              type="button"
-              className={`kt-nav__tab ${leftTab === "units" ? "kt-nav__tab--active" : ""}`}
-              onClick={() => setLeftTab("units")}
-            >
-              Units
-            </button>
-            <button
-              type="button"
-              className={`kt-nav__tab ${leftTab === "log" ? "kt-nav__tab--active" : ""}`}
-              onClick={() => setLeftTab("log")}
-            >
-              Log
-            </button>
-          </div>
-
-          {leftTab === "units" ? (
-            <UnitListNav
-              units={myTeamUnits}
-              selectedUnitId={selectedUnit?.id}
-              onSelectUnit={(unitId) => {
-                if (!canSelectOperative) return;
-                if (inCounteractWindow) {
-                  const eligible = counteractOperatives.some(
-                    (unit) => unit.id === unitId,
-                  );
-                  if (!eligible) return;
-                  setSelectedUnitId(unitId);
-                  dispatchGameEvent("COUNTERACT", {
-                    playerId: loopPlayerId,
-                    operativeId: unitId,
-                    action: null,
-                  });
-                  return;
-                }
-                setSelectedUnitId(unitId);
-              }}
-              activeOperativeId={state.firefight?.activeOperativeId}
-              highlightReadyForPlayerId={state.firefight?.activePlayerId}
-              canSelectUnit={canSelectOperative}
-              isCounteractWindow={inCounteractWindow}
-              counteractEligibleIds={counteractOperatives.map((unit) => unit.id)}
-              isCounteractActivation={
-                state.firefight?.activation?.isCounteract === true
-              }
-            />
-          ) : (
-            <LogsWindow
-              entries={state.log.entries}
-              cursor={state.log.cursor}
-              units={state.game}
-              debug={false}
-              onUndo={() => dispatchIntent({ type: "UNDO" })}
-              onRedo={() => dispatchIntent({ type: "REDO" })}
-            />
-          )}
-        </aside>
         <div className="kt-main">
           <TopBar
             cp={cp}
@@ -1092,125 +1056,32 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
             phase={phase}
             initiativePlayerId={state.initiativePlayerId}
           />
+          <LogNotice summary={latestLogSummary} />
 
           <main className="kt-detail">
             {tpEndToast && <div className="kt-toast">{tpEndToast}</div>}
             {skipToast && <div className="kt-toast">{skipToast}</div>}
-            {selectedUnit ? (
-              <>
+            <div className="kt-card-grid">
+              {myTeamUnits.map((unit) => (
                 <UnitCard
-                  key={selectedUnit.id}
-                  unit={selectedUnit}
+                  key={unit.id}
+                  unit={unit}
                   dispatch={dispatchIntent}
                   canChooseOrder={canChooseOrder}
+                  onCardClick={handleOpenUnitCard}
                   onChooseOrder={
                     isFirefight
                       ? (order) => {
-                          if (!selectedUnit?.id) return;
                           dispatchGameEvent("SET_ORDER", {
-                            operativeId: selectedUnit.id,
+                            operativeId: unit.id,
                             order,
                           });
                         }
                       : null
                   }
                 />
-                <StrategicPloys
-                  armyKey={myTeamKey}
-                  isVisible={
-                    phase === "STRATEGY" &&
-                    state.strategy?.operativesReadiedThisTP === true
-                  }
-                  currentPlayerId={state.strategy?.turn}
-                  localPlayerId={playerSlot}
-                  usedPloyIds={state.strategy?.usedStrategicGambits?.[playerSlot] || []}
-                  passedByPlayer={state.strategy?.passed}
-                  onUsePloy={(ploy) =>
-                    dispatchGameEvent("USE_STRATEGIC_GAMBIT", {
-                      playerId: playerSlot,
-                      gambitId: ploy.id,
-                    })
-                  }
-                  onPass={() =>
-                    dispatchGameEvent("PASS_STRATEGY", { playerId: playerSlot })
-                  }
-                />
-                {isFirefight && (
-                  <Actions
-                    attacker={selectedUnit}
-                    actionMarks={selectedUnit?.state?.actionMarks}
-                    showActivate={showActivate}
-                    onActivateConceal={() => {
-                      if (!selectedUnit?.id) return;
-                      dispatchGameEvent("SET_ACTIVE_OPERATIVE", {
-                        playerId: loopPlayerId,
-                        operativeId: selectedUnit.id,
-                        order: "conceal",
-                      });
-                    }}
-                    onActivateEngage={() => {
-                      if (!selectedUnit?.id) return;
-                      dispatchGameEvent("SET_ACTIVE_OPERATIVE", {
-                        playerId: loopPlayerId,
-                        operativeId: selectedUnit.id,
-                        order: "engage",
-                      });
-                    }}
-                    showActionButtons={showActionButtons}
-                    canUseActions={canUseActions}
-                    allowedActions={counteractAllowedActions}
-                    onEndActivation={() => dispatchGameEvent("END_ACTIVATION")}
-                    onAction={(actionKey) => {
-                      if (!selectedUnit?.id) return;
-                      dispatchGameEvent("ACTION_USE", {
-                        operativeId: selectedUnit.id,
-                        actionKey,
-                      });
-
-                      if (actionKey !== "shoot") return;
-                      if (!canShoot) {
-                        return;
-                      }
-                      if (opponentUnits.length === 0) return;
-                      setAttackerId(selectedUnit.id);
-                      setShootModalOpen(true);
-                    }}
-                    showCounteract={showCounteract}
-                    showCounteractWindow={inCounteractWindow}
-                    onPassCounteract={() =>
-                      dispatchGameEvent("PASS_COUNTERACT_WINDOW", {
-                        playerId: loopPlayerId,
-                      })
-                    }
-                    isCounteractActive={isCounteractActive}
-                    counteractActionsTaken={counteractActionsTaken}
-                    counteractOptions={counteractOperatives}
-                    onSelectCounteractOperative={(operativeId) => {
-                      if (!operativeId) return;
-                      dispatchGameEvent("COUNTERACT", {
-                        playerId: loopPlayerId,
-                        operativeId,
-                        action: null,
-                      });
-                    }}
-                    onCounteract={() => {
-                      const target =
-                        counteractOperatives.find((op) => op.id === selectedUnit?.id) ||
-                        counteractOperatives[0];
-                      if (!target) return;
-                      dispatchGameEvent("COUNTERACT", {
-                        playerId: loopPlayerId,
-                        operativeId: target.id,
-                        action: null,
-                      });
-                    }}
-                    statusMessage={statusMessage}
-                  />
-                )}
-              </>
-            ) : (
-              <div className="kt-empty">No units loaded</div>
-            )}
+              ))}
+            </div>
           </main>
         </div>
       </div>
@@ -2263,6 +2134,7 @@ function App() {
       <Route path="/:username/army-selector" element={<ArmySelector />} />
       <Route path="/:username/unit-selector" element={<UnitSelector />} />
       <Route path="/:username/army" element={<ArmyOverlayRoute />} />
+      <Route path="/:username/army/unit/:unitId" element={<UnitCardFocused />} />
       <Route path="*" element={<Navigate to="/multiplayer" replace />} />
     </Routes>
   );
