@@ -2229,6 +2229,15 @@ function StrategyPhaseRoute() {
   );
 }
 
+function UnitActionRoute() {
+  return (
+    <>
+      <ArmyOverlayRoute renderUi={false} />
+      <UnitCardFocused />
+    </>
+  );
+}
+
 function App() {
   useEffect(() => {
     const existingId = localStorage.getItem("kt_playerId");
@@ -2248,7 +2257,7 @@ function App() {
       <Route path="/:username/unit-selector" element={<UnitSelector />} />
       <Route path="/:username/strategy-phase" element={<StrategyPhaseRoute />} />
       <Route path="/:username/army" element={<ArmyOverlayRoute />} />
-      <Route path="/:username/army/unit/:unitId" element={<UnitCardFocused />} />
+      <Route path="/:username/army/unit/:unitId" element={<UnitActionRoute />} />
       <Route path="*" element={<Navigate to="/multiplayer" replace />} />
     </Routes>
   );

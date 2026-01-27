@@ -1,0 +1,43 @@
+.kt-firefight-ploys {
+  width: 100%;
+}
+
+.kt-firefight-ploys__list {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 6px 2px 10px;
+  scroll-snap-type: x proximity;
+  min-height: 120px;
+}
+
+.kt-firefight-ploys__item {
+  min-width: 160px;
+  height: 110px;
+  background: rgba(16, 19, 24, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: #f7f7f7;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  scroll-snap-align: start;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.kt-firefight-ploys__item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.kt-firefight-ploys__name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.kt-firefight-ploys__cost {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.7);
+}

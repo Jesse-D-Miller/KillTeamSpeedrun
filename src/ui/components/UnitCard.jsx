@@ -12,6 +12,7 @@ function UnitCard({
   dispatch,
   canChooseOrder = false,
   onChooseOrder = null,
+  activeOperativeId = null,
   onCardClick = null,
 }) {
   if (!unit) return null;
@@ -70,7 +71,10 @@ function UnitCard({
 
   const unitImage = resolveUnitImage(image);
   const readyState = unit.state?.readyState;
-  const isActive = unit.state?.isActive === true || readyState === "ACTIVE";
+  const isActive =
+    unit.id === activeOperativeId ||
+    unit.state?.isActive === true ||
+    readyState === "ACTIVE";
   const statusClass = isActive
     ? "active"
     : readyState === "EXPENDED"

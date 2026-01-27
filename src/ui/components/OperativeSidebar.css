@@ -1,0 +1,16 @@
+.operative-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.operative-sidebar__block {
+  background: rgba(16, 19, 24, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}

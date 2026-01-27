@@ -1405,7 +1405,8 @@ function reduceGameState(state, action) {
 			if (playerId !== state.firefight?.activePlayerId) return state;
 			const operative = state.game.find((unit) => unit.id === operativeId);
 			if (!operative || operative.owner !== playerId) return state;
-			if (operative.state?.readyState !== "READY") return state;
+			const readyState = operative.state?.readyState ?? "READY";
+			if (readyState !== "READY") return state;
 			const desiredOrder = action.payload?.order;
 			const hasOrder = desiredOrder === "conceal" || desiredOrder === "engage";
 			return {
