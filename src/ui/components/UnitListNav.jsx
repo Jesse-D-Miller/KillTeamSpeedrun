@@ -22,8 +22,8 @@ function UnitListNav({
 			const aExpended = a.unit.state?.readyState === "EXPENDED";
 			const bExpended = b.unit.state?.readyState === "EXPENDED";
 			if (aDead !== bDead) return aDead ? 1 : -1;
+			if (aExpended !== bExpended) return aExpended ? 1 : -1;
 			if (aReady !== bReady) return aReady ? -1 : 1;
-			if (aExpended !== bExpended) return aExpended ? -1 : 1;
 			return a.index - b.index;
 		})
 		.map(({ unit }) => unit);

@@ -1,4 +1,5 @@
 import "./UnitCard.css";
+import { useState } from "react";
 import {
   isInjured,
   statDeltaClass,
@@ -14,6 +15,11 @@ function UnitCard({
   onChooseOrder = null,
   activeOperativeId = null,
   onCardClick = null,
+  className = "",
+  weaponMode = null,
+  collapsibleSections = false,
+  showWoundsText = true,
+  showInjuredInHeader = false,
 }) {
   if (!unit) return null;
 
@@ -53,6 +59,10 @@ function UnitCard({
 
   const { name, stats, state, weapons = [], rules = [], abilities = [], image } = unit;
 
+  const [weaponsOpen, setWeaponsOpen] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [abilitiesOpen, setAbilitiesOpen] = useState(false);
+
   const isUnitInjured = isInjured(unit);
   const baseMove = toNumber(stats.move);
   const effectiveMove = unitMove(unit);
@@ -63,11 +73,20 @@ function UnitCard({
   );
   const safeWoundsPct = Math.max(0, Math.min(100, woundsPct));
 
+  const filteredWeapons = Array.isArray(weapons)
+    ? weaponMode
+      ? weapons.filter((w) => w?.mode === weaponMode)
+      : weapons
+    : [];
+
+  const selectedWeaponNameRaw = state.selectedWeapon || "";
   const selectedWeaponName =
-    state.selectedWeapon || (weapons[0] ? weapons[0].name : "");
+    filteredWeapons.find((w) => w.name === selectedWeaponNameRaw)?.name ||
+    (filteredWeapons[0] ? filteredWeapons[0].name : "");
 
   const selectedWeapon =
-    weapons.find((w) => w.name === selectedWeaponName) || weapons[0];
+    filteredWeapons.find((w) => w.name === selectedWeaponName) ||
+    filteredWeapons[0];
 
   const unitImage = resolveUnitImage(image);
   const readyState = unit.state?.readyState;
@@ -97,7 +116,7 @@ function UnitCard({
     <article
       className={`kt-card ${isUnitInjured ? "kt-card--injured" : ""} ${
         onCardClick ? "kt-card--clickable" : ""
-      }`}
+      } ${className}`}
       onClick={handleCardClick}
     >
       {/* Header */}
@@ -148,6 +167,9 @@ function UnitCard({
           </div>
         </div>
         <div className="kt-dark-header-meta">
+          {showInjuredInHeader && isUnitInjured && (
+            <span className="pill pill--red">INJURED</span>
+          )}
           <button
             className={`pill pill--clickable ${
               state.order === "conceal" ? "pill--blue" : "pill--orange"
@@ -179,81 +201,209 @@ function UnitCard({
       <div className="wounds">
         <div className="wounds__bar">
           <div className="wounds__fill" style={{ width: `${safeWoundsPct}%` }} />
-          <span className="wounds__value">
-            {state.woundsCurrent}/{stats.woundsMax}
-          </span>
+          {showWoundsText && (
+            <span className="wounds__value">
+              {state.woundsCurrent}/{stats.woundsMax}
+            </span>
+          )}
         </div>
       </div>
       
       <section className="kt-card__controls">
-        {isUnitInjured && <span className="pill pill--red">INJURED</span>}
+        {!showInjuredInHeader && isUnitInjured && (
+          <span className="pill pill--red">INJURED</span>
+        )}
       </section>
 
       {/* Weapons table */}
       <section className="kt-card__section">
-        <div className="kt-card__sectionline" />
-        <table className="kt-table">
-          <thead>
-            <tr>
-              <th className="left">NAME</th>
-              <th>ATK</th>
-              <th>HIT</th>
-              <th>DMG</th>
-              <th className="left">WR</th>
-            </tr>
-          </thead>
-          <tbody>
-            {weapons.map((w) => {
-              const isSelected = w.name === selectedWeaponName;
+        {collapsibleSections ? (
+          <>
+            <button
+              className="kt-card__section-toggle"
+              type="button"
+              onClick={() => setWeaponsOpen((prev) => !prev)}
+              aria-expanded={weaponsOpen}
+            >
+              <span>Weapons</span>
+              <span className="kt-card__section-caret">
+                {weaponsOpen ? "▾" : "▸"}
+              </span>
+            </button>
+            {weaponsOpen && (
+              <>
+                <div className="kt-card__sectionline" />
+                {filteredWeapons.length === 0 ? (
+                  <div className="kt-card__section-empty">No weapons</div>
+                ) : (
+                  <table className="kt-table">
+                    <thead>
+                      <tr>
+                        <th className="left">NAME</th>
+                        <th>ATK</th>
+                        <th>HIT</th>
+                        <th>DMG</th>
+                        <th className="left">WR</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredWeapons.map((w) => {
+                        const isSelected = w.name === selectedWeaponName;
 
-              return (
-                <tr
-                  key={w.name}
-                  className={`kt-row ${isSelected ? "kt-row--selected" : ""}`}
-                >
-                  <td className="left">{w.name}</td>
-                  <td>{w.atk}</td>
-                  {(() => {
-                    const effectiveHit = weaponHit(w, unit);
-                    const baseHit = toNumber(w.hit);
-                    const hitDeltaClass = statDeltaClassLowerIsBetter(
-                      baseHit,
-                      effectiveHit,
-                    );
-                    return (
-                      <td className={hitDeltaClass}>{effectiveHit ?? w.hit}+</td>
-                    );
-                  })()}
-                  <td>{w.dmg}</td>
-                  <td className="left">{formatWeaponRules(w.wr)}</td>
+                        return (
+                          <tr
+                            key={w.name}
+                            className={`kt-row ${isSelected ? "kt-row--selected" : ""}`}
+                          >
+                            <td className="left">{w.name}</td>
+                            <td>{w.atk}</td>
+                            {(() => {
+                              const effectiveHit = weaponHit(w, unit);
+                              const baseHit = toNumber(w.hit);
+                              const hitDeltaClass = statDeltaClassLowerIsBetter(
+                                baseHit,
+                                effectiveHit,
+                              );
+                              return (
+                                <td className={hitDeltaClass}>{effectiveHit ?? w.hit}+</td>
+                              );
+                            })()}
+                            <td>{w.dmg}</td>
+                            <td className="left">{formatWeaponRules(w.wr)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="kt-card__sectionline" />
+            <table className="kt-table">
+              <thead>
+                <tr>
+                  <th className="left">NAME</th>
+                  <th>ATK</th>
+                  <th>HIT</th>
+                  <th>DMG</th>
+                  <th className="left">WR</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              </thead>
+              <tbody>
+                {filteredWeapons.map((w) => {
+                  const isSelected = w.name === selectedWeaponName;
+
+                  return (
+                    <tr
+                      key={w.name}
+                      className={`kt-row ${isSelected ? "kt-row--selected" : ""}`}
+                    >
+                      <td className="left">{w.name}</td>
+                      <td>{w.atk}</td>
+                      {(() => {
+                        const effectiveHit = weaponHit(w, unit);
+                        const baseHit = toNumber(w.hit);
+                        const hitDeltaClass = statDeltaClassLowerIsBetter(
+                          baseHit,
+                          effectiveHit,
+                        );
+                        return (
+                          <td className={hitDeltaClass}>{effectiveHit ?? w.hit}+</td>
+                        );
+                      })()}
+                      <td>{w.dmg}</td>
+                      <td className="left">{formatWeaponRules(w.wr)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </>
+        )}
       </section>
 
       {/* Rules */}
       {rules.length > 0 && (
         <section className="kt-card__section kt-card__rules">
-          {rules.map((r) => (
-            <p key={r.name} className="ruleline">
-              <span className="ruleline__name">{r.name}:</span> {r.text}
-            </p>
-          ))}
+          {collapsibleSections ? (
+            <>
+              <button
+                className="kt-card__section-toggle"
+                type="button"
+                onClick={() => setRulesOpen((prev) => !prev)}
+                aria-expanded={rulesOpen}
+              >
+                <span>Rules</span>
+                <span className="kt-card__section-caret">
+                  {rulesOpen ? "▾" : "▸"}
+                </span>
+              </button>
+              {rulesOpen && (
+                <div className="kt-card__section-body">
+                  {rules.map((r) => (
+                    <p key={r.name} className="ruleline">
+                      <span className="ruleline__name">{r.name}:</span> {r.text}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            rules.map((r) => (
+              <p key={r.name} className="ruleline">
+                <span className="ruleline__name">{r.name}:</span> {r.text}
+              </p>
+            ))
+          )}
         </section>
       )}
 
       {/* Abilities */}
-      {abilities.map((a) => (
-        <section key={a.name} className="kt-card__ability">
-          <div className="ability__bar">
-            <div className="ability__name">{a.name}</div>
-            <div className="ability__cost">{a.cost}AP</div>
-          </div>
-          {a.text && <div className="ability__text">{a.text}</div>}
+      {abilities.length > 0 && (
+        <section className="kt-card__section kt-card__abilities">
+          {collapsibleSections ? (
+            <>
+              <button
+                className="kt-card__section-toggle"
+                type="button"
+                onClick={() => setAbilitiesOpen((prev) => !prev)}
+                aria-expanded={abilitiesOpen}
+              >
+                <span>Abilities</span>
+                <span className="kt-card__section-caret">
+                  {abilitiesOpen ? "▾" : "▸"}
+                </span>
+              </button>
+              {abilitiesOpen && (
+                <div className="kt-card__section-body">
+                  {abilities.map((a) => (
+                    <section key={a.name} className="kt-card__ability">
+                      <div className="ability__bar">
+                        <div className="ability__name">{a.name}</div>
+                        <div className="ability__cost">{a.cost}AP</div>
+                      </div>
+                      {a.text && <div className="ability__text">{a.text}</div>}
+                    </section>
+                  ))}
+                </div>
+              )}
+            </>
+          ) : (
+            abilities.map((a) => (
+              <section key={a.name} className="kt-card__ability">
+                <div className="ability__bar">
+                  <div className="ability__name">{a.name}</div>
+                  <div className="ability__cost">{a.cost}AP</div>
+                </div>
+                {a.text && <div className="ability__text">{a.text}</div>}
+              </section>
+            ))
+          )}
         </section>
-      ))}
+      )}
     </article>
   );
 }

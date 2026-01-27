@@ -2,7 +2,6 @@ import "./App.css";
 import UnitCard from "./ui/components/UnitCard";
 import TopBar from "./ui/components/TopBar";
 import LogNotice from "./ui/components/LogNotice";
-import TargetSelectModal from "./ui/components/TargetSelectModal";
 import DiceInputModal from "./ui/components/DiceInputModal";
 import DefenseAllocationModal from "./ui/components/DefenseAllocationModal";
 import DefenseRollModal from "./ui/components/DefenseRollModal";
@@ -11,6 +10,7 @@ import UnitSelector from "./ui/screens/UnitSelector";
 import MultiplayerLobby from "./ui/screens/MultiplayerLobby";
 import UnitCardFocused from "./ui/screens/UnitCardFocused";
 import StrategyPhase from "./ui/screens/StrategyPhase";
+import TargetSelectScreen from "./ui/screens/TargetSelectScreen";
 import {
   gameReducer,
   initialCombatState,
@@ -267,6 +267,24 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
     myTeamUnits.find((u) => u.id === selectedUnitId) ?? myTeamUnits[0] ?? null;
   const attackerTeamId = selectedUnit?.teamId || myTeamId;
   const opponentUnits = attackerTeamId === "alpha" ? teamBUnits : teamAUnits;
+  const orderedMyTeamUnits = [...myTeamUnits]
+    .map((unit, index) => ({ unit, index }))
+    .sort((a, b) => {
+      const aDead = Number(a.unit.state?.woundsCurrent ?? 0) <= 0;
+      const bDead = Number(b.unit.state?.woundsCurrent ?? 0) <= 0;
+      if (aDead !== bDead) return aDead ? 1 : -1;
+      const aReadyState = a.unit.state?.readyState ?? "READY";
+      const bReadyState = b.unit.state?.readyState ?? "READY";
+      const aExpended = aReadyState === "EXPENDED";
+      const bExpended = bReadyState === "EXPENDED";
+      if (aExpended !== bExpended) return aExpended ? 1 : -1;
+      const aReady = aReadyState === "READY";
+      const bReady = bReadyState === "READY";
+      if (aReady !== bReady) return aReady ? -1 : 1;
+      return a.index - b.index;
+    })
+    .map(({ unit }) => unit);
+
   const cp =
     playerSlot === "B"
       ? state.cp?.B ?? 0
@@ -564,6 +582,44 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
   const otherPlayerId = playerSlot ? (playerSlot === "A" ? "B" : "A") : null;
   const combatState = state.combatState;
   const actionFlow = state.ui?.actionFlow ?? null;
+  const isTargetSelectStep =
+    actionFlow?.mode &&
+    (actionFlow.mode === "shoot" || actionFlow.mode === "fight") &&
+    actionFlow.step === "pickTarget";
+  const isTargetSelectRoute = location.pathname.endsWith("/target-select");
+
+  useEffect(() => {
+    if (!username) return;
+    if (isTargetSelectStep && !isTargetSelectRoute) {
+      navigate(`/${username}/target-select`, {
+        state: {
+          slot: playerSlot,
+          gameCode,
+          mode: actionFlow?.mode,
+          attackerId: actionFlow?.attackerId ?? null,
+        },
+      });
+      return;
+    }
+    if (!isTargetSelectStep && isTargetSelectRoute) {
+      navigate(`/${username}/army`, {
+        state: {
+          slot: playerSlot,
+          gameCode,
+        },
+      });
+    }
+  }, [
+    isTargetSelectStep,
+    isTargetSelectRoute,
+    actionFlow?.mode,
+    actionFlow?.attackerId,
+    username,
+    navigate,
+    playerSlot,
+    gameCode,
+    location.pathname,
+  ]);
   const attackModalOpen =
     [
       COMBAT_STAGES.ATTACK_ROLLING,
@@ -1061,6 +1117,15 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
   }, [dispatchGameEvent]);
 
   useEffect(() => {
+    window.ktDispatchCombatEvent = dispatchCombatEvent;
+    return () => {
+      if (window.ktDispatchCombatEvent === dispatchCombatEvent) {
+        delete window.ktDispatchCombatEvent;
+      }
+    };
+  }, [dispatchCombatEvent]);
+
+  useEffect(() => {
     if (typeof window === "undefined") return;
     if (!window.__ktGameStateSubs) {
       window.__ktGameStateSubs = new Set();
@@ -1174,7 +1239,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
             {tpEndToast && <div className="kt-toast">{tpEndToast}</div>}
             {skipToast && <div className="kt-toast">{skipToast}</div>}
             <div className="kt-card-grid">
-              {myTeamUnits.map((unit) => (
+              {orderedMyTeamUnits.map((unit) => (
                 <UnitCard
                   key={unit.id}
                   unit={unit}
@@ -1197,85 +1262,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
           </main>
         </div>
       </div>
-
-      <TargetSelectModal
-        open={shootModalOpen}
-        attacker={selectedUnit}
-        targets={opponentUnits}
-        primaryTargetId={selectedTargetId}
-        secondaryTargetIds={selectedSecondaryIds}
-        allowSecondarySelection={hasBlast}
-        onSelectPrimary={(id) => {
-          setSelectedTargetId(id);
-          setSelectedSecondaryIds([]);
-        }}
-        onToggleSecondary={(id) => {
-          setSelectedSecondaryIds((prev) =>
-            prev.includes(id)
-              ? prev.filter((entry) => entry !== id)
-              : [...prev, id],
-          );
-        }}
-        onClose={() => {
-          setShootModalOpen(false);
-          setSelectedSecondaryIds([]);
-          setSelectedTargetId(null);
-        }}
-        onConfirm={() => {
-          if (!selectedTargetId) return;
-          const blastInputs = {
-            primaryTargetId: selectedTargetId,
-            secondaryTargetIds: selectedSecondaryIds,
-          };
-          const ctx = {
-            weapon: selectedWeapon,
-            weaponProfile: selectedWeapon,
-            weaponRules: normalizeWeaponRules(selectedWeapon),
-            inputs: blastInputs,
-            modifiers: {},
-            log: [],
-          };
-          runWeaponRuleHook(ctx, "ON_DECLARE_ATTACK");
-          const attackQueue = Array.isArray(ctx.attackQueue)
-            ? ctx.attackQueue
-            : [];
-          const firstTargetId = attackQueue[0]?.targetId ?? selectedTargetId;
-          setDefenderId(selectedTargetId);
-          dispatchCombatEvent("START_RANGED_ATTACK", {
-            attackerId: currentPlayerId,
-            defenderId: otherPlayerId,
-            attackingOperativeId: selectedUnit?.id || null,
-            defendingOperativeId: firstTargetId,
-            weaponId: selectedWeapon?.name || null,
-            weaponProfile: selectedWeapon || null,
-            attackQueue,
-            inputs: blastInputs,
-          });
-          setShootModalOpen(false);
-          setSelectedSecondaryIds([]);
-          setSelectedTargetId(null);
-        }}
-      />
-
-      <TargetSelectModal
-        open={actionFlow?.mode === "fight" && actionFlow?.step === "pickTarget"}
-        attacker={fightAttacker}
-        targets={fightTargets}
-        primaryTargetId={actionFlow?.defenderId ?? null}
-        secondaryTargetIds={[]}
-        allowSecondarySelection={false}
-        confirmLabel="Fight"
-        onSelectPrimary={(id) => {
-          if (!id || !fightAttacker) return;
-          dispatchGameEvent("FLOW_SET_TARGET", { defenderId: id });
-        }}
-        onToggleSecondary={() => {}}
-        onClose={() => {
-          if (!canCancelFightFlow) return;
-          dispatchGameEvent("FLOW_CANCEL");
-        }}
-        onConfirm={() => {}}
-      />
 
       {actionFlow?.mode === "fight" && actionFlow?.step === "pickWeapons" && (
         <div className="kt-modal">
@@ -2238,6 +2224,15 @@ function UnitActionRoute() {
   );
 }
 
+function TargetSelectRoute() {
+  return (
+    <>
+      <ArmyOverlayRoute renderUi={false} />
+      <TargetSelectScreen />
+    </>
+  );
+}
+
 function App() {
   useEffect(() => {
     const existingId = localStorage.getItem("kt_playerId");
@@ -2258,6 +2253,7 @@ function App() {
       <Route path="/:username/strategy-phase" element={<StrategyPhaseRoute />} />
       <Route path="/:username/army" element={<ArmyOverlayRoute />} />
       <Route path="/:username/army/unit/:unitId" element={<UnitActionRoute />} />
+      <Route path="/:username/target-select" element={<TargetSelectRoute />} />
       <Route path="*" element={<Navigate to="/multiplayer" replace />} />
     </Routes>
   );
