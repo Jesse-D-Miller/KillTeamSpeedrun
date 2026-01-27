@@ -12,8 +12,8 @@ import StrategicPloys from "../components/strategicPloys";
  * - Shared state is updated via window.ktSubscribeGameState or "kt:state" events
  * - These event types exist in your reducer/engine:
  *    - "READY_ALL_OPERATIVES"   (or swap to your existing ready event)
- *    - "SET_INITIATIVE"
  *    - "AWARD_COMMAND_POINTS"   (or swap to your existing CP events)
+ *    - "SET_INITIATIVE"
  *    - "USE_STRATEGIC_PLOY"
  *    - "PASS_STRATEGIC_PLOY"
  *    - "END_STRATEGY_PHASE"
@@ -27,8 +27,10 @@ function StrategyPhase() {
   const { username } = useParams();
 
   const navState = location.state || {};
-  const slot = navState?.slot || null; // "A" | "B"
-  const gameCode = navState?.gameCode || null;
+  const params = new URLSearchParams(location.search);
+  const slot = navState?.slot || params.get("slot") || "A"; // "A" | "B"
+  const gameCode = navState?.gameCode || params.get("gameCode") || "E2E";
+  const armyKeyFromQuery = params.get("armyKey") || "kommandos";
 
   // --- shared state subscription ---
   const [gameState, setGameState] = useState(() =>
@@ -101,15 +103,16 @@ function StrategyPhase() {
   const bothPassed = Boolean(passedByPlayer?.A) && Boolean(passedByPlayer?.B);
 
   const canAct = Boolean(slot && activeChooser === slot);
-  const canAdvanceToFirefight = activeChooser === null || bothPassed;
+  const canAdvanceToFirefight = Boolean(initiativePlayerId) && Boolean(bothPassed);
 
   // --- army key (nav state) ---
   const armyKey = useMemo(() => {
     if (navState.armyKey) return navState.armyKey;
+    if (!location.state && armyKeyFromQuery) return armyKeyFromQuery;
     if (slot === "A") return navState.armyKeyA || navState.armyKeyB || null;
     if (slot === "B") return navState.armyKeyB || navState.armyKeyA || null;
     return navState.armyKeyA || navState.armyKeyB || null;
-  }, [navState, slot]);
+  }, [navState, slot, location.state, armyKeyFromQuery]);
 
   // --- READY step: robust operative collector (prevents deadlock) ---
   const collectOperatives = useCallback((state) => {
@@ -364,6 +367,7 @@ function StrategyPhase() {
             <button
               className="strategy-phase__stepper-btn"
               type="button"
+              data-testid="strategy-prev-step"
               disabled={bannerStepIndex <= 0}
               onClick={() => {
                 freezeAuto();
@@ -380,6 +384,7 @@ function StrategyPhase() {
                 `strategy-phase__stepper-content--${bannerStatus}`,
                 flashGreen ? "is-complete" : "",
               ].join(" ")}
+              data-testid="strategy-stepper"
             >
               <div className="strategy-phase__stepper-label">
                 Step {bannerStepIndex + 1}/4 — {currentStep?.label}
@@ -390,6 +395,7 @@ function StrategyPhase() {
             <button
               className="strategy-phase__stepper-btn"
               type="button"
+              data-testid="strategy-next-step"
               disabled={bannerStepIndex >= STEPS.length - 1}
               onClick={() => {
                 freezeAuto();
@@ -403,12 +409,13 @@ function StrategyPhase() {
 
           <div className="strategy-phase__subtitle">Roll initiative to begin.</div>
 
-          <div className="strategy-phase__initiative">
+          <div className="strategy-phase__initiative" data-testid="strategy-initiative">
             <p className="strategy-phase__hint">Roll in real life, then tap the winner.</p>
             <div className="strategy-phase__initiative-buttons">
               <button
                 className="strategy-phase__initiative-btn strategy-phase__initiative-btn--a"
                 type="button"
+                data-testid="initiative-A"
                 onClick={() => dispatchGameEvent("SET_INITIATIVE", { winnerPlayerId: "A" })}
               >
                 A
@@ -416,6 +423,7 @@ function StrategyPhase() {
               <button
                 className="strategy-phase__initiative-btn strategy-phase__initiative-btn--b"
                 type="button"
+                data-testid="initiative-B"
                 onClick={() => dispatchGameEvent("SET_INITIATIVE", { winnerPlayerId: "B" })}
               >
                 B
@@ -425,31 +433,38 @@ function StrategyPhase() {
 
           {/* Ploys UI */}
           {initiativePlayerId && !armyKey && (
-            <div className="strategy-phase__warning">No armyKey passed to StrategyPhase</div>
+            <div
+              className="strategy-phase__warning"
+              data-testid="strategy-warning-no-armykey"
+            >
+              No armyKey passed to StrategyPhase
+            </div>
           )}
 
           {initiativePlayerId && armyKey && (
-            <StrategicPloys
-              armyKey={armyKey}
-              isVisible
-              currentPlayerId={activeChooser}
-              localPlayerId={slot}
-              isInteractive={canAct}
-              activeChooserPlayerId={activeChooser}
-              usedPloyIds={usedPloyIds}
-              passedByPlayer={passedByPlayer}
-              onUsePloy={(ploy) =>
-                dispatchGameEvent("USE_STRATEGIC_PLOY", {
-                  playerId: slot,
-                  ployId: ploy.id,
-                })
-              }
-              onPass={() =>
-                dispatchGameEvent("PASS_STRATEGIC_PLOY", {
-                  playerId: slot,
-                })
-              }
-            />
+            <div data-testid="strategy-ploys">
+              <StrategicPloys
+                armyKey={armyKey}
+                isVisible
+                currentPlayerId={activeChooser}
+                localPlayerId={slot}
+                isInteractive={canAct}
+                activeChooserPlayerId={activeChooser}
+                usedPloyIds={usedPloyIds}
+                passedByPlayer={passedByPlayer}
+                onUsePloy={(ploy) =>
+                  dispatchGameEvent("USE_STRATEGIC_PLOY", {
+                    playerId: slot,
+                    ployId: ploy.id,
+                  })
+                }
+                onPass={() =>
+                  dispatchGameEvent("PASS_STRATEGIC_PLOY", {
+                    playerId: slot,
+                  })
+                }
+              />
+            </div>
           )}
         </div>
 
@@ -457,16 +472,11 @@ function StrategyPhase() {
           <button
             className="strategy-phase__firefight"
             type="button"
+            data-testid="go-firefight"
             disabled={!canAdvanceToFirefight}
             onClick={() => {
               dispatchGameEvent("END_STRATEGY_PHASE");
-              navigate(`/${username}/army`, {
-                state: {
-                  ...navState,
-                  ...(slot ? { slot } : {}),
-                  ...(gameCode ? { gameCode } : {}),
-                },
-              });
+              setPendingFirefightNav(true);
             }}
           >
             FIREFIGHT PHASE

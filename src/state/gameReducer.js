@@ -1382,6 +1382,10 @@ function reduceGameState(state, action) {
 			if (!ploysComplete) return state;
 			return {
 				...state,
+				topBar: {
+					...(state.topBar || {}),
+					phase: "FIREFIGHT",
+				},
 				phase: "FIREFIGHT",
 				firefight: {
 					...(state.firefight || {}),

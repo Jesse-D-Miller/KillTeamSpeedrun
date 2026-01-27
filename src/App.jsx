@@ -296,8 +296,47 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
       dispatch({ type: "E2E_SET_STATE", payload: { state: buildSeedState(next) } });
     };
 
+    const resetToStrategySeed = ({ slot: seedSlot, turningPoint: seedTp } = {}) => {
+      const tp = Number(seedTp) || 1;
+      const strategySeed = {
+        phase: "STRATEGY",
+        turningPoint: tp,
+        topBar: {
+          initiativePlayerId: null,
+          turningPoint: tp,
+          phase: "STRATEGY",
+        },
+        cp: { A: 2, B: 2 },
+        strategy: {
+          activeChooserPlayerId: null,
+          passedByPlayer: { A: false, B: false },
+          usedPloyIdsByPlayer: { A: [], B: [] },
+          lastAction: null,
+          cpAwardedForTP: null,
+          decisions: [],
+          cpGrantedThisTP: false,
+          operativesReadiedThisTP: false,
+        },
+        firefight: {
+          activeOperativeId: null,
+          activePlayerId: null,
+          orderChosenThisActivation: false,
+          awaitingOrder: false,
+          awaitingActions: false,
+        },
+        ui: {
+          actionFlow: null,
+        },
+      };
+      dispatch({
+        type: "E2E_SET_STATE",
+        payload: { state: buildSeedState(strategySeed) },
+      });
+    };
+
     window.ktResetToSeed = resetToSeed;
     window.ktSetGameState = setGameState;
+    window.ktE2E_resetToStrategySeed = resetToStrategySeed;
 
     return () => {
       if (window.ktResetToSeed === resetToSeed) {
@@ -305,6 +344,9 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
       }
       if (window.ktSetGameState === setGameState) {
         delete window.ktSetGameState;
+      }
+      if (window.ktE2E_resetToStrategySeed === resetToStrategySeed) {
+        delete window.ktE2E_resetToStrategySeed;
       }
     };
   }, [buildSeedState]);

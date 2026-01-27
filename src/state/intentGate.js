@@ -335,7 +335,9 @@ export const validateGameIntent = (state, event) => {
       if (state?.phase !== "STRATEGY") {
         pushIssue(issues, "END_STRATEGY_PHASE only allowed in STRATEGY.");
       }
-      if (!state?.strategy?.passed?.A || !state?.strategy?.passed?.B) {
+      const passedByPlayer =
+        state?.strategy?.passedByPlayer || state?.strategy?.passed || {};
+      if (!passedByPlayer?.A || !passedByPlayer?.B) {
         pushIssue(issues, "Both players must pass to end strategy phase.");
       }
       break;
