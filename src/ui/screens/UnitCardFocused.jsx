@@ -19,7 +19,7 @@ import {
 function UnitCardFocused() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { username } = useParams();
+  const { username, unitId } = useParams();
   const unit = location.state?.unit || null;
   const slot = location.state?.slot || null;
   const gameCode = location.state?.gameCode || null;
@@ -79,13 +79,22 @@ function UnitCardFocused() {
     }
   };
 
-  const effectiveTopBar = gameState?.topBar || gameState || topBar || {};
+  const effectivePhase = gameState?.phase ?? topBar.phase ?? "SETUP";
+  const effectiveTurningPoint = gameState?.turningPoint ?? topBar.turningPoint ?? 0;
+  const effectiveInitiativePlayerId =
+    gameState?.topBar?.initiativePlayerId ?? topBar.initiativePlayerId ?? null;
+  const effectiveCp =
+    slot === "B"
+      ? gameState?.cp?.B ?? topBar.cp ?? 0
+      : gameState?.cp?.A ?? topBar.cp ?? 0;
+  const effectiveVp = topBar.vp ?? 0;
 
   const selectedUnit = useMemo(() => {
-    if (!unit) return null;
-    const nextUnit = gameState?.game?.find((entry) => entry.id === unit.id);
+    const targetId = unitId || unit?.id || null;
+    if (!targetId) return unit;
+    const nextUnit = gameState?.game?.find((entry) => entry.id === targetId);
     return nextUnit || unit;
-  }, [unit, gameState]);
+  }, [unitId, unit, gameState]);
   const isFirefightPhase = gameState?.phase === "FIREFIGHT";
   const isMyTurn = gameState?.firefight?.activePlayerId === slot;
   const isOwnedByMe = selectedUnit?.owner === slot;
@@ -192,7 +201,7 @@ function UnitCardFocused() {
     });
   };
 
-  if (!unit) {
+  if (!selectedUnit) {
     return (
       <div className="unit-card-focused">
         <div className="unit-card-focused__panel">
@@ -218,11 +227,11 @@ function UnitCardFocused() {
       <div className="unit-card-focused__panel">
         <div className="unit-card-focused__header">
           <TopBar
-            cp={effectiveTopBar.cp ?? 0}
-            vp={effectiveTopBar.vp ?? 0}
-            turningPoint={effectiveTopBar.turningPoint ?? 0}
-            phase={effectiveTopBar.phase ?? "SETUP"}
-            initiativePlayerId={effectiveTopBar.initiativePlayerId ?? null}
+            cp={effectiveCp}
+            vp={effectiveVp}
+            turningPoint={effectiveTurningPoint}
+            phase={effectivePhase}
+            initiativePlayerId={effectiveInitiativePlayerId}
           />
           <LogNotice summary={latestLogSummary} />
           <div className="unit-card-focused__actions">

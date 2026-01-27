@@ -105,6 +105,16 @@
   box-shadow: 0 0 6px rgba(180, 180, 180, 0.35);
 }
 
+.kt-dark-status-light--dead {
+  background: rgba(120, 120, 120, 0.9);
+  box-shadow: none;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.kt-card--dead {
+  filter: grayscale(1) brightness(0.7);
+}
+
 /* Left title/portrait block */
 .kt-card__title {
   min-width: 0;

@@ -300,6 +300,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
 
   const loopPlayerId = playerSlot || "A";
   const isFirefight = phase === "FIREFIGHT";
+  const activeOperativeId = state.firefight?.activeOperativeId ?? null;
   const allOperativesReady = state.game.every((unit) => {
     const isDead = Number(unit.state?.woundsCurrent ?? 0) <= 0;
     if (isDead) return true;
@@ -587,6 +588,14 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
     (actionFlow.mode === "shoot" || actionFlow.mode === "fight") &&
     actionFlow.step === "pickTarget";
   const isTargetSelectRoute = location.pathname.endsWith("/target-select");
+  const prevCombatStageRef = useRef(null);
+
+  const resolvePostCombatPath = () => {
+    if (isMyTurn && activeOperativeId) {
+      return `/${username}/army/unit/${activeOperativeId}`;
+    }
+    return `/${username}/army`;
+  };
 
   useEffect(() => {
     if (!username) return;
@@ -619,7 +628,13 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
     playerSlot,
     gameCode,
     location.pathname,
+    activeOperativeId,
+    isMyTurn,
   ]);
+
+  useEffect(() => {
+    prevCombatStageRef.current = combatState?.stage ?? null;
+  }, [combatState?.stage]);
   const attackModalOpen =
     [
       COMBAT_STAGES.ATTACK_ROLLING,
@@ -1245,6 +1260,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
                   unit={unit}
                   dispatch={dispatchIntent}
                   canChooseOrder={canChooseOrder}
+                  activeOperativeId={state.firefight?.activeOperativeId ?? null}
                   onCardClick={handleOpenUnitCard}
                   onChooseOrder={
                     isFirefight

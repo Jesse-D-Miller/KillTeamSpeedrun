@@ -72,6 +72,7 @@ function UnitCard({
     stats.woundsMax === 0 ? 0 : (state.woundsCurrent / stats.woundsMax) * 100,
   );
   const safeWoundsPct = Math.max(0, Math.min(100, woundsPct));
+  const isDead = Number(state.woundsCurrent ?? 0) <= 0;
 
   const filteredWeapons = Array.isArray(weapons)
     ? weaponMode
@@ -94,13 +95,15 @@ function UnitCard({
     unit.id === activeOperativeId ||
     unit.state?.isActive === true ||
     readyState === "ACTIVE";
-  const statusClass = isActive
-    ? "active"
-    : readyState === "EXPENDED"
-      ? "expended"
-      : readyState === "READY"
-        ? "ready"
-        : "idle";
+  const statusClass = isDead
+    ? "dead"
+    : isActive
+      ? "active"
+      : readyState === "EXPENDED"
+        ? "expended"
+        : readyState === "READY"
+          ? "ready"
+          : "idle";
 
   const handleCardClick = (event) => {
     if (!onCardClick) return;
@@ -116,7 +119,7 @@ function UnitCard({
     <article
       className={`kt-card ${isUnitInjured ? "kt-card--injured" : ""} ${
         onCardClick ? "kt-card--clickable" : ""
-      } ${className}`}
+      } ${isDead ? "kt-card--dead" : ""} ${className}`}
       onClick={handleCardClick}
     >
       {/* Header */}
@@ -210,7 +213,8 @@ function UnitCard({
       </div>
       
       <section className="kt-card__controls">
-        {!showInjuredInHeader && isUnitInjured && (
+        {isDead && <span className="pill pill--red">DEAD</span>}
+        {!isDead && !showInjuredInHeader && isUnitInjured && (
           <span className="pill pill--red">INJURED</span>
         )}
       </section>
