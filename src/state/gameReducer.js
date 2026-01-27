@@ -196,7 +196,10 @@ function endTurningPoint(state, nextGame = state.game, action = null) {
 		game: nextGame,
 		phase: nextTp > 4 ? "GAME_OVER" : "STRATEGY",
 		turningPoint: nextTp > 4 ? 4 : nextTp,
-		initiativePlayerId: null,
+		topBar: {
+			...(state.topBar || {}),
+			initiativePlayerId: null,
+		},
 		ui: {
 			...(state.ui || {}),
 			actionFlow: null,
@@ -244,6 +247,7 @@ function resetTpFlags(state) {
 			usedStrategicGambits: { A: [], B: [] },
 			turn: null,
 			cpGrantedThisTP: false,
+			cpAwardedForTP: null,
 			operativesReadiedThisTP: false,
 		},
 		firefight: {
@@ -1178,8 +1182,20 @@ function reduceGameState(state, action) {
 				...state,
 				phase: "STRATEGY",
 				turningPoint: 1,
-				initiativePlayerId: null,
+				topBar: {
+					...(state.topBar || {}),
+					initiativePlayerId: null,
+				},
 				cp: { A: 2, B: 2 },
+				strategy: {
+					...(state.strategy || {}),
+					activeChooserPlayerId: null,
+					passedByPlayer: { A: false, B: false },
+					usedPloyIdsByPlayer: { A: [], B: [] },
+					lastAction: null,
+					cpAwardedForTP: null,
+					decisions: [],
+				},
 				...resetTpFlags(state),
 			};
 		}
@@ -1190,17 +1206,49 @@ function reduceGameState(state, action) {
 			if (!winnerPlayerId) return state;
 			return {
 				...state,
-				initiativePlayerId: winnerPlayerId,
+				phase: "STRATEGY",
+				topBar: {
+					...(state.topBar || {}),
+					initiativePlayerId: winnerPlayerId,
+				},
 				strategy: {
 					...(state.strategy || {}),
+					activeChooserPlayerId: winnerPlayerId,
+					passedByPlayer: { A: false, B: false },
+					usedPloyIdsByPlayer: { A: [], B: [] },
+					decisions: [],
+					lastAction: null,
+					cpAwardedForTP: null,
 					passed: { A: false, B: false },
 					turn: winnerPlayerId,
 				},
 			};
 		}
 
+		case "AWARD_COMMAND_POINTS": {
+			const { tp, awards } = action.payload || {};
+			if (!Number.isFinite(Number(tp))) return state;
+			const safeAwards = awards || {};
+			const awardA = Number(safeAwards.A || 0);
+			const awardB = Number(safeAwards.B || 0);
+			if (!Number.isFinite(awardA) || !Number.isFinite(awardB)) return state;
+			if (state.strategy?.cpAwardedForTP === Number(tp)) return state;
+			return {
+				...state,
+				cp: {
+					A: (state.cp?.A ?? 0) + awardA,
+					B: (state.cp?.B ?? 0) + awardB,
+				},
+				strategy: {
+					...(state.strategy || {}),
+					cpGrantedThisTP: true,
+					cpAwardedForTP: Number(tp),
+				},
+			};
+		}
+
 		case "GAIN_CP": {
-			const initiative = state.initiativePlayerId;
+			const initiative = state.topBar?.initiativePlayerId;
 			if (!initiative) return state;
 			if (state.strategy?.cpGrantedThisTP) return state;
 			const other = getOtherPlayerId(initiative);
@@ -1252,78 +1300,92 @@ function reduceGameState(state, action) {
 			};
 		}
 
-		case "USE_STRATEGIC_GAMBIT": {
-			const { playerId, gambitId } = action.payload || {};
-			if (!playerId || !gambitId) return state;
-			if (state.strategy?.turn !== playerId) return state;
-			const used = state.strategy?.usedStrategicGambits?.[playerId] || [];
-			if (used.includes(gambitId)) return state;
-			const other = getOtherPlayerId(playerId);
+		case "USE_STRATEGIC_PLOY": {
+			const { playerId, ployId } = action.payload || {};
+			if (!playerId || !ployId) return state;
+			if (state.strategy?.activeChooserPlayerId !== playerId) return state;
+			const usedByPlayer = {
+				...(state.strategy?.usedPloyIdsByPlayer || { A: [], B: [] }),
+			};
+			const currentUsed = Array.isArray(usedByPlayer[playerId])
+				? usedByPlayer[playerId]
+				: [];
+			const nextUsed = currentUsed.includes(ployId)
+				? currentUsed
+				: [...currentUsed, ployId];
+			usedByPlayer[playerId] = nextUsed;
+			const decisions = Array.isArray(state.strategy?.decisions)
+				? [...state.strategy.decisions]
+				: [];
+			decisions.push({ playerId, type: "USE", ployId });
+			const passedByPlayer = {
+				...(state.strategy?.passedByPlayer || { A: false, B: false }),
+				[playerId]: false,
+			};
+			const nextChooser = playerId === "A" ? "B" : "A";
+
 			return {
 				...state,
 				strategy: {
 					...(state.strategy || {}),
-					usedStrategicGambits: {
-						...(state.strategy?.usedStrategicGambits || {}),
-						[playerId]: [...used, gambitId],
-					},
-					passed: {
-						...(state.strategy?.passed || {}),
-						[playerId]: false,
-					},
-					turn: other ?? state.strategy?.turn ?? null,
+					usedPloyIdsByPlayer: usedByPlayer,
+					passedByPlayer,
+					decisions,
+					activeChooserPlayerId: nextChooser,
+					lastAction: { playerId, type: "USE", ployId },
 				},
 			};
 		}
 
-		case "PASS_STRATEGY": {
+		case "PASS_STRATEGIC_PLOY": {
 			const { playerId } = action.payload || {};
 			if (!playerId) return state;
-			if (state.strategy?.turn !== playerId) return state;
-			const nextPassed = {
-				...(state.strategy?.passed || {}),
+			if (state.strategy?.activeChooserPlayerId !== playerId) return state;
+			const passedByPlayer = {
+				...(state.strategy?.passedByPlayer || { A: false, B: false }),
 				[playerId]: true,
 			};
-			const bothPassed = Boolean(nextPassed.A) && Boolean(nextPassed.B);
-			if (bothPassed) {
-				return {
-					...state,
-					phase: "FIREFIGHT",
-					firefight: {
-						...(state.firefight || {}),
-						activePlayerId: state.initiativePlayerId,
-						activeOperativeId: null,
-						orderChosenThisActivation: false,
-						awaitingOrder: false,
-						awaitingActions: false,
-						awaitingChoice: true,
-						roundIndex: 0,
-					},
-					strategy: {
-						...(state.strategy || {}),
-						passed: nextPassed,
-						turn: null,
-					},
-				};
-			}
+			const usedByPlayer = {
+				...(state.strategy?.usedPloyIdsByPlayer || { A: [], B: [] }),
+			};
+			const decisions = Array.isArray(state.strategy?.decisions)
+				? [...state.strategy.decisions]
+				: [];
+			decisions.push({ playerId, type: "PASS" });
+			const lastAction = state.strategy?.lastAction || null;
+			const isSecondConsecutivePass =
+				lastAction?.type === "PASS" && lastAction?.playerId !== playerId;
+			const nextChooser = isSecondConsecutivePass
+				? null
+				: playerId === "A"
+					? "B"
+					: "A";
+
 			return {
 				...state,
 				strategy: {
 					...(state.strategy || {}),
-					passed: nextPassed,
-					turn: getOtherPlayerId(playerId),
+					passedByPlayer,
+					usedPloyIdsByPlayer: usedByPlayer,
+					decisions,
+					activeChooserPlayerId: nextChooser,
+					lastAction: { playerId, type: "PASS" },
 				},
 			};
 		}
 
 		case "END_STRATEGY_PHASE": {
-			if (!state.strategy?.passed?.A || !state.strategy?.passed?.B) return state;
+			const passedByPlayer = state.strategy?.passedByPlayer || {};
+			const ploysComplete =
+				state.strategy?.activeChooserPlayerId === null ||
+				(Boolean(passedByPlayer.A) && Boolean(passedByPlayer.B));
+			if (!ploysComplete) return state;
 			return {
 				...state,
 				phase: "FIREFIGHT",
 				firefight: {
 					...(state.firefight || {}),
-					activePlayerId: state.initiativePlayerId,
+					activePlayerId: state.topBar?.initiativePlayerId ?? null,
 					activeOperativeId: null,
 					orderChosenThisActivation: false,
 					awaitingChoice: true,
@@ -1582,7 +1644,10 @@ function reduceGameState(state, action) {
 			return {
 				...state,
 				turningPoint: tp + 1,
-				initiativePlayerId: null,
+				topBar: {
+					...(state.topBar || {}),
+					initiativePlayerId: null,
+				},
 				phase: "STRATEGY",
 				...resetTpFlags(state),
 			};

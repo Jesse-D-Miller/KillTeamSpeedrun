@@ -2,7 +2,6 @@ import "./App.css";
 import UnitCard from "./ui/components/UnitCard";
 import TopBar from "./ui/components/TopBar";
 import LogNotice from "./ui/components/LogNotice";
-import InitiativeModal from "./ui/components/InitiativeModal";
 import TargetSelectModal from "./ui/components/TargetSelectModal";
 import DiceInputModal from "./ui/components/DiceInputModal";
 import DefenseAllocationModal from "./ui/components/DefenseAllocationModal";
@@ -11,6 +10,7 @@ import ArmySelector from "./ui/screens/ArmySelector";
 import UnitSelector from "./ui/screens/UnitSelector";
 import MultiplayerLobby from "./ui/screens/MultiplayerLobby";
 import UnitCardFocused from "./ui/screens/UnitCardFocused";
+import StrategyPhase from "./ui/screens/StrategyPhase";
 import {
   gameReducer,
   initialCombatState,
@@ -150,15 +150,18 @@ const armies = Object.entries(killteamModules).map(([path, data]) => ({
   units: normalizeKillteamData(data),
 }));
 
-function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
+function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = true }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { username } = useParams();
-  const [state, dispatch] = useReducer(gameReducer, {
+  const buildInitialState = () => ({
     gameId: generateClientId(),
     appliedEventIds: new Set(),
     phase: "SETUP",
     turningPoint: 0,
-    initiativePlayerId: null,
+    topBar: {
+      initiativePlayerId: null,
+    },
     cp: { A: 0, B: 0 },
     endedAt: null,
     winner: null,
@@ -170,6 +173,12 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
       passed: { A: false, B: false },
       usedStrategicGambits: { A: [], B: [] },
       turn: null,
+      activeChooserPlayerId: null,
+      passedByPlayer: { A: false, B: false },
+      usedPloyIdsByPlayer: { A: [], B: [] },
+      lastAction: null,
+      cpAwardedForTP: null,
+      decisions: [],
       cpGrantedThisTP: false,
       operativesReadiedThisTP: false,
     },
@@ -189,6 +198,29 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
     ui: {
       actionFlow: null,
     },
+  });
+
+  const [state, dispatch] = useReducer(gameReducer, null, () => {
+    const initialState = buildInitialState();
+    if (typeof window === "undefined" || typeof window.ktGetGameState !== "function") {
+      return initialState;
+    }
+    const shared = window.ktGetGameState();
+    if (!shared || typeof shared !== "object" || !shared.phase) {
+      return initialState;
+    }
+    const merged = {
+      ...initialState,
+      ...shared,
+      topBar: { ...(initialState.topBar || {}), ...(shared.topBar || {}) },
+    };
+    if (!Array.isArray(merged.game) || merged.game.length === 0) {
+      merged.game = initialUnits;
+    }
+    if (!merged.appliedEventIds) {
+      merged.appliedEventIds = new Set();
+    }
+    return merged;
   });
   const socketRef = useRef(null);
   const seenDamageIdsRef = useRef(new Set());
@@ -215,6 +247,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   const skipToastRef = useRef(null);
   const [tpEndToast, setTpEndToast] = useState(null);
   const prevPhaseRef = useRef(null);
+  const stateRef = useRef(state);
 
   const [selectedUnitId, setSelectedUnitId] = useState(
     initialUnits?.[0]?.id ?? null,
@@ -339,12 +372,41 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
           vp,
           turningPoint,
           phase,
-          initiativePlayerId: state.initiativePlayerId,
+          initiativePlayerId: state.topBar?.initiativePlayerId ?? null,
         },
         latestLogSummary,
       },
     });
   };
+
+  useEffect(() => {
+    if (!username) return;
+    if (phase !== "STRATEGY") return;
+    if (location.pathname.endsWith("/strategy-phase")) return;
+    const baseState = { ...(location.state || {}) };
+    delete baseState.topBar;
+    delete baseState.latestLogSummary;
+    navigate(`/${username}/strategy-phase`, {
+      state: {
+        ...baseState,
+        slot: playerSlot,
+        gameCode,
+      },
+    });
+  }, [
+    phase,
+    username,
+    location.pathname,
+    location.state,
+    navigate,
+    playerSlot,
+    gameCode,
+    cp,
+    vp,
+    turningPoint,
+    state.topBar?.initiativePlayerId,
+    latestLogSummary,
+  ]);
   const getAttackCritThreshold = (weapon) => {
     const rules = normalizeWeaponRules(weapon);
     const lethalRule = rules.find((rule) => rule.id === "lethal");
@@ -401,10 +463,22 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
 
   useEffect(() => {
     if (phase !== "STRATEGY") return;
-    if (!state.initiativePlayerId) return;
-    if (state.strategy?.cpGrantedThisTP) return;
-    dispatchGameEvent("GAIN_CP");
-  }, [phase, state.initiativePlayerId, state.strategy?.cpGrantedThisTP]);
+    if (location.pathname.endsWith("/strategy-phase")) return;
+    if (!state.topBar?.initiativePlayerId) return;
+    if (state.strategy?.cpAwardedForTP === Number(turningPoint)) return;
+    const tpNumber = Number(turningPoint) || 1;
+    const initiative = state.topBar?.initiativePlayerId;
+    const awards = tpNumber === 1
+      ? { A: 2, B: 2 }
+      : initiative === "A"
+        ? { A: 1, B: 2 }
+        : { A: 2, B: 1 };
+    dispatchGameEvent("AWARD_COMMAND_POINTS", {
+      tp: tpNumber,
+      awards,
+      reason: "STRATEGY_PHASE",
+    });
+  }, [phase, location.pathname, state.topBar?.initiativePlayerId, state.strategy?.cpAwardedForTP, turningPoint]);
 
   useEffect(() => {
     if (phase !== "STRATEGY") return;
@@ -488,15 +562,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
 
   const currentPlayerId = playerSlot || getOrCreatePlayerId();
   const otherPlayerId = playerSlot ? (playerSlot === "A" ? "B" : "A") : null;
-  const showInitiativeModal =
-    phase === "STRATEGY" && !state.initiativePlayerId;
-  const isStrategyReady =
-    phase === "STRATEGY" &&
-    Number.isFinite(Number(turningPoint)) &&
-    turningPoint >= 1 &&
-    turningPoint <= 4 &&
-    Boolean(state.setup?.teamsLocked) &&
-    Boolean(state.setup?.deploymentComplete);
   const combatState = state.combatState;
   const actionFlow = state.ui?.actionFlow ?? null;
   const attackModalOpen =
@@ -968,6 +1033,51 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
     sendMultiplayerEvent("GAME_EVENT", { type, payload, eventId, ts }, eventId, ts);
   };
 
+  const publishGameState = (nextState) => {
+    if (typeof window === "undefined") return;
+    stateRef.current = nextState;
+    const subs = window.__ktGameStateSubs;
+    if (subs && subs.size) {
+      subs.forEach((fn) => {
+        try {
+          fn(nextState);
+        } catch {
+          // ignore subscriber errors
+        }
+      });
+    }
+    window.dispatchEvent(
+      new CustomEvent("kt:state", { detail: { state: nextState } }),
+    );
+  };
+
+  useEffect(() => {
+    window.ktDispatchGameEvent = dispatchGameEvent;
+    return () => {
+      if (window.ktDispatchGameEvent === dispatchGameEvent) {
+        delete window.ktDispatchGameEvent;
+      }
+    };
+  }, [dispatchGameEvent]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!window.__ktGameStateSubs) {
+      window.__ktGameStateSubs = new Set();
+    }
+    window.ktGetGameState = () => stateRef.current;
+    window.ktSubscribeGameState = (fn) => {
+      if (typeof fn !== "function") return () => {};
+      window.__ktGameStateSubs.add(fn);
+      fn(stateRef.current);
+      return () => window.__ktGameStateSubs.delete(fn);
+    };
+  }, []);
+
+  useEffect(() => {
+    publishGameState(state);
+  }, [state]);
+
   const dispatchDamageEvent = (targetUnitId, damage) => {
     if (!targetUnitId || typeof damage !== "number") return;
     const eventId = generateClientId();
@@ -1045,6 +1155,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
     };
   }, [gameCode, playerSlot]);
 
+  if (!renderUi) return null;
+
   return (
     <div className="App">
       <div className={`kt-shell ${showTurnGlow ? "kt-shell--turn-glow" : ""}`}>
@@ -1054,7 +1166,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
             vp={vp}
             turningPoint={turningPoint}
             phase={phase}
-            initiativePlayerId={state.initiativePlayerId}
+            initiativePlayerId={state.topBar?.initiativePlayerId ?? null}
           />
           <LogNotice summary={latestLogSummary} />
 
@@ -1085,15 +1197,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
           </main>
         </div>
       </div>
-
-      <InitiativeModal
-        isOpen={showInitiativeModal}
-        isPlayerA={playerSlot === "A"}
-        onSelectWinner={(playerId) =>
-          dispatchGameEvent("SET_INITIATIVE", { winnerPlayerId: playerId })
-        }
-        onClose={() => {}}
-      />
 
       <TargetSelectModal
         open={shootModalOpen}
@@ -1985,7 +2088,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys }) {
   );
 }
 
-function ArmyOverlayRoute() {
+function ArmyOverlayRoute({ renderUi = true }) {
   const location = useLocation();
   const gameCode = location.state?.gameCode;
   const slot = location.state?.slot;
@@ -2112,7 +2215,17 @@ function ArmyOverlayRoute() {
       playerSlot={slot}
       gameCode={gameCode}
       teamKeys={{ alpha: teamA?.key, beta: teamB?.key }}
+      renderUi={renderUi}
     />
+  );
+}
+
+function StrategyPhaseRoute() {
+  return (
+    <>
+      <ArmyOverlayRoute renderUi={false} />
+      <StrategyPhase />
+    </>
   );
 }
 
@@ -2133,6 +2246,7 @@ function App() {
       <Route path="/multiplayer" element={<MultiplayerLobby />} />
       <Route path="/:username/army-selector" element={<ArmySelector />} />
       <Route path="/:username/unit-selector" element={<UnitSelector />} />
+      <Route path="/:username/strategy-phase" element={<StrategyPhaseRoute />} />
       <Route path="/:username/army" element={<ArmyOverlayRoute />} />
       <Route path="/:username/army/unit/:unitId" element={<UnitCardFocused />} />
       <Route path="*" element={<Navigate to="/multiplayer" replace />} />

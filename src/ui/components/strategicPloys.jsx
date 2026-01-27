@@ -12,6 +12,8 @@ function StrategicPloys({
   isVisible,
   currentPlayerId,
   localPlayerId,
+  isInteractive = true,
+  activeChooserPlayerId = null,
   usedPloyIds = [],
   passedByPlayer = {},
   onUsePloy,
@@ -39,6 +41,10 @@ function StrategicPloys({
   const passedLabel = passedByPlayer?.[localPlayerId]
     ? `Player ${localPlayerId} passed`
     : null;
+  const waitingLabel =
+    !isInteractive && activeChooserPlayerId
+      ? `Waiting for Player ${activeChooserPlayerId}...`
+      : null;
 
   return (
     <section className="kt-ploys">
@@ -46,6 +52,7 @@ function StrategicPloys({
       <div className="kt-ploys__meta">
         <span className="kt-ploys__turn">{turnLabel}</span>
         {passedLabel && <span className="kt-ploys__passed">{passedLabel}</span>}
+        {waitingLabel && <span className="kt-ploys__waiting">{waitingLabel}</span>}
       </div>
       <div className="kt-ploys__list">
         {ploys.map((ploy) => (
@@ -53,7 +60,7 @@ function StrategicPloys({
             key={ploy.id || ploy.name}
             className="kt-ploys__item"
             type="button"
-            disabled={!isMyTurn || usedPloyIds.includes(ploy.id)}
+            disabled={!isInteractive || !isMyTurn || usedPloyIds.includes(ploy.id)}
             onClick={() => onUsePloy?.(ploy)}
           >
             <div className="kt-ploys__name">{ploy.name}</div>
@@ -67,7 +74,7 @@ function StrategicPloys({
         <button
           className="kt-ploys__pass"
           type="button"
-          disabled={!isMyTurn}
+          disabled={!isInteractive || !isMyTurn}
           onClick={() => onPass?.()}
         >
           Pass

@@ -27,9 +27,10 @@ const PHASE_ALLOWED_EVENTS = {
     "ROLL_INITIATIVE",
     "SET_INITIATIVE",
     "GAIN_CP",
+    "AWARD_COMMAND_POINTS",
     "READY_ALL_OPERATIVES",
-    "USE_STRATEGIC_GAMBIT",
-    "PASS_STRATEGY",
+    "USE_STRATEGIC_PLOY",
+    "PASS_STRATEGIC_PLOY",
     "END_STRATEGY_PHASE",
     "TURNING_POINT_START",
     "TOGGLE_ORDER",
@@ -251,7 +252,7 @@ export const validateGameIntent = (state, event) => {
       if (state?.phase !== "STRATEGY") {
         pushIssue(issues, "Initiative only allowed in STRATEGY.");
       }
-      if (state?.initiativePlayerId != null) {
+      if (state?.topBar?.initiativePlayerId != null) {
         pushIssue(issues, "Initiative already set.");
       }
       const winnerPlayerId = event.payload?.winnerPlayerId || event.payload?.playerId;
@@ -263,11 +264,37 @@ export const validateGameIntent = (state, event) => {
       if (state?.phase !== "STRATEGY") {
         pushIssue(issues, "GAIN_CP only allowed in STRATEGY.");
       }
-      if (state?.initiativePlayerId == null) {
+      if (state?.topBar?.initiativePlayerId == null) {
         pushIssue(issues, "Initiative must be set before GAIN_CP.");
       }
       if (state?.strategy?.cpGrantedThisTP) {
         pushIssue(issues, "CP already granted this turning point.");
+      }
+      break;
+    }
+
+    case "AWARD_COMMAND_POINTS": {
+      const { tp, awards } = event.payload || {};
+      if (state?.phase !== "STRATEGY") {
+        pushIssue(issues, "AWARD_COMMAND_POINTS only allowed in STRATEGY.");
+      }
+      if (!Number.isFinite(Number(tp))) {
+        pushIssue(issues, "Missing or invalid turning point.");
+      }
+      if (!awards || typeof awards !== "object") {
+        pushIssue(issues, "Missing awards payload.");
+      } else {
+        const awardA = Number(awards.A ?? 0);
+        const awardB = Number(awards.B ?? 0);
+        if (!Number.isFinite(awardA) || awardA < 0) {
+          pushIssue(issues, "Award for A must be a non-negative number.");
+        }
+        if (!Number.isFinite(awardB) || awardB < 0) {
+          pushIssue(issues, "Award for B must be a non-negative number.");
+        }
+      }
+      if (state?.strategy?.cpAwardedForTP === Number(tp)) {
+        pushIssue(issues, "CP already awarded for this turning point.");
       }
       break;
     }
@@ -285,39 +312,24 @@ export const validateGameIntent = (state, event) => {
       break;
     }
 
-    case "USE_STRATEGIC_GAMBIT": {
-      const { playerId, gambitId } = event.payload || {};
-      if (state?.phase !== "STRATEGY") {
-        pushIssue(issues, "Strategic gambits only allowed in STRATEGY.");
+      case "USE_STRATEGIC_PLOY": {
+        const { playerId, ployId } = event.payload || {};
+        if (!playerId) pushIssue(issues, "Missing playerId.");
+        if (!ployId) pushIssue(issues, "Missing ployId.");
+        if (phase !== "STRATEGY") {
+          pushIssue(issues, "USE_STRATEGIC_PLOY only allowed in STRATEGY.");
+        }
+        break;
       }
-      if (!state?.strategy?.operativesReadiedThisTP) {
-        pushIssue(issues, "Operatives must be readied before using strategic gambits.");
-      }
-      if (!playerId) pushIssue(issues, "Missing playerId.");
-      if (!gambitId) pushIssue(issues, "Missing gambitId.");
-      if (playerId && state?.strategy?.turn !== playerId) {
-        pushIssue(issues, "Not this player's strategy turn.");
-      }
-      if (
-        playerId &&
-        state?.strategy?.usedStrategicGambits?.[playerId]?.includes(gambitId)
-      ) {
-        pushIssue(issues, "Strategic gambit already used.");
-      }
-      break;
-    }
 
-    case "PASS_STRATEGY": {
-      const { playerId } = event.payload || {};
-      if (state?.phase !== "STRATEGY") {
-        pushIssue(issues, "PASS_STRATEGY only allowed in STRATEGY.");
+      case "PASS_STRATEGIC_PLOY": {
+        const { playerId } = event.payload || {};
+        if (!playerId) pushIssue(issues, "Missing playerId.");
+        if (phase !== "STRATEGY") {
+          pushIssue(issues, "PASS_STRATEGIC_PLOY only allowed in STRATEGY.");
+        }
+        break;
       }
-      if (!playerId) pushIssue(issues, "Missing playerId.");
-      if (playerId && state?.strategy?.turn !== playerId) {
-        pushIssue(issues, "Not this player's strategy turn.");
-      }
-      break;
-    }
 
     case "END_STRATEGY_PHASE": {
       if (state?.phase !== "STRATEGY") {

@@ -46,9 +46,9 @@ function LogsWindow({ entries, cursor, onUndo, onRedo, units = [], debug = false
         return `Player ${meta.playerId ?? "?"} gains ${meta.amount ?? 0} CP`;
       case "READY_ALL_OPERATIVES":
         return "All operatives readied";
-      case "USE_STRATEGIC_GAMBIT":
-        return `Player ${meta.playerId ?? "?"} used: ${meta.gambitId ?? "ploy"}`;
-      case "PASS_STRATEGY":
+      case "USE_STRATEGIC_PLOY":
+        return `Player ${meta.playerId ?? "?"} used: ${meta.ployId ?? "ploy"}`;
+      case "PASS_STRATEGIC_PLOY":
         return `Player ${meta.playerId ?? "?"} passed`;
       case "SET_ACTIVE_OPERATIVE":
         return `Player ${meta.playerId ?? "?"} activates ${nameFor(meta.operativeId, "operative")}${meta.order ? ` (${meta.order})` : ""}`;

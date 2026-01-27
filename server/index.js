@@ -29,6 +29,7 @@ const createGame = () => {
     players: { A: null, B: null },
     state: null,
     eventLog: [],
+    seq: 0,
     createdAt: new Date().toISOString(),
   };
   games.set(code, game);
@@ -165,10 +166,14 @@ wss.on("connection", (ws, url) => {
         const event = {
           ...message.event,
           slot,
+          code,
+          seq: game.seq + 1,
+          serverTs: Date.now(),
         };
 
+        game.seq += 1;
         game.eventLog.push(event);
-        broadcastToGame(code, { type: "EVENT", event });
+        broadcastToGame(code, { type: "EVENT", code, event });
       }
     } catch (err) {
       ws.send(JSON.stringify({ type: "ERROR", error: "INVALID_MESSAGE" }));

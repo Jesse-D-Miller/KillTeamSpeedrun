@@ -52,7 +52,7 @@ export const allOperativesExpended = (game) => {
 export const nextActivePlayer = (game) => {
   const normalized = normalizeGame(game);
   const current = normalized.firefight?.activePlayerId || null;
-  const initiative = normalized.initiativePlayerId || null;
+  const initiative = normalized.topBar?.initiativePlayerId || null;
   const readyA = getReadyOperatives(normalized, "A").length;
   const readyB = getReadyOperatives(normalized, "B").length;
 

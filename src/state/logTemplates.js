@@ -84,6 +84,29 @@ export const buildLogEntriesForEvent = (stateBefore, stateAfter, event) => {
       }
       break;
     }
+    case "AWARD_COMMAND_POINTS": {
+      const beforeA = stateBefore.cp?.A ?? 0;
+      const beforeB = stateBefore.cp?.B ?? 0;
+      const afterA = stateAfter.cp?.A ?? 0;
+      const afterB = stateAfter.cp?.B ?? 0;
+      const deltaA = afterA - beforeA;
+      const deltaB = afterB - beforeB;
+      if (deltaA > 0) {
+        add({
+          type: "GAIN_CP",
+          summary: `Player A gains ${deltaA} CP`,
+          meta: { playerId: "A", amount: deltaA },
+        });
+      }
+      if (deltaB > 0) {
+        add({
+          type: "GAIN_CP",
+          summary: `Player B gains ${deltaB} CP`,
+          meta: { playerId: "B", amount: deltaB },
+        });
+      }
+      break;
+    }
     case "READY_ALL_OPERATIVES":
       if (!stateBefore.strategy?.operativesReadiedThisTP && stateAfter.strategy?.operativesReadiedThisTP) {
         add({
@@ -93,23 +116,23 @@ export const buildLogEntriesForEvent = (stateBefore, stateAfter, event) => {
         });
       }
       break;
-    case "USE_STRATEGIC_GAMBIT": {
+    case "USE_STRATEGIC_PLOY": {
       const playerId = payload?.playerId;
-      const gambitId = payload?.gambitId;
-      if (playerId && gambitId) {
+      const ployId = payload?.ployId;
+      if (playerId && ployId) {
         add({
-          type: "USE_STRATEGIC_GAMBIT",
-          summary: `Player ${playerId} used: ${gambitId}`,
-          meta: { playerId, gambitId },
+          type: "USE_STRATEGIC_PLOY",
+          summary: `Player ${playerId} used: ${ployId}`,
+          meta: { playerId, ployId },
         });
       }
       break;
     }
-    case "PASS_STRATEGY": {
+    case "PASS_STRATEGIC_PLOY": {
       const playerId = payload?.playerId;
       if (playerId) {
         add({
-          type: "PASS_STRATEGY",
+          type: "PASS_STRATEGIC_PLOY",
           summary: `Player ${playerId} passed`,
           meta: { playerId, phase: "STRATEGY" },
         });

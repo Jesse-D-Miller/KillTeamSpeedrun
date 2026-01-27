@@ -342,7 +342,7 @@ function UnitSelector() {
 			selectedWeaponsByUnitIdA = weaponSelectionsA,
 			selectedWeaponsByUnitIdB = weaponSelectionsB,
 		} = override;
-		navigate(`/${username}/army`, {
+		navigate(`/${username}/strategy-phase`, {
 			state: isSingleSelect
 				? {
 						armyKey,
