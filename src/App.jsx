@@ -2,9 +2,7 @@ import "./App.css";
 import UnitCard from "./ui/components/UnitCard";
 import TopBar from "./ui/components/TopBar";
 import LogNotice from "./ui/components/LogNotice";
-import DiceInputModal from "./ui/components/DiceInputModal";
-import DefenseAllocationModal from "./ui/components/DefenseAllocationModal";
-import DefenseRollModal from "./ui/components/DefenseRollModal";
+import AttackResolutionScreen from "./ui/screens/AttackResolutionScreen";
 import WeaponSelectModal from "./ui/components/WeaponSelectModal";
 import ArmySelector from "./ui/screens/ArmySelector";
 import UnitSelector from "./ui/screens/UnitSelector";
@@ -264,8 +262,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
   const [shootModalOpen, setShootModalOpen] = useState(false);
   const [selectedTargetId, setSelectedTargetId] = useState(null);
   const [selectedSecondaryIds, setSelectedSecondaryIds] = useState([]);
-  const [allocationModalOpen, setAllocationModalOpen] = useState(false);
-  const [pendingAttack, setPendingAttack] = useState(null);
   const [intentGate, setIntentGate] = useState({
     open: false,
     issues: [],
@@ -740,28 +736,22 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
   useEffect(() => {
     prevCombatStageRef.current = combatState?.stage ?? null;
   }, [combatState?.stage]);
-  const attackModalOpen =
+  const attackResolutionRole =
+    combatState?.attackerId === currentPlayerId
+      ? "attacker"
+      : combatState?.defenderId === currentPlayerId
+        ? "defender"
+        : null;
+  const attackResolutionOpen =
+    Boolean(attackResolutionRole) &&
     [
       COMBAT_STAGES.ATTACK_ROLLING,
       COMBAT_STAGES.ATTACK_LOCKED,
       COMBAT_STAGES.DEFENSE_ROLLING,
-      COMBAT_STAGES.BLOCKS_RESOLVING,
+      COMBAT_STAGES.DEFENSE_LOCKED,
       COMBAT_STAGES.READY_TO_RESOLVE_DAMAGE,
       COMBAT_STAGES.DONE,
-    ].includes(combatState?.stage) &&
-    combatState?.attackerId === currentPlayerId;
-  const defenseModalOpen =
-    [
-      COMBAT_STAGES.ATTACK_ROLLING,
-      COMBAT_STAGES.ATTACK_LOCKED,
-      COMBAT_STAGES.DEFENSE_ROLLING,
-      COMBAT_STAGES.READY_TO_RESOLVE_DAMAGE,
-      COMBAT_STAGES.DONE,
-    ].includes(combatState?.stage) &&
-    combatState?.defenderId === currentPlayerId;
-  const blocksModalOpen =
-    combatState?.stage === COMBAT_STAGES.BLOCKS_RESOLVING &&
-    combatState?.defenderId === currentPlayerId;
+    ].includes(combatState?.stage);
 
   const attackingOperative = state.game.find(
     (unit) => unit.id === combatState?.attackingOperativeId,
@@ -2014,237 +2004,46 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
         </div>
       )}
 
-      <DiceInputModal
-        open={attackModalOpen}
+      <AttackResolutionScreen
+        open={attackResolutionOpen}
+        role={attackResolutionRole}
         attacker={attackingOperative}
         defender={defendingOperative}
-        weaponProfile={combatState?.weaponProfile || selectedWeapon}
+        weapon={combatState?.weaponProfile || selectedWeapon}
+        combatStage={combatState?.stage}
         attackDiceCount={selectedWeapon?.atk ?? 0}
         defenseDiceCount={3}
-        attackHitThreshold={selectedWeapon?.hit ?? 6}
-        hasCeaseless={hasCeaseless}
-        hasBalanced={hasBalanced}
-        accurateMax={getAccurateMax(
-          combatState?.weaponProfile || selectedWeapon,
-        )}
-        combatInputs={combatState?.inputs}
-        combatStage={combatState?.stage}
-        combatAttackRoll={combatState?.attackRoll}
-        combatDefenseRoll={combatState?.defenseRoll}
-        combatSummary={combatSummary}
-        onSetCombatAttackRoll={(roll, inputs) => {
-          dispatchCombatEvent("SET_ATTACK_ROLL", { roll, inputs });
+        onSetAttackRoll={(roll) => {
+          dispatchCombatEvent("SET_ATTACK_ROLL", { roll });
         }}
-        onSetCombatInputs={(inputs) => {
-          dispatchCombatEvent("SET_COMBAT_INPUTS", { inputs });
+        onLockAttack={() => {
+          dispatchCombatEvent("LOCK_ATTACK_ROLL");
         }}
-        onLockAttack={(payload) => {
-          // payload comes from DiceInputModal handleLockInAttackClick
-          // { targetId, woundsCurrent, woundsMax, combatEnded, killed, log, modifiers }
-
-          const defenderUnit = defendingOperative;
-
-          // 1) Apply Devastating damage immediately (if present)
-          const dmg = Number(payload?.modifiers?.devastatingDamage ?? 0);
-          if (defenderUnit?.id && dmg > 0) {
-            const oldHealth = Number(defenderUnit?.state?.woundsCurrent);
-            const fallbackOldHealth = Number(payload?.woundsCurrent ?? 0) + dmg;
-            const safeOldHealth = Number.isFinite(oldHealth)
-              ? oldHealth
-              : fallbackOldHealth;
-            const newHealth = Number.isFinite(Number(payload?.woundsCurrent))
-              ? Number(payload?.woundsCurrent)
-              : Math.max(0, safeOldHealth - dmg);
-
-            dispatchDamageEvent(defenderUnit.id, dmg);
-
-          }
-
-          // 2) If Devastating killed the target, end combat immediately
-          if (payload?.killed || payload?.combatEnded) {
-            dispatchCombatEvent("RESOLVE_COMBAT");
-
-            const queue = combatState?.attackQueue || [];
-            const idx = combatState?.currentAttackIndex ?? 0;
-            if (queue.length > 0 && idx < queue.length - 1) {
-              dispatchCombatEvent("ADVANCE_ATTACK_QUEUE");
-            } else {
-              dispatchCombatEvent("CLEAR_COMBAT_STATE");
-            }
-            return;
-          }
-
-          // 3) Otherwise proceed as normal: lock attack and wait for defense
-          dispatchCombatEvent("LOCK_ATTACK_ROLL", {
-            ruleLog: payload?.log ?? [],
-            modifiers: payload?.modifiers ?? {},
-          });
-        }}
-        readOnly={combatState?.stage !== COMBAT_STAGES.ATTACK_ROLLING}
-        statusMessage={
-          combatState?.stage === COMBAT_STAGES.ATTACK_LOCKED
-            ? "Attack locked in. Waiting for defense..."
-            : combatState?.stage === COMBAT_STAGES.DEFENSE_ROLLING
-              ? "Defense rolling..."
-              : combatState?.stage === COMBAT_STAGES.BLOCKS_RESOLVING
-                ? "Defender is assigning blocks..."
-                : combatState?.stage === COMBAT_STAGES.READY_TO_RESOLVE_DAMAGE
-                  ? "Ready to resolve damage."
-                  : combatState?.stage === COMBAT_STAGES.DONE
-                    ? "Combat resolved."
-                    : null
-        }
-        onAutoRoll={({ attackBefore, defenseDice, ceaseless }) => {
-        }}
-        onClose={() => {
-          dispatchCombatEvent("CLEAR_COMBAT_STATE");
-        }}
-        onConfirm={({ attackDice, defenseDice, ceaseless, autoLogged }) => {
-          if (combatState?.stage === COMBAT_STAGES.READY_TO_RESOLVE_DAMAGE) {
-            const weapon = combatState?.weaponProfile;
-            const attackerUnit = attackingOperative;
-            const defenderUnit = defendingOperative;
-            const blocks = combatState?.blocks;
-            const remainingHits = blocks?.remainingHits ?? 0;
-            const remainingCrits = blocks?.remainingCrits ?? 0;
-            const [normalDmg, critDmg] = weapon?.dmg
-              ?.split("/")
-              .map(Number) ?? [0, 0];
-            const safeNormalDmg = Number.isFinite(normalDmg) ? normalDmg : 0;
-            const safeCritDmg = Number.isFinite(critDmg) ? critDmg : 0;
-            const totalDamage =
-              remainingHits * safeNormalDmg + remainingCrits * safeCritDmg;
-
-            if (defenderUnit?.id) {
-              dispatchDamageEvent(defenderUnit.id, totalDamage);
-            }
-
-            dispatchCombatEvent("RESOLVE_COMBAT");
-            const queue = combatState?.attackQueue || [];
-            const idx = combatState?.currentAttackIndex ?? 0;
-            if (queue.length > 0 && idx < queue.length - 1) {
-              dispatchCombatEvent("ADVANCE_ATTACK_QUEUE");
-            } else {
-              dispatchCombatEvent("CLEAR_COMBAT_STATE");
-            }
-            return;
-          }
-
-          setPendingAttack({
-            attacker,
-            defender,
-            weapon: selectedWeapon,
-            attackDice,
-            defenseDice,
-          });
-
-          setAllocationModalOpen(true);
-        }}
-      />
-
-      <DefenseRollModal
-        open={defenseModalOpen}
-        stage={combatState?.stage}
-        attacker={attackingOperative}
-        defender={defendingOperative}
-        weaponProfile={combatState?.weaponProfile || selectedWeapon}
-        attackRoll={combatState?.attackRoll}
-        combatSummary={combatSummary}
-        defenseDiceCount={3}
-        onClose={() => {
-          dispatchCombatEvent("CLEAR_COMBAT_STATE");
-        }}
-        readOnly={combatState?.stage !== COMBAT_STAGES.DEFENSE_ROLLING}
-        statusMessage={
-          combatState?.stage === COMBAT_STAGES.ATTACK_ROLLING
-            ? "Waiting for attacker to lock in…"
-            : combatState?.stage === COMBAT_STAGES.ATTACK_LOCKED
-              ? "Attacker locked in. Preparing defense roll…"
-              : combatState?.stage === COMBAT_STAGES.DEFENSE_ROLLING
-                ? "Roll defense dice."
-                : combatState?.stage === COMBAT_STAGES.READY_TO_RESOLVE_DAMAGE
-                  ? "Waiting for attacker to resolve…"
-                  : combatState?.stage === COMBAT_STAGES.DONE
-                    ? "Combat resolved."
-                    : null
-        }
         onSetDefenseRoll={(roll) => {
           dispatchCombatEvent("SET_DEFENSE_ROLL", { roll });
         }}
         onLockDefense={() => {
           dispatchCombatEvent("LOCK_DEFENSE_ROLL");
         }}
-      />
-
-      <DefenseAllocationModal
-        open={blocksModalOpen || allocationModalOpen}
-        attacker={attackingOperative || pendingAttack?.attacker}
-        defender={defendingOperative || pendingAttack?.defender}
-        weapon={combatState?.weaponProfile || pendingAttack?.weapon}
-        attackDice={combatState?.attackRoll ?? pendingAttack?.attackDice ?? []}
-        defenseDice={
-          combatState?.defenseRoll ?? pendingAttack?.defenseDice ?? []
-        }
-        hitThreshold={
-          (combatState?.weaponProfile || pendingAttack?.weapon)?.hit ?? 6
-        }
-        saveThreshold={
-          (defendingOperative || pendingAttack?.defender)?.stats?.save ?? 6
-        }
-        attackCritThreshold={getAttackCritThreshold(
-          combatState?.weaponProfile || pendingAttack?.weapon || selectedWeapon,
-        )}
-        onClose={() => {
-          if (blocksModalOpen) {
-            dispatchCombatEvent("CLEAR_COMBAT_STATE");
-            return;
-          }
-          setAllocationModalOpen(false);
-          setPendingAttack(null);
+        onApplyDamage={(targetUnitId, damage) => {
+          dispatchDamageEvent(targetUnitId, damage);
         }}
-        onConfirm={({
-          remainingHits,
-          remainingCrits,
-          defenseEntries,
-          attackEntries,
-        }) => {
-          if (blocksModalOpen) {
-            dispatchCombatEvent("SET_BLOCKS_RESULT", {
-              blocks: {
-                remainingHits,
-                remainingCrits,
-                defenseEntries,
-                attackEntries,
-              },
-            });
-            return;
-          }
-          const weapon = pendingAttack?.weapon;
-          const attacker = pendingAttack?.attacker;
-          const defender = pendingAttack?.defender;
-          const [normalDmg, critDmg] = weapon?.dmg?.split("/").map(Number) ?? [
-            0, 0,
-          ];
-          const safeNormalDmg = Number.isFinite(normalDmg) ? normalDmg : 0;
-          const safeCritDmg = Number.isFinite(critDmg) ? critDmg : 0;
-          const totalDamage =
-            remainingHits * safeNormalDmg + remainingCrits * safeCritDmg;
-          const hits = attackEntries.filter((d) => d.type === "hit").length;
-          const crits = attackEntries.filter((d) => d.type === "crit").length;
-          const defenseHits = defenseEntries.filter(
-            (d) => d.type === "hit",
-          ).length;
-          const defenseCrits = defenseEntries.filter(
-            (d) => d.type === "crit",
-          ).length;
-          const savesUsed = defenseHits + defenseCrits;
+        onResolveComplete={() => {
+          dispatchCombatEvent("SET_COMBAT_STAGE", {
+            stage: COMBAT_STAGES.READY_TO_RESOLVE_DAMAGE,
+          });
+          dispatchCombatEvent("RESOLVE_COMBAT");
 
-          if (defender?.id) {
-            dispatchDamageEvent(defender.id, totalDamage);
+          const queue = combatState?.attackQueue || [];
+          const idx = combatState?.currentAttackIndex ?? 0;
+          if (queue.length > 0 && idx < queue.length - 1) {
+            dispatchCombatEvent("ADVANCE_ATTACK_QUEUE");
+          } else {
+            dispatchCombatEvent("CLEAR_COMBAT_STATE");
           }
-
-          setAllocationModalOpen(false);
-          setPendingAttack(null);
+        }}
+        onCancel={() => {
+          dispatchCombatEvent("CLEAR_COMBAT_STATE");
         }}
       />
 

@@ -1,0 +1,26 @@
+.attack-summary {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: grid;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 0.9rem;
+}
+
+.attack-summary__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.attack-summary__row--keywords {
+  opacity: 0.8;
+  font-size: 0.85rem;
+}
+
+.attack-summary__stat {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
