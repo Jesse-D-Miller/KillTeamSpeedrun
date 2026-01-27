@@ -110,6 +110,7 @@ function Actions({
             type="button"
             onClick={() => onAction?.("reposition")}
             disabled={!attacker || !canUseActions}
+            data-testid="action-reposition"
           >
             Reposition
           </button>
@@ -120,6 +121,7 @@ function Actions({
             type="button"
             onClick={() => onAction?.("dash")}
             disabled={!attacker || !canUseActions}
+            data-testid="action-dash"
           >
             Dash
           </button>
@@ -147,6 +149,7 @@ function Actions({
             type="button"
             onClick={() => onAction?.("charge")}
             disabled={!attacker || !canUseActions}
+            data-testid="action-charge"
           >
             Charge
           </button>
@@ -174,6 +177,7 @@ function Actions({
             type="button"
             onClick={() => onAction?.("fallBack")}
             disabled={!attacker || !canUseActions}
+            data-testid="action-fall-back"
           >
             Fall Back
           </button>
@@ -187,6 +191,7 @@ function Actions({
             type="button"
             onClick={() => onAction?.("pickUpMarker")}
             disabled={!attacker || !canUseActions}
+            data-testid="action-pick-up-marker"
           >
             Pick up Marker
           </button>
@@ -200,6 +205,7 @@ function Actions({
             type="button"
             onClick={() => onAction?.("placeMarker")}
             disabled={!attacker || !canUseActions}
+            data-testid="action-place-marker"
           >
             Place Marker
           </button>

@@ -20,9 +20,10 @@ function UnitCardFocused() {
   const navigate = useNavigate();
   const location = useLocation();
   const { username, unitId } = useParams();
+  const params = new URLSearchParams(location.search);
   const unit = location.state?.unit || null;
-  const slot = location.state?.slot || null;
-  const gameCode = location.state?.gameCode || null;
+  const slot = location.state?.slot || params.get("slot") || "A";
+  const gameCode = location.state?.gameCode || params.get("gameCode") || "E2E";
   const topBar = location.state?.topBar || {};
   const latestLogSummary = location.state?.latestLogSummary || "";
   const storedArmyKeyA =
@@ -33,7 +34,7 @@ function UnitCardFocused() {
     gameCode && typeof window !== "undefined"
       ? localStorage.getItem(`kt_game_${gameCode}_army_B`)
       : null;
-  const fallbackArmyKey = location.state?.armyKey || null;
+  const fallbackArmyKey = location.state?.armyKey || params.get("armyKey") || null;
   const armyKeyForSlot =
     slot === "A"
       ? location.state?.armyKeyA || fallbackArmyKey || storedArmyKeyA

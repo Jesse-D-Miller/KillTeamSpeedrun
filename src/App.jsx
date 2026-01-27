@@ -483,7 +483,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
 
   const handleOpenUnitCard = (unit) => {
     if (!username) return;
-    navigate(`/${username}/army/unit/${unit.id}`, {
+    const search = isE2E() ? location.search : "";
+    navigate(`/${username}/army/unit/${unit.id}${search}`, {
       state: {
         unit,
         slot: playerSlot,
@@ -713,6 +714,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
       return;
     }
     if (!isTargetSelectStep && isTargetSelectRoute) {
+      if (isE2E()) return;
       navigate(`/${username}/army`, {
         state: {
           slot: playerSlot,
@@ -1225,20 +1227,41 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
   };
 
   useEffect(() => {
-    window.ktDispatchGameEvent = dispatchGameEvent;
-    return () => {
-      if (window.ktDispatchGameEvent === dispatchGameEvent) {
-        delete window.ktDispatchGameEvent;
+    if (typeof window === "undefined") return undefined;
+    const e2e = new URLSearchParams(window.location.search).get("e2e") === "1";
+    if (e2e) {
+      if (!Array.isArray(window.__ktE2E_gameEvents)) {
+        window.__ktE2E_gameEvents = [];
       }
+      if (!Array.isArray(window.__ktE2E_combatEvents)) {
+        window.__ktE2E_combatEvents = [];
+      }
+    }
+    window.ktDispatchGameEvent = (type, payload = {}) => {
+      if (e2e && Array.isArray(window.__ktE2E_gameEvents)) {
+        window.__ktE2E_gameEvents.push({ type, payload });
+      }
+      dispatchGameEvent(type, payload);
+    };
+    return () => {
+      delete window.ktDispatchGameEvent;
     };
   }, [dispatchGameEvent]);
 
   useEffect(() => {
-    window.ktDispatchCombatEvent = dispatchCombatEvent;
-    return () => {
-      if (window.ktDispatchCombatEvent === dispatchCombatEvent) {
-        delete window.ktDispatchCombatEvent;
+    if (typeof window === "undefined") return undefined;
+    const e2e = new URLSearchParams(window.location.search).get("e2e") === "1";
+    if (e2e && !Array.isArray(window.__ktE2E_combatEvents)) {
+      window.__ktE2E_combatEvents = [];
+    }
+    window.ktDispatchCombatEvent = (type, payload = {}) => {
+      if (e2e && Array.isArray(window.__ktE2E_combatEvents)) {
+        window.__ktE2E_combatEvents.push({ type, payload });
       }
+      dispatchCombatEvent(type, payload);
+    };
+    return () => {
+      delete window.ktDispatchCombatEvent;
     };
   }, [dispatchCombatEvent]);
 
@@ -2202,6 +2225,8 @@ function ArmyOverlayRoute({ renderUi = true }) {
   const params = new URLSearchParams(location.search);
   const e2e = params.get("e2e") === "1";
   const slotFromQuery = params.get("slot") === "B" ? "B" : "A";
+  const armyKeyFromQuery = params.get("armyKey") || null;
+  const armyKeyFromQueryB = params.get("armyKeyB") || null;
   const gameCode = location.state?.gameCode;
   const slot = location.state?.slot;
   const armyKey = location.state?.armyKey;
@@ -2234,13 +2259,13 @@ function ArmyOverlayRoute({ renderUi = true }) {
     ? readStoredJson(`kt_game_${gameCode}_weapons_B`)
     : null;
   const armyKeyA = e2e
-    ? armies[0]?.key
+    ? armyKeyFromQuery || "kommandos" || armies[0]?.key
     : location.state?.armyKeyA ||
       (slot === "A" ? armyKey : undefined) ||
       storedArmyKeyA ||
       armyKey;
   const armyKeyB = e2e
-    ? armies[1]?.key || armies[0]?.key
+    ? armyKeyFromQueryB || armyKeyFromQuery || "kommandos" || armies[1]?.key || armies[0]?.key
     : location.state?.armyKeyB ||
       (slot === "B" ? armyKey : undefined) ||
       storedArmyKeyB ||
@@ -2286,11 +2311,19 @@ function ArmyOverlayRoute({ renderUi = true }) {
       ? teamB.units.filter((unit) => selectedUnitIdsB.includes(unit.id))
       : teamB.units;
 
-  const buildTeamUnits = (units, teamId, weaponSelections) =>
+  const buildTeamUnits = (units, teamId, weaponSelections, forceBlastSelected = false) =>
     units.map((unit) => {
       const selectedWeaponNames = Array.isArray(weaponSelections?.[unit.id])
         ? weaponSelections[unit.id]
         : null;
+      const findBlastWeapon = (weaponList) =>
+        weaponList.find((weapon) =>
+          normalizeWeaponRulesList(weapon?.wr).some((rule) => {
+            if (!rule) return false;
+            if (typeof rule === "string") return rule.toLowerCase().includes("blast");
+            return rule.id === "blast";
+          }),
+        );
       const filteredWeapons = Array.isArray(unit.weapons)
         ? selectedWeaponNames && selectedWeaponNames.length > 0
           ? unit.weapons.filter((weapon) =>
@@ -2298,6 +2331,9 @@ function ArmyOverlayRoute({ renderUi = true }) {
             )
           : unit.weapons
         : [];
+      const forcedSelectedWeapon = forceBlastSelected
+        ? findBlastWeapon(filteredWeapons)?.name || filteredWeapons[0]?.name
+        : null;
 
       return {
         ...unit,
@@ -2308,6 +2344,9 @@ function ArmyOverlayRoute({ renderUi = true }) {
         stats: { ...unit.stats },
         state: {
           ...unit.state,
+          ...(forcedSelectedWeapon
+            ? { selectedWeapon: forcedSelectedWeapon }
+            : {}),
           apCurrent:
             Number.isFinite(Number(unit.state?.apCurrent))
               ? Number(unit.state?.apCurrent)
@@ -2328,8 +2367,8 @@ function ArmyOverlayRoute({ renderUi = true }) {
     });
 
   const combinedUnits = [
-    ...buildTeamUnits(filteredUnitsA, "alpha", selectedWeaponsByUnitIdA),
-    ...buildTeamUnits(filteredUnitsB, "beta", selectedWeaponsByUnitIdB),
+    ...buildTeamUnits(filteredUnitsA, "alpha", selectedWeaponsByUnitIdA, e2e),
+    ...buildTeamUnits(filteredUnitsB, "beta", selectedWeaponsByUnitIdB, false),
   ];
 
   return (

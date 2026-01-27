@@ -25,7 +25,7 @@ function TargetSelectModal({
     const interactive = event?.target?.closest?.(
       "button, a, input, select, textarea, [role='button']",
     );
-    if (interactive) return;
+    if (interactive && interactive !== event.currentTarget) return;
 
     if (unit.id === primaryTargetId) {
       onSelectPrimary?.(null);
@@ -64,8 +64,8 @@ function TargetSelectModal({
             onClick={(event) => handleTargetClick(event, unit)}
             onKeyDown={(event) => {
               if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
                 handleTargetClick(event, unit);
+                event.preventDefault();
               }
             }}
           >

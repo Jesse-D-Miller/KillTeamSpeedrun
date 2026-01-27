@@ -7,10 +7,11 @@ function TargetSelectScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const { username } = useParams();
-  const mode = location.state?.mode || "shoot";
-  const slot = location.state?.slot || null;
-  const gameCode = location.state?.gameCode || null;
-  const attackerId = location.state?.attackerId || null;
+  const params = new URLSearchParams(location.search);
+  const mode = location.state?.mode || params.get("mode") || "shoot";
+  const slot = location.state?.slot || params.get("slot") || "A";
+  const gameCode = location.state?.gameCode || params.get("gameCode") || "E2E";
+  const attackerId = location.state?.attackerId || params.get("attackerId") || null;
 
   const [gameState, setGameState] = useState(() =>
     typeof window !== "undefined" && typeof window.ktGetGameState === "function"
