@@ -121,6 +121,7 @@ function UnitCard({
         onCardClick ? "kt-card--clickable" : ""
       } ${isDead ? "kt-card--dead" : ""} ${className}`}
       onClick={handleCardClick}
+      data-testid={`unit-card-${unit.id}`}
     >
       {/* Header */}
       <header className="kt-card__header">

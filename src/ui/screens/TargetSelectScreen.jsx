@@ -127,29 +127,31 @@ function TargetSelectScreen() {
   const weaponMode = mode === "fight" ? "melee" : "ranged";
 
   return (
-    <TargetSelectModal
-      open={true}
-      attacker={attacker}
-      targets={targets}
-      primaryTargetId={primaryTargetId}
-      secondaryTargetIds={secondaryTargetIds}
-      allowSecondarySelection={mode === "shoot" && hasBlast}
-      confirmLabel={confirmLabel}
-      weaponMode={weaponMode}
-      onSelectPrimary={(id) => {
-        setPrimaryTargetId(id);
-        setSecondaryTargetIds([]);
-      }}
-      onToggleSecondary={(id) => {
-        setSecondaryTargetIds((prev) =>
-          prev.includes(id)
-            ? prev.filter((entry) => entry !== id)
-            : [...prev, id],
-        );
-      }}
-      onClose={handleClose}
-      onConfirm={handleConfirm}
-    />
+    <div data-testid="target-select-screen">
+      <TargetSelectModal
+        open={true}
+        attacker={attacker}
+        targets={targets}
+        primaryTargetId={primaryTargetId}
+        secondaryTargetIds={secondaryTargetIds}
+        allowSecondarySelection={mode === "shoot" && hasBlast}
+        confirmLabel={confirmLabel}
+        weaponMode={weaponMode}
+        onSelectPrimary={(id) => {
+          setPrimaryTargetId(id);
+          setSecondaryTargetIds([]);
+        }}
+        onToggleSecondary={(id) => {
+          setSecondaryTargetIds((prev) =>
+            prev.includes(id)
+              ? prev.filter((entry) => entry !== id)
+              : [...prev, id],
+          );
+        }}
+        onClose={handleClose}
+        onConfirm={handleConfirm}
+      />
+    </div>
   );
 }
 

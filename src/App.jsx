@@ -11,6 +11,7 @@ import MultiplayerLobby from "./ui/screens/MultiplayerLobby";
 import UnitCardFocused from "./ui/screens/UnitCardFocused";
 import StrategyPhase from "./ui/screens/StrategyPhase";
 import TargetSelectScreen from "./ui/screens/TargetSelectScreen";
+import seedGameState from "./e2e/seedGameState.json";
 import {
   gameReducer,
   initialCombatState,
@@ -28,7 +29,7 @@ import {
   isInCounteractWindow,
 } from "./state/gameLoopSelectors";
 import { ACTION_CONFIG } from "./engine/rules/actionsCore";
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { connectWS } from "./lib/multiplayer";
 import { getOrCreatePlayerId } from "./lib/playerIdentity";
@@ -144,6 +145,11 @@ function generateClientId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function isE2E() {
+  if (typeof window === "undefined") return false;
+  return new URLSearchParams(window.location.search).get("e2e") === "1";
+}
+
 const armies = Object.entries(killteamModules).map(([path, data]) => ({
   key: getArmyKey(path),
   name: getArmyKey(path).replace(/[-_]+/g, " "),
@@ -154,7 +160,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
   const navigate = useNavigate();
   const location = useLocation();
   const { username } = useParams();
-  const buildInitialState = () => ({
+  const buildInitialState = useCallback(() => ({
     gameId: generateClientId(),
     appliedEventIds: new Set(),
     phase: "SETUP",
@@ -198,10 +204,38 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
     ui: {
       actionFlow: null,
     },
-  });
+  }), [initialUnits]);
+
+  const buildSeedState = useCallback(
+    (seedOverride = seedGameState) => {
+      const base = buildInitialState();
+      const seed = seedOverride && typeof seedOverride === "object" ? seedOverride : {};
+      const merged = {
+        ...base,
+        ...seed,
+        topBar: { ...(base.topBar || {}), ...(seed.topBar || {}) },
+        setup: { ...(base.setup || {}), ...(seed.setup || {}) },
+        strategy: { ...(base.strategy || {}), ...(seed.strategy || {}) },
+        firefight: { ...(base.firefight || {}), ...(seed.firefight || {}) },
+        log: { ...(base.log || {}), ...(seed.log || {}) },
+        combatState: { ...(base.combatState || {}), ...(seed.combatState || {}) },
+        ui: { ...(base.ui || {}), ...(seed.ui || {}) },
+      };
+      if (!Array.isArray(merged.game) || merged.game.length === 0) {
+        merged.game = base.game;
+      }
+      const applied = Array.isArray(seed.appliedEventIds) ? seed.appliedEventIds : [];
+      merged.appliedEventIds = new Set(applied);
+      return merged;
+    },
+    [buildInitialState],
+  );
 
   const [state, dispatch] = useReducer(gameReducer, null, () => {
     const initialState = buildInitialState();
+    if (isE2E()) {
+      return buildSeedState();
+    }
     if (typeof window === "undefined" || typeof window.ktGetGameState !== "function") {
       return initialState;
     }
@@ -248,6 +282,32 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
   const [tpEndToast, setTpEndToast] = useState(null);
   const prevPhaseRef = useRef(null);
   const stateRef = useRef(state);
+
+  useEffect(() => {
+    if (!isE2E()) return undefined;
+    if (typeof window === "undefined") return undefined;
+
+    const resetToSeed = () => {
+      dispatch({ type: "E2E_SET_STATE", payload: { state: buildSeedState() } });
+    };
+
+    const setGameState = (nextState) => {
+      const next = nextState && typeof nextState === "object" ? nextState : {};
+      dispatch({ type: "E2E_SET_STATE", payload: { state: buildSeedState(next) } });
+    };
+
+    window.ktResetToSeed = resetToSeed;
+    window.ktSetGameState = setGameState;
+
+    return () => {
+      if (window.ktResetToSeed === resetToSeed) {
+        delete window.ktResetToSeed;
+      }
+      if (window.ktSetGameState === setGameState) {
+        delete window.ktSetGameState;
+      }
+    };
+  }, [buildSeedState]);
 
   const [selectedUnitId, setSelectedUnitId] = useState(
     initialUnits?.[0]?.id ?? null,
@@ -1205,6 +1265,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
   };
 
   useEffect(() => {
+    if (isE2E()) return undefined;
     if (!gameCode || !playerSlot) return undefined;
 
     const socket = connectWS({
@@ -1238,7 +1299,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
   if (!renderUi) return null;
 
   return (
-    <div className="App">
+    <div className="App" data-testid="screen-root">
       <div className={`kt-shell ${showTurnGlow ? "kt-shell--turn-glow" : ""}`}>
         <div className="kt-main">
           <TopBar
@@ -1253,7 +1314,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
           <main className="kt-detail">
             {tpEndToast && <div className="kt-toast">{tpEndToast}</div>}
             {skipToast && <div className="kt-toast">{skipToast}</div>}
-            <div className="kt-card-grid">
+            <div className="kt-card-grid" data-testid="unit-grid">
               {orderedMyTeamUnits.map((unit) => (
                 <UnitCard
                   key={unit.id}
@@ -1280,7 +1341,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
       </div>
 
       {actionFlow?.mode === "fight" && actionFlow?.step === "pickWeapons" && (
-        <div className="kt-modal">
+        <div className="kt-modal" data-testid="fight-modal-pick-weapons">
           <div
             className="kt-modal__backdrop"
             onClick={() => {
@@ -1313,6 +1374,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
                     <button
                       className="kt-modal__btn kt-modal__btn--primary"
                       type="button"
+                      data-testid="fight-ready"
                       onClick={() => {
                         dispatchGameEvent("FLOW_LOCK_WEAPON", {
                           role: fightReadyRole,
@@ -1402,7 +1464,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
       )}
 
       {actionFlow?.mode === "fight" && actionFlow?.step === "rollDice" && (
-        <div className="kt-modal">
+        <div className="kt-modal" data-testid="fight-modal-roll-dice">
           <div
             className="kt-modal__backdrop"
             onClick={() => {
@@ -1422,6 +1484,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
                     <button
                       className="kt-modal__btn kt-modal__btn--primary"
                       type="button"
+                      data-testid="fight-roll-dice"
                       onClick={() => {
                         dispatchGameEvent("FLOW_LOCK_DICE", {
                           role: fightDiceRole,
@@ -1517,6 +1580,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
               ? "kt-modal--turn-glow"
               : ""
           }`}
+          data-testid="fight-modal-resolve"
         >
           <div className="kt-modal__backdrop" />
           <div className="kt-modal__panel">
@@ -1682,6 +1746,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
                         }`}
                         role="button"
                         tabIndex={0}
+                        data-testid="fight-strike"
                         onDragOver={(event) => {
                           if (!canUseDraggedDie) return;
                           event.preventDefault();
@@ -2092,6 +2157,9 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
 
 function ArmyOverlayRoute({ renderUi = true }) {
   const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const e2e = params.get("e2e") === "1";
+  const slotFromQuery = params.get("slot") === "B" ? "B" : "A";
   const gameCode = location.state?.gameCode;
   const slot = location.state?.slot;
   const armyKey = location.state?.armyKey;
@@ -2123,46 +2191,58 @@ function ArmyOverlayRoute({ renderUi = true }) {
   const storedWeaponsB = gameCode
     ? readStoredJson(`kt_game_${gameCode}_weapons_B`)
     : null;
-  const armyKeyA =
-    location.state?.armyKeyA ||
-    (slot === "A" ? armyKey : undefined) ||
-    storedArmyKeyA ||
-    armyKey;
-  const armyKeyB =
-    location.state?.armyKeyB ||
-    (slot === "B" ? armyKey : undefined) ||
-    storedArmyKeyB ||
-    armyKey;
+  const armyKeyA = e2e
+    ? armies[0]?.key
+    : location.state?.armyKeyA ||
+      (slot === "A" ? armyKey : undefined) ||
+      storedArmyKeyA ||
+      armyKey;
+  const armyKeyB = e2e
+    ? armies[1]?.key || armies[0]?.key
+    : location.state?.armyKeyB ||
+      (slot === "B" ? armyKey : undefined) ||
+      storedArmyKeyB ||
+      armyKey;
   const selectedUnitIds = location.state?.selectedUnitIds;
-  const selectedUnitIdsA =
-    location.state?.selectedUnitIdsA ||
-    (slot === "A" ? selectedUnitIds : undefined) ||
-    storedUnitIdsA;
-  const selectedUnitIdsB =
-    location.state?.selectedUnitIdsB ||
-    (slot === "B" ? selectedUnitIds : undefined) ||
-    storedUnitIdsB;
+  const selectedUnitIdsA = e2e
+    ? null
+    : location.state?.selectedUnitIdsA ||
+      (slot === "A" ? selectedUnitIds : undefined) ||
+      storedUnitIdsA;
+  const selectedUnitIdsB = e2e
+    ? null
+    : location.state?.selectedUnitIdsB ||
+      (slot === "B" ? selectedUnitIds : undefined) ||
+      storedUnitIdsB;
 
   const selectedWeaponsByUnitId = location.state?.selectedWeaponsByUnitId;
-  const selectedWeaponsByUnitIdA =
-    location.state?.selectedWeaponsByUnitIdA ||
-    (slot === "A" ? selectedWeaponsByUnitId : undefined) ||
-    storedWeaponsA;
-  const selectedWeaponsByUnitIdB =
-    location.state?.selectedWeaponsByUnitIdB ||
-    (slot === "B" ? selectedWeaponsByUnitId : undefined) ||
-    storedWeaponsB;
+  const selectedWeaponsByUnitIdA = e2e
+    ? null
+    : location.state?.selectedWeaponsByUnitIdA ||
+      (slot === "A" ? selectedWeaponsByUnitId : undefined) ||
+      storedWeaponsA;
+  const selectedWeaponsByUnitIdB = e2e
+    ? null
+    : location.state?.selectedWeaponsByUnitIdB ||
+      (slot === "B" ? selectedWeaponsByUnitId : undefined) ||
+      storedWeaponsB;
 
   const teamA = armies.find((army) => army.key === armyKeyA) || armies[0];
   const teamB = armies.find((army) => army.key === armyKeyB) || teamA;
 
-  const filteredUnitsA = Array.isArray(selectedUnitIdsA)
-    ? teamA.units.filter((unit) => selectedUnitIdsA.includes(unit.id))
-    : teamA.units;
+  const sliceUnits = (units) => (Array.isArray(units) ? units.slice(0, 3) : []);
 
-  const filteredUnitsB = Array.isArray(selectedUnitIdsB)
-    ? teamB.units.filter((unit) => selectedUnitIdsB.includes(unit.id))
-    : teamB.units;
+  const filteredUnitsA = e2e
+    ? sliceUnits(teamA.units)
+    : Array.isArray(selectedUnitIdsA)
+      ? teamA.units.filter((unit) => selectedUnitIdsA.includes(unit.id))
+      : teamA.units;
+
+  const filteredUnitsB = e2e
+    ? sliceUnits(teamB.units)
+    : Array.isArray(selectedUnitIdsB)
+      ? teamB.units.filter((unit) => selectedUnitIdsB.includes(unit.id))
+      : teamB.units;
 
   const buildTeamUnits = (units, teamId, weaponSelections) =>
     units.map((unit) => {
@@ -2214,8 +2294,8 @@ function ArmyOverlayRoute({ renderUi = true }) {
     <GameOverlay
       key={`${teamA?.key || "team-a"}-${teamB?.key || "team-b"}`}
       initialUnits={combinedUnits}
-      playerSlot={slot}
-      gameCode={gameCode}
+      playerSlot={e2e ? slotFromQuery : slot}
+      gameCode={e2e ? "E2E" : gameCode}
       teamKeys={{ alpha: teamA?.key, beta: teamB?.key }}
       renderUi={renderUi}
     />

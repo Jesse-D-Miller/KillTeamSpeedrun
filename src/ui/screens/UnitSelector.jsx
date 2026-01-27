@@ -547,7 +547,7 @@ function UnitSelector() {
 	]);
 
 	return (
-		<div className="unit-selector">
+		<div className="unit-selector" data-testid="screen-root">
 			<div className="unit-selector__panel">
 				<h1 className="unit-selector__title">Select Units</h1>
 				<p className="unit-selector__subtitle">

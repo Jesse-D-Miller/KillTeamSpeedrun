@@ -285,7 +285,7 @@ function MultiplayerLobby() {
   }, [emitEvent, uiState.phase]);
 
   return (
-    <div className="lobby-screen">
+    <div className="lobby-screen" data-testid="screen-root">
         <div className="lobby-logo">
           <img src="public/killteamSpeedrunLogo.png" alt="Kill Team Speedrun" />
         </div>

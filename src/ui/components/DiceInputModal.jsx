@@ -530,7 +530,7 @@ function DiceInputModal({
   };
 
   return (
-    <div className="kt-modal">
+    <div className="kt-modal" data-testid="dice-attack-modal">
       <div
         className="kt-modal__backdrop"
         onClick={() => {
@@ -618,6 +618,7 @@ function DiceInputModal({
                   type="button"
                   disabled={combatStage !== "ATTACK_ROLLING" || !hasAttackRoll}
                   onClick={handleLockInAttackClick}
+                  data-testid="lock-in-attack"
                 >
                   Lock In Attack
                 </button>

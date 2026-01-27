@@ -203,7 +203,7 @@ function UnitCardFocused() {
 
   if (!selectedUnit) {
     return (
-      <div className="unit-card-focused">
+      <div className="unit-card-focused" data-testid="unit-focused">
         <div className="unit-card-focused__panel">
           <div className="unit-card-focused__empty">No unit selected.</div>
           <button
@@ -223,7 +223,10 @@ function UnitCardFocused() {
   }
 
   return (
-    <div className={`unit-card-focused ${showTurnGlow ? "kt-shell--turn-glow" : ""}`}>
+    <div
+      className={`unit-card-focused ${showTurnGlow ? "kt-shell--turn-glow" : ""}`}
+      data-testid="unit-focused"
+    >
       <div className="unit-card-focused__panel">
         <div className="unit-card-focused__header">
           <TopBar
@@ -267,89 +270,93 @@ function UnitCardFocused() {
         <div className="unit-card-focused__activation">
           <div className="unit-card-focused__section-title">Activation</div>
           <div className="unit-card-focused__section-body">
-            {shouldShowActivationButtons && (
-              <div className="unit-card-focused__activation-buttons">
-                <button
-                  className="unit-card-focused__activate"
-                  type="button"
-                  onClick={() => {
-                    console.log("[KT DEBUG] Activate preflight", reducerPreflight);
+            <div data-testid="actions-panel">
+              {shouldShowActivationButtons && (
+                <div className="unit-card-focused__activation-buttons">
+                  <button
+                    className="unit-card-focused__activate"
+                    type="button"
+                    data-testid="action-activate-conceal"
+                    onClick={() => {
+                      console.log("[KT DEBUG] Activate preflight", reducerPreflight);
+                      dispatchGameEvent("SET_ACTIVE_OPERATIVE", {
+                        playerId: slot,
+                        operativeId: selectedUnit?.id,
+                        order: "conceal",
+                      });
+                    }}
+                  >
+                    Activate (Conceal)
+                  </button>
+                  <button
+                    className="unit-card-focused__activate"
+                    type="button"
+                    data-testid="action-activate-engage"
+                    onClick={() => {
+                      console.log("[KT DEBUG] Activate preflight", reducerPreflight);
+                      dispatchGameEvent("SET_ACTIVE_OPERATIVE", {
+                        playerId: slot,
+                        operativeId: selectedUnit?.id,
+                        order: "engage",
+                      });
+                    }}
+                  >
+                    Activate (Engage)
+                  </button>
+                </div>
+              )}
+              {shouldShowActions && (
+                <Actions
+                  attacker={selectedUnit}
+                  actionMarks={selectedUnit?.state?.actionMarks}
+                  onAction={handleActionUse}
+                  showActivate={false}
+                  onActivateConceal={() =>
                     dispatchGameEvent("SET_ACTIVE_OPERATIVE", {
                       playerId: slot,
                       operativeId: selectedUnit?.id,
                       order: "conceal",
-                    });
-                  }}
-                >
-                  Activate (Conceal)
-                </button>
-                <button
-                  className="unit-card-focused__activate"
-                  type="button"
-                  onClick={() => {
-                    console.log("[KT DEBUG] Activate preflight", reducerPreflight);
+                    })
+                  }
+                  onActivateEngage={() =>
                     dispatchGameEvent("SET_ACTIVE_OPERATIVE", {
                       playerId: slot,
                       operativeId: selectedUnit?.id,
                       order: "engage",
-                    });
-                  }}
-                >
-                  Activate (Engage)
-                </button>
-              </div>
-            )}
-            {shouldShowActions && (
-              <Actions
-                attacker={selectedUnit}
-                actionMarks={selectedUnit?.state?.actionMarks}
-                onAction={handleActionUse}
-                showActivate={false}
-                onActivateConceal={() =>
-                  dispatchGameEvent("SET_ACTIVE_OPERATIVE", {
-                    playerId: slot,
-                    operativeId: selectedUnit?.id,
-                    order: "conceal",
-                  })
-                }
-                onActivateEngage={() =>
-                  dispatchGameEvent("SET_ACTIVE_OPERATIVE", {
-                    playerId: slot,
-                    operativeId: selectedUnit?.id,
-                    order: "engage",
-                  })
-                }
-                showActionButtons={showActionButtons}
-                canUseActions={canUseActions}
-                onEndActivation={handleEndActivation}
-                showCounteract={showCounteract}
-                showCounteractWindow={inCounteractWindow}
-                onCounteract={() =>
-                  handleCounteract(
-                    selectedUnit?.id ?? counteractOperatives?.[0]?.id,
-                  )
-                }
-                onPassCounteract={() =>
-                  dispatchGameEvent("PASS_COUNTERACT_WINDOW", {
-                    playerId: slot,
-                  })
-                }
-                counteractOptions={counteractOperatives}
-                onSelectCounteractOperative={handleCounteract}
-                allowedActions={counteractAllowedActions}
-                statusMessage={statusMessage}
-                isCounteractActive={isCounteractActive}
-                counteractActionsTaken={counteractActionsTaken}
-              />
-            )}
-            {!shouldShowActivationButtons &&
-              !shouldShowActions &&
-              isFirefightPhase &&
-              hasActiveOperative &&
-              !isThisOperativeActive &&
-              "Another operative is currently active."}
-            {!shouldShowActivationButtons && !shouldShowActions &&
-              "Activation not available"}
+                    })
+                  }
+                  showActionButtons={showActionButtons}
+                  canUseActions={canUseActions}
+                  onEndActivation={handleEndActivation}
+                  showCounteract={showCounteract}
+                  showCounteractWindow={inCounteractWindow}
+                  onCounteract={() =>
+                    handleCounteract(
+                      selectedUnit?.id ?? counteractOperatives?.[0]?.id,
+                    )
+                  }
+                  onPassCounteract={() =>
+                    dispatchGameEvent("PASS_COUNTERACT_WINDOW", {
+                      playerId: slot,
+                    })
+                  }
+                  counteractOptions={counteractOperatives}
+                  onSelectCounteractOperative={handleCounteract}
+                  allowedActions={counteractAllowedActions}
+                  statusMessage={statusMessage}
+                  isCounteractActive={isCounteractActive}
+                  counteractActionsTaken={counteractActionsTaken}
+                />
+              )}
+              {!shouldShowActivationButtons &&
+                !shouldShowActions &&
+                isFirefightPhase &&
+                hasActiveOperative &&
+                !isThisOperativeActive &&
+                "Another operative is currently active."}
+              {!shouldShowActivationButtons && !shouldShowActions &&
+                "Activation not available"}
+            </div>
           </div>
         </div>
         <div className="unit-card-focused__ploys">

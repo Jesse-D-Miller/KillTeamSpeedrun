@@ -108,7 +108,7 @@ function LogsWindow({ entries, cursor, onUndo, onRedo, units = [], debug = false
   const hiddenTypes = new Set(["ACTION_REJECTED"]);
 
   return (
-    <div className="kt-log">
+    <div className="kt-log" data-testid="logs-window">
       <div className="kt-log__actions">
         <button
           className="kt-log__btn"

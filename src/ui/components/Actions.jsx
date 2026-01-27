@@ -45,6 +45,7 @@ function Actions({
               type="button"
               onClick={onActivateConceal}
               disabled={!attacker}
+              data-testid="action-activate-conceal"
             >
               <span>Activate</span>
               <span>Conceal</span>
@@ -54,6 +55,7 @@ function Actions({
               type="button"
               onClick={onActivateEngage}
               disabled={!attacker}
+              data-testid="action-activate-engage"
             >
               <span>Activate</span>
               <span>Engage</span>
@@ -68,6 +70,7 @@ function Actions({
                 type="button"
                 onClick={onCounteract}
                 disabled={!attacker || !showCounteract}
+                data-testid="action-counteract"
               >
                 Counteract
               </button>
@@ -130,6 +133,7 @@ function Actions({
             type="button"
             onClick={() => onAction?.("shoot")}
             disabled={!attacker || !canUseActions}
+            data-testid="action-shoot"
           >
             Shoot
           </button>
@@ -156,6 +160,7 @@ function Actions({
             type="button"
             onClick={() => onAction?.("fight")}
             disabled={!attacker || !canUseActions}
+            data-testid="action-fight"
           >
             Fight
           </button>
@@ -207,6 +212,7 @@ function Actions({
           type="button"
           onClick={() => onEndActivation?.()}
           disabled={!attacker || (isCounteractActive && counteractActionsTaken <= 0)}
+          data-testid="action-end-activation"
         >
           End Activation
         </button>

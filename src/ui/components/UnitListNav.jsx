@@ -29,7 +29,7 @@ function UnitListNav({
 		.map(({ unit }) => unit);
 
 	return (
-		<div className="kt-nav__list">
+		<div className="kt-nav__list" data-testid="unit-nav">
 			{orderedUnits.map((unit) => {
 					const isSelected = unit.id === selectedUnitId;
 					const isDead = Number(unit.state.woundsCurrent) <= 0;
@@ -59,6 +59,7 @@ function UnitListNav({
 							onClick={() => onSelectUnit(unit.id)}
 							disabled={!canSelectUnit || (isCounteractWindow && !isCounteractEligible)}
 							type="button"
+							data-testid={`unit-nav-item-${unit.id}`}
 						>
 							<div className="kt-navitem__top">
 								<div className="kt-navitem__name">{unit.name}</div>

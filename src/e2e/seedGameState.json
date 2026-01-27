@@ -1,0 +1,55 @@
+{
+  "phase": "FIREFIGHT",
+  "turningPoint": 1,
+  "topBar": {
+    "initiativePlayerId": "A"
+  },
+  "cp": {
+    "A": 2,
+    "B": 2
+  },
+  "setup": {
+    "teamsLocked": true,
+    "deploymentComplete": true
+  },
+  "strategy": {
+    "passed": {
+      "A": false,
+      "B": false
+    },
+    "usedStrategicGambits": {
+      "A": [],
+      "B": []
+    },
+    "turn": null,
+    "activeChooserPlayerId": null,
+    "passedByPlayer": {
+      "A": false,
+      "B": false
+    },
+    "usedPloyIdsByPlayer": {
+      "A": [],
+      "B": []
+    },
+    "lastAction": null,
+    "cpAwardedForTP": null,
+    "decisions": [],
+    "cpGrantedThisTP": false,
+    "operativesReadiedThisTP": false
+  },
+  "firefight": {
+    "activeOperativeId": null,
+    "activePlayerId": "A",
+    "orderChosenThisActivation": false,
+    "awaitingOrder": false,
+    "awaitingActions": false
+  },
+  "ui": {
+    "actionFlow": null
+  },
+  "log": {
+    "entries": [],
+    "cursor": 0
+  },
+  "appliedEventIds": []
+}

@@ -1,6 +1,6 @@
 function TopBar({ cp, vp, turningPoint, phase, initiativePlayerId }) {
   return (
-    <header className="kt-topbar">
+    <header className="kt-topbar" data-testid="topbar">
       <div className="kt-topbar__item">
         <span className="kt-topbar__label">Phase</span>
         <span className="kt-topbar__value">{phase}</span>

@@ -2,7 +2,7 @@ import "./LogNotice.css";
 
 function LogNotice({ summary = "", label = "Latest log" }) {
   return (
-    <div className="kt-notice">
+    <div className="kt-notice" data-testid="log-notice">
       <span className="kt-notice__label">{label}</span>
       <span className="kt-notice__text">{summary || "No log entries yet"}</span>
     </div>

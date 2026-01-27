@@ -132,7 +132,7 @@ function ArmySelector() {
   }, [gameCode, slot]);
 
   return (
-    <div className="army-selector">
+    <div className="army-selector" data-testid="screen-root">
       <div className="army-selector__panel">
         <h1 className="army-selector__title">
           {isSingleSelect ? "Select Your Army" : "Army Selector"}

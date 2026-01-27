@@ -127,7 +127,7 @@ function DefenseRollModal({
   if (!open) return null;
 
   return (
-    <div className="kt-modal">
+    <div className="kt-modal" data-testid="dice-defense-modal">
       <div className="kt-modal__backdrop" />
       <div className="kt-modal__panel">
         <button
@@ -165,6 +165,7 @@ function DefenseRollModal({
                   onSetDefenseRoll?.(parsed);
                   onLockDefense?.();
                 }}
+                data-testid="lock-in-defense"
               >
                 Lock In Defense
               </button>

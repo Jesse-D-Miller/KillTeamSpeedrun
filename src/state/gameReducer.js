@@ -1767,6 +1767,19 @@ function reduceGameState(state, action) {
 }
 
 export function gameReducer(state, action) {
+	if (action?.type === "E2E_SET_STATE") {
+		const nextState = action?.payload?.state;
+		if (!nextState || typeof nextState !== "object") return state;
+		const appliedEventIds =
+			nextState.appliedEventIds instanceof Set
+				? nextState.appliedEventIds
+				: new Set(
+						Array.isArray(nextState.appliedEventIds)
+							? nextState.appliedEventIds
+							: [],
+					);
+		return { ...nextState, appliedEventIds };
+	}
 	const eventId = action?.meta?.eventId || null;
 	if (eventId && state.appliedEventIds?.has(eventId)) {
 		return state;

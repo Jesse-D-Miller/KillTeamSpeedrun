@@ -343,7 +343,7 @@ function StrategyPhase() {
 
   // --- UI ---
   return (
-    <div className="strategy-phase">
+    <div className="strategy-phase" data-testid="screen-root">
       <div className="strategy-phase__panel">
         <div className="strategy-phase__header">
           <TopBar
