@@ -139,45 +139,46 @@ function DefenseRollModal({
         >
           ×
         </button>
-        <div className="kt-modal__layout">
-          <aside className="kt-modal__sidebar">
-            <div className="kt-modal__sidebar-group">
-              <div className="kt-modal__sidebar-title">Actions</div>
-              <div className="kt-modal__sidebar-empty">
-                Roll defense dice, then lock them in.
-              </div>
-              <button
-                className="kt-modal__btn kt-modal__btn--success"
-                type="button"
-                onClick={handleRollClick}
-                disabled={readOnly || isRolling}
-              >
-                Roll
-              </button>
-            </div>
-            <div className="kt-modal__sidebar-footer">
-              <button
-                className="kt-modal__btn kt-modal__btn--primary"
-                type="button"
-                disabled={readOnly || isRolling || !hasDefenseRoll}
-                onClick={() => {
-                  const parsed = parseDice(defenseDice);
-                  onSetDefenseRoll?.(parsed);
-                  onLockDefense?.();
-                }}
-                data-testid="lock-in-defense"
-              >
-                Lock In Defense
-              </button>
-            </div>
-          </aside>
-          <div className="kt-modal__content">
+        <div className="kt-modal__layout defense-roll__layout">
+          <div className="kt-modal__content defense-roll__content">
             <div className="kt-modal__header">
               <div className="kt-modal__title">Defense Roll</div>
               <div className="kt-modal__subtitle">
                 {attacker?.name || "Attacker"} → {defender?.name || "Defender"}
               </div>
               {statusMessage && <div className="kt-modal__subtitle">{statusMessage}</div>}
+            </div>
+
+            <div className="defense-roll__actions">
+              <div className="defense-roll__actions-header">
+                <div className="defense-roll__actions-title">Actions</div>
+                <div className="defense-roll__actions-subtitle">
+                  Roll defense dice, then lock them in.
+                </div>
+              </div>
+              <div className="defense-roll__actions-grid">
+                <button
+                  className="kt-modal__btn kt-modal__btn--success"
+                  type="button"
+                  onClick={handleRollClick}
+                  disabled={readOnly || isRolling}
+                >
+                  Roll
+                </button>
+                <button
+                  className="kt-modal__btn kt-modal__btn--primary"
+                  type="button"
+                  disabled={readOnly || isRolling || !hasDefenseRoll}
+                  onClick={() => {
+                    const parsed = parseDice(defenseDice);
+                    onSetDefenseRoll?.(parsed);
+                    onLockDefense?.();
+                  }}
+                  data-testid="lock-in-defense"
+                >
+                  Lock In Defense
+                </button>
+              </div>
             </div>
 
             <div className="kt-modal__grid">

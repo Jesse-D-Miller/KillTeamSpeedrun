@@ -1,0 +1,92 @@
+.kt-modal[data-testid="weapon-select-modal"] .kt-modal__panel {
+  width: min(1200px, 99vw);
+  max-width: none;
+}
+
+.kt-modal[data-testid="weapon-select-modal"] .kt-modal__layout.weapon-select__layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+}
+
+.kt-modal[data-testid="weapon-select-modal"] .kt-modal__content.weapon-select__content {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+}
+
+.kt-modal[data-testid="weapon-select-modal"] .kt-modal__grid.weapon-select__grid {
+  width: 100%;
+  max-width: none;
+}
+
+.weapon-select__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.weapon-select__layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  width: 100%;
+  height: 100%;
+}
+
+.weapon-select__content {
+  width: 100%;
+  height: 100%;
+}
+
+.weapon-select__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  width: 100%;
+  height: 100%;
+}
+
+.weapon-select__tile {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+@media (max-width: 900px) {
+  .weapon-select__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.weapon-select__card-wrap {
+  margin-top: 8px;
+}
+
+.weapon-select__card {
+  width: 100%;
+}
+
+.weapon-select__status {
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+.weapon-select__table {
+  width: 100%;
+}
+
+.weapon-select__selection {
+  opacity: 0.85;
+}
+
+.weapon-select__empty {
+  opacity: 0.7;
+}
+
+.weapon-select__card .kt-row--selected {
+  background: rgba(255, 120, 60, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(255, 120, 60, 0.55);
+}

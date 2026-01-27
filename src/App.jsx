@@ -5,6 +5,7 @@ import LogNotice from "./ui/components/LogNotice";
 import DiceInputModal from "./ui/components/DiceInputModal";
 import DefenseAllocationModal from "./ui/components/DefenseAllocationModal";
 import DefenseRollModal from "./ui/components/DefenseRollModal";
+import WeaponSelectModal from "./ui/components/WeaponSelectModal";
 import ArmySelector from "./ui/screens/ArmySelector";
 import UnitSelector from "./ui/screens/UnitSelector";
 import MultiplayerLobby from "./ui/screens/MultiplayerLobby";
@@ -807,6 +808,24 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
     Boolean(fightAttacker?.owner) && fightAttacker.owner === playerSlot;
   const canSelectDefenderWeapon =
     Boolean(fightDefender?.owner) && fightDefender.owner === playerSlot;
+  const shootAttacker =
+    actionFlow?.mode === "shoot"
+      ? state.game.find((unit) => unit.id === actionFlow.attackerId)
+      : null;
+  const shootDefender =
+    actionFlow?.mode === "shoot"
+      ? state.game.find((unit) => unit.id === actionFlow.defenderId)
+      : null;
+  const shootAttackerWeapons = Array.isArray(shootAttacker?.weapons)
+    ? shootAttacker.weapons.filter((weapon) => weapon.mode === "ranged")
+    : [];
+  const shootDefenderWeapons = Array.isArray(shootDefender?.weapons)
+    ? shootDefender.weapons.filter((weapon) => weapon.mode === "ranged")
+    : [];
+  const canSelectShootAttackerWeapon =
+    Boolean(shootAttacker?.owner) && shootAttacker.owner === playerSlot;
+  const canSelectShootDefenderWeapon =
+    Boolean(shootDefender?.owner) && shootDefender.owner === playerSlot;
   const fightAttackerWeapon = fightAttackerWeapons.find(
     (weapon) => weapon.name === actionFlow?.attackerWeapon,
   );
@@ -829,6 +848,26 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
     fightReadyRole === "attacker"
       ? Boolean(actionFlow?.attackerWeapon) && !attackerReady
       : Boolean(actionFlow?.defenderWeapon) && !defenderReady;
+  const fightOpponentReady =
+    fightReadyRole === "attacker" ? defenderReady : attackerReady;
+  const shootAttackerReady = Boolean(actionFlow?.locked?.attackerWeapon);
+  const shootDefenderReady = Boolean(actionFlow?.locked?.defenderWeapon);
+  const bothShootReady = shootAttackerReady && shootDefenderReady;
+  const shootReadyRole = canSelectShootAttackerWeapon
+    ? "attacker"
+    : canSelectShootDefenderWeapon
+      ? "defender"
+      : null;
+  const isShootWaiting =
+    shootReadyRole === "attacker"
+      ? shootAttackerReady && !bothShootReady
+      : shootDefenderReady && !bothShootReady;
+  const canClickShootReady =
+    shootReadyRole === "attacker"
+      ? Boolean(actionFlow?.attackerWeapon) && !shootAttackerReady
+      : Boolean(actionFlow?.defenderWeapon) && !shootDefenderReady;
+  const shootOpponentReady =
+    shootReadyRole === "attacker" ? shootDefenderReady : shootAttackerReady;
   const attackerDiceReady = Boolean(actionFlow?.locked?.attackerDice);
   const defenderDiceReady = Boolean(actionFlow?.locked?.defenderDice);
   const bothDiceReady = attackerDiceReady && defenderDiceReady;
@@ -964,6 +1003,27 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
     !actionFlow?.locked?.attackerDice &&
     !actionFlow?.locked?.defenderDice &&
     !actionFlow?.locked?.diceRolled;
+  const canCancelShootFlow =
+    actionFlow?.mode === "shoot" &&
+    ["pickTarget", "pickWeapons", "rollDice"].includes(actionFlow?.step) &&
+    !actionFlow?.locked?.attackerWeapon &&
+    !actionFlow?.locked?.defenderWeapon &&
+    !actionFlow?.locked?.attackerDice &&
+    !actionFlow?.locked?.defenderDice &&
+    !actionFlow?.locked?.diceRolled;
+  const showWeaponSelect =
+    (actionFlow?.mode === "fight" || actionFlow?.mode === "shoot") &&
+    actionFlow?.step === "pickWeapons";
+  const weaponSelectAttacker = actionFlow?.mode === "shoot" ? shootAttacker : fightAttacker;
+  const weaponSelectDefender = actionFlow?.mode === "shoot" ? shootDefender : fightDefender;
+  const weaponSelectLocalRole =
+    weaponSelectAttacker?.owner === playerSlot
+      ? "attacker"
+      : weaponSelectDefender?.owner === playerSlot
+        ? "defender"
+        : null;
+  const canCancelWeaponSelect =
+    actionFlow?.mode === "shoot" ? canCancelShootFlow : canCancelFightFlow;
 
   const showIssues = (result, event) =>
     setIntentGate({
@@ -1027,6 +1087,37 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
     canSelectDefenderWeapon,
     fightAttackerWeapons,
     fightDefenderWeapons,
+  ]);
+
+  useEffect(() => {
+    if (actionFlow?.mode !== "shoot" || actionFlow?.step !== "pickWeapons") return;
+    if (canSelectShootAttackerWeapon && shootAttackerWeapons.length === 1) {
+      const onlyWeapon = shootAttackerWeapons[0]?.name;
+      if (onlyWeapon && actionFlow?.attackerWeapon !== onlyWeapon) {
+        dispatchGameEvent("FLOW_SET_WEAPON", {
+          role: "attacker",
+          weaponName: onlyWeapon,
+        });
+      }
+    }
+    if (canSelectShootDefenderWeapon && shootDefenderWeapons.length === 1) {
+      const onlyWeapon = shootDefenderWeapons[0]?.name;
+      if (onlyWeapon && actionFlow?.defenderWeapon !== onlyWeapon) {
+        dispatchGameEvent("FLOW_SET_WEAPON", {
+          role: "defender",
+          weaponName: onlyWeapon,
+        });
+      }
+    }
+  }, [
+    actionFlow?.mode,
+    actionFlow?.step,
+    actionFlow?.attackerWeapon,
+    actionFlow?.defenderWeapon,
+    canSelectShootAttackerWeapon,
+    canSelectShootDefenderWeapon,
+    shootAttackerWeapons,
+    shootDefenderWeapons,
   ]);
 
   useEffect(() => {
@@ -1124,6 +1215,73 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
     playerSlot,
   ]);
 
+  useEffect(() => {
+    if (actionFlow?.mode !== "shoot") return;
+    if (!actionFlow?.locked?.attackerWeapon || !actionFlow?.locked?.defenderWeapon) {
+      return;
+    }
+    if (combatState?.attackingOperativeId) return;
+    if (!shootAttacker || !shootDefender) return;
+    if (shootAttacker?.owner !== playerSlot) return;
+
+    const preferredWeaponName =
+      actionFlow?.attackerWeapon ||
+      shootAttacker?.state?.selectedWeapon ||
+      shootAttackerWeapons[0]?.name ||
+      "";
+    const selectedWeapon =
+      shootAttackerWeapons.find((weapon) => weapon.name === preferredWeaponName) ||
+      shootAttackerWeapons[0];
+    if (!selectedWeapon) return;
+
+    const blastInputs = {
+      primaryTargetId:
+        actionFlow?.inputs?.primaryTargetId ?? actionFlow?.defenderId ?? null,
+      secondaryTargetIds: Array.isArray(actionFlow?.inputs?.secondaryTargetIds)
+        ? actionFlow.inputs.secondaryTargetIds
+        : [],
+    };
+
+    const ctx = {
+      weapon: selectedWeapon,
+      weaponProfile: selectedWeapon,
+      weaponRules: normalizeWeaponRules(selectedWeapon),
+      inputs: blastInputs,
+      modifiers: {},
+      log: [],
+    };
+    runWeaponRuleHook(ctx, "ON_DECLARE_ATTACK");
+    const attackQueue = Array.isArray(ctx.attackQueue) ? ctx.attackQueue : [];
+    const firstTargetId = attackQueue[0]?.targetId ?? blastInputs.primaryTargetId;
+
+    const attackerOwner = shootAttacker?.owner ?? playerSlot ?? null;
+    const defenderOwner = shootDefender?.owner ??
+      (playerSlot ? (playerSlot === "A" ? "B" : "A") : null);
+
+    dispatchCombatEvent("START_RANGED_ATTACK", {
+      attackerId: attackerOwner,
+      defenderId: defenderOwner,
+      attackingOperativeId: shootAttacker?.id || null,
+      defendingOperativeId: firstTargetId,
+      weaponId: selectedWeapon?.name || null,
+      weaponProfile: selectedWeapon || null,
+      attackQueue,
+      inputs: blastInputs,
+    });
+  }, [
+    actionFlow?.mode,
+    actionFlow?.locked?.attackerWeapon,
+    actionFlow?.locked?.defenderWeapon,
+    actionFlow?.attackerWeapon,
+    actionFlow?.inputs,
+    actionFlow?.defenderId,
+    combatState?.attackingOperativeId,
+    shootAttacker,
+    shootDefender,
+    shootAttackerWeapons,
+    playerSlot,
+  ]);
+
   // fight roll handled in animated roll effect
 
   useEffect(() => {
@@ -1195,6 +1353,9 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
   };
 
   const dispatchCombatEvent = (type, payload = {}) => {
+    if (typeof window !== "undefined" && Array.isArray(window.__ktE2E_combatEvents)) {
+      window.__ktE2E_combatEvents.push({ type, payload });
+    }
     const eventId = generateClientId();
     const ts = Date.now();
     dispatchIntent({ type, payload, meta: { eventId, ts } });
@@ -1202,6 +1363,9 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
   };
 
   const dispatchGameEvent = (type, payload = {}) => {
+    if (typeof window !== "undefined" && Array.isArray(window.__ktE2E_gameEvents)) {
+      window.__ktE2E_gameEvents.push({ type, payload });
+    }
     const eventId = generateClientId();
     const ts = Date.now();
     dispatchIntent({ type, payload, meta: { eventId, ts } });
@@ -1228,7 +1392,11 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
-    const e2e = new URLSearchParams(window.location.search).get("e2e") === "1";
+    const urlE2E = new URLSearchParams(window.location.search).get("e2e") === "1";
+    const e2e =
+      urlE2E ||
+      Array.isArray(window.__ktE2E_gameEvents) ||
+      Array.isArray(window.__ktE2E_combatEvents);
     if (e2e) {
       if (!Array.isArray(window.__ktE2E_gameEvents)) {
         window.__ktE2E_gameEvents = [];
@@ -1238,9 +1406,6 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
       }
     }
     window.ktDispatchGameEvent = (type, payload = {}) => {
-      if (e2e && Array.isArray(window.__ktE2E_gameEvents)) {
-        window.__ktE2E_gameEvents.push({ type, payload });
-      }
       dispatchGameEvent(type, payload);
     };
     return () => {
@@ -1250,14 +1415,15 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
-    const e2e = new URLSearchParams(window.location.search).get("e2e") === "1";
+    const urlE2E = new URLSearchParams(window.location.search).get("e2e") === "1";
+    const e2e =
+      urlE2E ||
+      Array.isArray(window.__ktE2E_gameEvents) ||
+      Array.isArray(window.__ktE2E_combatEvents);
     if (e2e && !Array.isArray(window.__ktE2E_combatEvents)) {
       window.__ktE2E_combatEvents = [];
     }
     window.ktDispatchCombatEvent = (type, payload = {}) => {
-      if (e2e && Array.isArray(window.__ktE2E_combatEvents)) {
-        window.__ktE2E_combatEvents.push({ type, payload });
-      }
       dispatchCombatEvent(type, payload);
     };
     return () => {
@@ -1405,127 +1571,28 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
         </div>
       </div>
 
-      {actionFlow?.mode === "fight" && actionFlow?.step === "pickWeapons" && (
-        <div className="kt-modal" data-testid="fight-modal-pick-weapons">
-          <div
-            className="kt-modal__backdrop"
-            onClick={() => {
-              if (!canCancelFightFlow) return;
-              dispatchGameEvent("FLOW_CANCEL");
-            }}
-          />
-          <div className="kt-modal__panel">
-            <button
-              className="kt-modal__close"
-              type="button"
-              onClick={() => {
-                if (!canCancelFightFlow) return;
-                dispatchGameEvent("FLOW_CANCEL");
-              }}
-              aria-label="Close"
-              title="Close"
-              disabled={!canCancelFightFlow}
-            >
-              ×
-            </button>
-            <div className="kt-modal__layout">
-              <aside className="kt-modal__sidebar">
-                <div className="kt-modal__sidebar-group">
-                  <div className="kt-modal__sidebar-title">Fight: Select Weapons</div>
-                  <div className="kt-modal__sidebar-empty">
-                    Both sides must ready their melee weapons.
-                  </div>
-                  {fightReadyRole && (
-                    <button
-                      className="kt-modal__btn kt-modal__btn--primary"
-                      type="button"
-                      data-testid="fight-ready"
-                      onClick={() => {
-                        dispatchGameEvent("FLOW_LOCK_WEAPON", {
-                          role: fightReadyRole,
-                        });
-                      }}
-                      disabled={!canClickFightReady}
-                    >
-                      {isFightWaiting && (
-                        <span className="unit-selector__spinner" aria-hidden="true" />
-                      )}
-                      READY
-                    </button>
-                  )}
-                  <button
-                    className="kt-modal__btn"
-                    type="button"
-                    onClick={() => {
-                      dispatchGameEvent("FLOW_CANCEL");
-                    }}
-                    disabled={!canCancelFightFlow}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </aside>
-              <div className="kt-modal__content">
-                <div className="kt-modal__header">
-                  <div className="kt-modal__title">Fight: Select Weapons</div>
-                  <div className="kt-modal__subtitle">
-                    {fightAttacker?.name || "Attacker"} vs {fightDefender?.name || "Defender"}
-                  </div>
-                </div>
-                <div className="kt-modal__grid">
-                  {renderFightCard(fightAttacker, "Attacker")}
-                  {renderFightCard(fightDefender, "Defender")}
-                </div>
-                <div className="defense-roll__section">
-                  <div className="defense-roll__label">Attacker Weapon</div>
-                  <select
-                    className="defense-roll__field"
-                    value={actionFlow?.attackerWeapon || ""}
-                    onChange={(event) => {
-                      dispatchGameEvent("FLOW_SET_WEAPON", {
-                        role: "attacker",
-                        weaponName: event.target.value,
-                      });
-                    }}
-                    disabled={!canSelectAttackerWeapon || actionFlow?.locked?.attackerWeapon}
-                  >
-                    <option value="" disabled>
-                      Select melee weapon
-                    </option>
-                    {fightAttackerWeapons.map((weapon) => (
-                      <option key={weapon.name} value={weapon.name}>
-                        {weapon.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="defense-roll__section">
-                  <div className="defense-roll__label">Defender Weapon</div>
-                  <select
-                    className="defense-roll__field"
-                    value={actionFlow?.defenderWeapon || ""}
-                    onChange={(event) => {
-                      dispatchGameEvent("FLOW_SET_WEAPON", {
-                        role: "defender",
-                        weaponName: event.target.value,
-                      });
-                    }}
-                    disabled={!canSelectDefenderWeapon || actionFlow?.locked?.defenderWeapon}
-                  >
-                    <option value="" disabled>
-                      Select melee weapon
-                    </option>
-                    {fightDefenderWeapons.map((weapon) => (
-                      <option key={weapon.name} value={weapon.name}>
-                        {weapon.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+      {showWeaponSelect && (
+        <WeaponSelectModal
+          open={showWeaponSelect}
+          mode={actionFlow?.mode}
+          attackerUnit={weaponSelectAttacker}
+          defenderUnit={weaponSelectDefender}
+          attackerWeapon={actionFlow?.attackerWeapon || null}
+          defenderWeapon={actionFlow?.defenderWeapon || null}
+          attackerReady={attackerReady}
+          defenderReady={defenderReady}
+          localRole={weaponSelectLocalRole}
+          onSetWeapon={(role, weaponName) => {
+            dispatchGameEvent("FLOW_SET_WEAPON", { role, weaponName });
+          }}
+          onReady={(role) => {
+            dispatchGameEvent("FLOW_LOCK_WEAPON", { role });
+          }}
+          onCancel={() => {
+            if (!canCancelWeaponSelect) return;
+            dispatchGameEvent("FLOW_CANCEL");
+          }}
+        />
       )}
 
       {actionFlow?.mode === "fight" && actionFlow?.step === "rollDice" && (

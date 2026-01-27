@@ -15,6 +15,13 @@ function UnitCard({
   onChooseOrder = null,
   activeOperativeId = null,
   onCardClick = null,
+  onSelectWeapon = null,
+  weaponSelectionEnabled = false,
+  selectedWeaponNameOverride = null,
+  autoSelectFirstWeapon = true,
+  emptyWeaponsLabel = "No weapons",
+  weaponOptionRole = null,
+  weaponOptionTestIdPrefix = "weapon-option",
   className = "",
   weaponMode = null,
   collapsibleSections = false,
@@ -80,14 +87,15 @@ function UnitCard({
       : weapons
     : [];
 
-  const selectedWeaponNameRaw = state.selectedWeapon || "";
-  const selectedWeaponName =
-    filteredWeapons.find((w) => w.name === selectedWeaponNameRaw)?.name ||
-    (filteredWeapons[0] ? filteredWeapons[0].name : "");
-
-  const selectedWeapon =
-    filteredWeapons.find((w) => w.name === selectedWeaponName) ||
-    filteredWeapons[0];
+  const selectedWeaponNameRaw =
+    selectedWeaponNameOverride !== null && selectedWeaponNameOverride !== undefined
+      ? selectedWeaponNameOverride
+      : state.selectedWeapon || "";
+  const selectedWeaponName = selectedWeaponNameRaw
+    ? filteredWeapons.find((w) => w.name === selectedWeaponNameRaw)?.name || ""
+    : autoSelectFirstWeapon
+      ? filteredWeapons[0]?.name || ""
+      : "";
 
   const unitImage = resolveUnitImage(image);
   const readyState = unit.state?.readyState;
@@ -239,7 +247,7 @@ function UnitCard({
               <>
                 <div className="kt-card__sectionline" />
                 {filteredWeapons.length === 0 ? (
-                  <div className="kt-card__section-empty">No weapons</div>
+                  <div className="kt-card__section-empty">{emptyWeaponsLabel}</div>
                 ) : (
                   <table className="kt-table">
                     <thead>
@@ -254,11 +262,33 @@ function UnitCard({
                     <tbody>
                       {filteredWeapons.map((w) => {
                         const isSelected = w.name === selectedWeaponName;
+                        const canSelectWeapon =
+                          Boolean(onSelectWeapon) && weaponSelectionEnabled;
+                        const weaponTestId =
+                          weaponOptionRole && weaponOptionTestIdPrefix
+                            ? `${weaponOptionTestIdPrefix}-${weaponOptionRole}-${w.name}`
+                            : undefined;
 
                         return (
                           <tr
                             key={w.name}
-                            className={`kt-row ${isSelected ? "kt-row--selected" : ""}`}
+                            className={`kt-row ${
+                              canSelectWeapon ? "kt-row--selectable" : ""
+                            } ${isSelected ? "kt-row--selected" : ""}`}
+                            data-testid={weaponTestId}
+                            role={canSelectWeapon ? "button" : undefined}
+                            tabIndex={canSelectWeapon ? 0 : undefined}
+                            onClick={() => {
+                              if (!canSelectWeapon) return;
+                              onSelectWeapon?.(w.name);
+                            }}
+                            onKeyDown={(event) => {
+                              if (!canSelectWeapon) return;
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                onSelectWeapon?.(w.name);
+                              }
+                            }}
                           >
                             <td className="left">{w.name}</td>
                             <td>{w.atk}</td>
@@ -284,49 +314,75 @@ function UnitCard({
               </>
             )}
           </>
-        ) : (
-          <>
-            <div className="kt-card__sectionline" />
-            <table className="kt-table">
-              <thead>
-                <tr>
-                  <th className="left">NAME</th>
-                  <th>ATK</th>
-                  <th>HIT</th>
-                  <th>DMG</th>
-                  <th className="left">WR</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredWeapons.map((w) => {
-                  const isSelected = w.name === selectedWeaponName;
-
-                  return (
-                    <tr
-                      key={w.name}
-                      className={`kt-row ${isSelected ? "kt-row--selected" : ""}`}
-                    >
-                      <td className="left">{w.name}</td>
-                      <td>{w.atk}</td>
-                      {(() => {
-                        const effectiveHit = weaponHit(w, unit);
-                        const baseHit = toNumber(w.hit);
-                        const hitDeltaClass = statDeltaClassLowerIsBetter(
-                          baseHit,
-                          effectiveHit,
-                        );
-                        return (
-                          <td className={hitDeltaClass}>{effectiveHit ?? w.hit}+</td>
-                        );
-                      })()}
-                      <td>{w.dmg}</td>
-                      <td className="left">{formatWeaponRules(w.wr)}</td>
+          ) : (
+            <>
+              <div className="kt-card__sectionline" />
+              {filteredWeapons.length === 0 ? (
+                <div className="kt-card__section-empty">{emptyWeaponsLabel}</div>
+              ) : (
+                <table className="kt-table">
+                  <thead>
+                    <tr>
+                      <th className="left">NAME</th>
+                      <th>ATK</th>
+                      <th>HIT</th>
+                      <th>DMG</th>
+                      <th className="left">WR</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </>
+                  </thead>
+                  <tbody>
+                    {filteredWeapons.map((w) => {
+                      const isSelected = w.name === selectedWeaponName;
+                      const canSelectWeapon =
+                        Boolean(onSelectWeapon) && weaponSelectionEnabled;
+                      const weaponTestId =
+                        weaponOptionRole && weaponOptionTestIdPrefix
+                          ? `${weaponOptionTestIdPrefix}-${weaponOptionRole}-${w.name}`
+                          : undefined;
+
+                      return (
+                        <tr
+                          key={w.name}
+                          className={`kt-row ${
+                            canSelectWeapon ? "kt-row--selectable" : ""
+                          } ${isSelected ? "kt-row--selected" : ""}`}
+                          data-testid={weaponTestId}
+                          role={canSelectWeapon ? "button" : undefined}
+                          tabIndex={canSelectWeapon ? 0 : undefined}
+                          onClick={() => {
+                            if (!canSelectWeapon) return;
+                            onSelectWeapon?.(w.name);
+                          }}
+                          onKeyDown={(event) => {
+                            if (!canSelectWeapon) return;
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              onSelectWeapon?.(w.name);
+                            }
+                          }}
+                        >
+                          <td className="left">{w.name}</td>
+                          <td>{w.atk}</td>
+                          {(() => {
+                            const effectiveHit = weaponHit(w, unit);
+                            const baseHit = toNumber(w.hit);
+                            const hitDeltaClass = statDeltaClassLowerIsBetter(
+                              baseHit,
+                              effectiveHit,
+                            );
+                            return (
+                              <td className={hitDeltaClass}>{effectiveHit ?? w.hit}+</td>
+                            );
+                          })()}
+                          <td>{w.dmg}</td>
+                          <td className="left">{formatWeaponRules(w.wr)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </>
         )}
       </section>
 

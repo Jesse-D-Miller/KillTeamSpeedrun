@@ -551,81 +551,8 @@ function DiceInputModal({
         >
           ×
         </button>
-        <div className="kt-modal__layout">
-          <aside className="kt-modal__sidebar">
-            <div className="kt-modal__sidebar-group">
-              <div className="kt-modal__sidebar-title">Actions</div>
-              <div className="kt-modal__sidebar-empty">
-                Roll attack dice, then lock them in.
-              </div>
-              <button
-                className="kt-modal__btn kt-modal__btn--success"
-                type="button"
-                onClick={handleRollClick}
-                disabled={readOnly || isRolling || hasAttackRoll || remainingAttackDiceCount <= 0}
-              >
-                Roll
-              </button>
-              {Number(accurateMax) > 0 && (
-                <button
-                  className="kt-modal__btn kt-modal__btn--primary"
-                  type="button"
-                  onClick={handleAccurateClick}
-                  disabled={readOnly || hasAttackRoll || accurateSpent >= Number(accurateMax)}
-                >
-                  Accurate {accurateSpent}/{accurateMax}
-                </button>
-              )}
-              {hasBalanced && (
-                <button
-                  className="kt-modal__btn kt-modal__btn--primary"
-                  type="button"
-                  onClick={handleBalancedClick}
-                  disabled={readOnly || !hasAttackRoll || balancedUsed}
-                >
-                  Balanced
-                </button>
-              )}
-              {hasCeaseless && (
-                <button
-                  className="kt-modal__btn kt-modal__btn--primary"
-                  type="button"
-                  onClick={handleCeaselessClick}
-                  disabled={readOnly || !hasAttackRoll || ceaselessApplied}
-                >
-                  Ceaseless
-                </button>
-              )}
-            </div>
-            {combatStage && (
-              <div className="kt-modal__sidebar-footer">
-                {combatStage === "READY_TO_RESOLVE_DAMAGE" && (
-                  <button
-                    className="kt-modal__btn kt-modal__btn--primary"
-                    type="button"
-                    onClick={() => onConfirm?.({
-                      attackDice: combatAttackRoll || [],
-                      defenseDice: [],
-                      ceaseless: null,
-                      autoLogged: true,
-                    })}
-                  >
-                    Resolve Combat
-                  </button>
-                )}
-                <button
-                  className="kt-modal__btn kt-modal__btn--primary"
-                  type="button"
-                  disabled={combatStage !== "ATTACK_ROLLING" || !hasAttackRoll}
-                  onClick={handleLockInAttackClick}
-                  data-testid="lock-in-attack"
-                >
-                  Lock In Attack
-                </button>
-              </div>
-            )}
-          </aside>
-          <div className="kt-modal__content">
+        <div className="kt-modal__layout dice-attack__layout">
+          <div className="kt-modal__content dice-attack__content">
             <div className="kt-modal__header">
               <div className="kt-modal__title">Attack Roll</div>
               <div className="kt-modal__subtitle">
@@ -633,6 +560,82 @@ function DiceInputModal({
               </div>
               {statusMessage && (
                 <div className="kt-modal__subtitle">{statusMessage}</div>
+              )}
+            </div>
+
+            <div className="dice-attack__actions">
+              <div className="dice-attack__actions-header">
+                <div className="dice-attack__actions-title">Actions</div>
+                <div className="dice-attack__actions-subtitle">
+                  Roll attack dice, then lock them in.
+                </div>
+              </div>
+              <div className="dice-attack__actions-grid">
+                <button
+                  className="kt-modal__btn kt-modal__btn--success"
+                  type="button"
+                  onClick={handleRollClick}
+                  disabled={readOnly || isRolling || hasAttackRoll || remainingAttackDiceCount <= 0}
+                >
+                  Roll
+                </button>
+                {Number(accurateMax) > 0 && (
+                  <button
+                    className="kt-modal__btn kt-modal__btn--primary"
+                    type="button"
+                    onClick={handleAccurateClick}
+                    disabled={readOnly || hasAttackRoll || accurateSpent >= Number(accurateMax)}
+                  >
+                    Accurate {accurateSpent}/{accurateMax}
+                  </button>
+                )}
+                {hasBalanced && (
+                  <button
+                    className="kt-modal__btn kt-modal__btn--primary"
+                    type="button"
+                    onClick={handleBalancedClick}
+                    disabled={readOnly || !hasAttackRoll || balancedUsed}
+                  >
+                    Balanced
+                  </button>
+                )}
+                {hasCeaseless && (
+                  <button
+                    className="kt-modal__btn kt-modal__btn--primary"
+                    type="button"
+                    onClick={handleCeaselessClick}
+                    disabled={readOnly || !hasAttackRoll || ceaselessApplied}
+                  >
+                    Ceaseless
+                  </button>
+                )}
+              </div>
+              {combatStage && (
+                <div className="dice-attack__actions-footer">
+                  {combatStage === "READY_TO_RESOLVE_DAMAGE" && (
+                    <button
+                      className="kt-modal__btn kt-modal__btn--primary"
+                      type="button"
+                      onClick={() => onConfirm?.({
+                        attackDice: combatAttackRoll || [],
+                        defenseDice: [],
+                        ceaseless: null,
+                        autoLogged: true,
+                      })}
+                    >
+                      Resolve Combat
+                    </button>
+                  )}
+                  <button
+                    className="kt-modal__btn kt-modal__btn--primary"
+                    type="button"
+                    disabled={combatStage !== "ATTACK_ROLLING" || !hasAttackRoll}
+                    onClick={handleLockInAttackClick}
+                    data-testid="lock-in-attack"
+                  >
+                    Lock In Attack
+                  </button>
+                </div>
               )}
             </div>
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import TargetSelectModal from "../components/TargetSelectModal";
-import { normalizeWeaponRules, runWeaponRuleHook } from "../../engine/rules/weaponRules";
+import { normalizeWeaponRules } from "../../engine/rules/weaponRules";
 
 function TargetSelectScreen() {
   const navigate = useNavigate();
@@ -71,12 +71,6 @@ function TargetSelectScreen() {
     }
   };
 
-  const dispatchCombatEvent = (type, payload = {}) => {
-    if (typeof window !== "undefined" && typeof window.ktDispatchCombatEvent === "function") {
-      window.ktDispatchCombatEvent(type, payload);
-    }
-  };
-
   const handleClose = () => {
     if (mode === "shoot" || mode === "fight") {
       dispatchGameEvent("FLOW_CANCEL");
@@ -92,35 +86,11 @@ function TargetSelectScreen() {
       return;
     }
 
-    const blastInputs = {
+    dispatchGameEvent("FLOW_SET_TARGET", {
+      defenderId: primaryTargetId,
       primaryTargetId,
       secondaryTargetIds,
-    };
-    const ctx = {
-      weapon: selectedWeapon,
-      weaponProfile: selectedWeapon,
-      weaponRules: normalizeWeaponRules(selectedWeapon),
-      inputs: blastInputs,
-      modifiers: {},
-      log: [],
-    };
-    runWeaponRuleHook(ctx, "ON_DECLARE_ATTACK");
-    const attackQueue = Array.isArray(ctx.attackQueue) ? ctx.attackQueue : [];
-    const firstTargetId = attackQueue[0]?.targetId ?? primaryTargetId;
-
-    dispatchCombatEvent("START_RANGED_ATTACK", {
-      attackerId: slot || null,
-      defenderId: slot === "A" ? "B" : slot === "B" ? "A" : null,
-      attackingOperativeId: attacker?.id || null,
-      defendingOperativeId: firstTargetId,
-      weaponId: selectedWeapon?.name || null,
-      weaponProfile: selectedWeapon || null,
-      attackQueue,
-      inputs: blastInputs,
     });
-
-    dispatchGameEvent("FLOW_CANCEL");
-
     navigate(backTarget, { state: backState });
   };
 

@@ -99,6 +99,10 @@
   min-height: 360px;
 }
 
+.dice-attack__layout {
+  grid-template-columns: 1fr;
+}
+
 .kt-modal__sidebar {
   padding: 18px;
   display: flex;
@@ -142,6 +146,49 @@
   padding: 18px;
   display: grid;
   gap: 12px;
+}
+
+.dice-attack__content {
+  width: 100%;
+}
+
+.dice-attack__actions {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dice-attack__actions-header {
+  display: grid;
+  gap: 6px;
+}
+
+.dice-attack__actions-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  opacity: 0.75;
+  font-weight: 800;
+}
+
+.dice-attack__actions-subtitle {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.dice-attack__actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.dice-attack__actions-footer {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
 }
 
 .kt-modal__panel {

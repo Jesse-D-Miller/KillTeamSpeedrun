@@ -460,10 +460,14 @@
 }
 
 .kt-row {
+  cursor: default;
+}
+
+.kt-row--selectable {
   cursor: pointer;
 }
 
-.kt-row:hover {
+.kt-row--selectable:hover {
   background: rgba(255, 255, 255, 0.05);
 }
 

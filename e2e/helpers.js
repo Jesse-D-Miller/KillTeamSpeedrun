@@ -5,6 +5,16 @@ export async function lastCombatEvent(page) {
   });
 }
 
+export async function waitForCombatEvent(page, type) {
+  return await page.waitForFunction(
+    (eventType) => {
+      const list = window.__ktE2E_combatEvents || [];
+      return list.find((entry) => entry?.type === eventType) || null;
+    },
+    type,
+  );
+}
+
 export async function lastGameEvent(page) {
   return await page.evaluate(() => {
     const list = window.__ktE2E_gameEvents || [];

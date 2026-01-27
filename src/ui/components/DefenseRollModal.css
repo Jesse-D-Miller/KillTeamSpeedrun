@@ -64,6 +64,10 @@
   min-height: 360px;
 }
 
+.defense-roll__layout {
+  grid-template-columns: 1fr;
+}
+
 .kt-modal__sidebar {
   padding: 18px;
   display: flex;
@@ -107,6 +111,43 @@
   padding: 18px;
   display: grid;
   gap: 12px;
+}
+
+.defense-roll__content {
+  width: 100%;
+}
+
+.defense-roll__actions {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.defense-roll__actions-header {
+  display: grid;
+  gap: 6px;
+}
+
+.defense-roll__actions-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  opacity: 0.75;
+  font-weight: 800;
+}
+
+.defense-roll__actions-subtitle {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+.defense-roll__actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
 }
 
 .kt-modal__panel {

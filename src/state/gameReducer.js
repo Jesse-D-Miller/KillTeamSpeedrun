@@ -50,6 +50,13 @@ const createActionFlow = ({ mode, attackerId }) => ({
 	step: "pickTarget",
 	attackerWeapon: null,
 	defenderWeapon: null,
+	inputs: {
+		primaryTargetId: null,
+		secondaryTargetIds: [],
+		accurateSpent: 0,
+		balancedClick: false,
+		balancedUsed: false,
+	},
 	log: [],
 	remainingDice: {
 		attacker: [],
@@ -280,9 +287,14 @@ function reduceGameState(state, action) {
 				weaponId,
 				weaponProfile,
 			} = action.payload || {};
+			const nextUi =
+				state.ui?.actionFlow?.mode === "shoot"
+					? { ...(state.ui || {}), actionFlow: null }
+					: state.ui;
 
 			return {
 				...state,
+				...(nextUi ? { ui: nextUi } : {}),
 				combatState: {
 					...initialCombatState,
 					attackerId: attackerId ?? null,
@@ -690,9 +702,19 @@ function reduceGameState(state, action) {
 		}
 
 		case "FLOW_SET_TARGET": {
-			const { defenderId } = action.payload || {};
+			const { defenderId, primaryTargetId, secondaryTargetIds } = action.payload || {};
 			const flow = state.ui?.actionFlow;
 			if (!flow || !defenderId) return state;
+			const nextInputs =
+				flow.mode === "shoot"
+					? {
+						...(flow.inputs || {}),
+						primaryTargetId: primaryTargetId ?? defenderId,
+						secondaryTargetIds: Array.isArray(secondaryTargetIds)
+							? secondaryTargetIds
+							: [],
+					}
+					: flow.inputs;
 			return {
 				...state,
 				ui: {
@@ -700,6 +722,7 @@ function reduceGameState(state, action) {
 					actionFlow: {
 						...flow,
 						defenderId,
+						inputs: nextInputs,
 						step: "pickWeapons",
 					},
 				},
