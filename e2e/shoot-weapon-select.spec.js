@@ -19,7 +19,7 @@ async function goToShootTargetSelect(page) {
   await expect(page.getByTestId("target-select-modal")).toBeVisible();
 }
 
-test("shoot target confirm opens weapon select (not attack modal)", async ({ page }) => {
+test("shoot target confirm opens attack resolution", async ({ page }) => {
   await goToShootTargetSelect(page);
 
   const firstTarget = page.locator("[data-testid^='target-beta:']").first();
@@ -27,9 +27,9 @@ test("shoot target confirm opens weapon select (not attack modal)", async ({ pag
   await firstTarget.press("Enter");
   await page.getByTestId("target-confirm").click();
 
-  await expect(page.getByTestId("weapon-select-modal")).toBeVisible();
-  await expect(page.getByTestId("dice-attack-modal")).toHaveCount(0);
+  await expect(page.getByTestId("attack-resolution-modal")).toBeVisible();
+  await expect(page.getByTestId("weapon-select-modal")).toHaveCount(0);
 
   const combatEv = await lastCombatEvent(page);
-  expect(combatEv?.type).not.toBe("START_RANGED_ATTACK");
+  expect(combatEv?.type).toBe("START_RANGED_ATTACK");
 });

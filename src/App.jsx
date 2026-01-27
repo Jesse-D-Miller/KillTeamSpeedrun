@@ -745,6 +745,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
   const attackResolutionOpen =
     Boolean(attackResolutionRole) &&
     [
+      COMBAT_STAGES.ATTACK_RESOLUTION,
       COMBAT_STAGES.ATTACK_ROLLING,
       COMBAT_STAGES.ATTACK_LOCKED,
       COMBAT_STAGES.DEFENSE_ROLLING,
@@ -752,6 +753,53 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
       COMBAT_STAGES.READY_TO_RESOLVE_DAMAGE,
       COMBAT_STAGES.DONE,
     ].includes(combatState?.stage);
+
+  const lastCombatIdsRef = useRef({
+    attackingOperativeId: null,
+    defendingOperativeId: null,
+  });
+
+  useEffect(() => {
+    if (combatState?.attackingOperativeId || combatState?.defendingOperativeId) {
+      lastCombatIdsRef.current = {
+        attackingOperativeId: combatState?.attackingOperativeId ?? null,
+        defendingOperativeId: combatState?.defendingOperativeId ?? null,
+      };
+    }
+  }, [combatState?.attackingOperativeId, combatState?.defendingOperativeId]);
+
+  useEffect(() => {
+    if (!username) return;
+    if (combatState?.stage !== COMBAT_STAGES.DONE) return;
+    const { attackingOperativeId, defendingOperativeId } = lastCombatIdsRef.current;
+    const targetId =
+      combatState?.attackerId === currentPlayerId
+        ? attackingOperativeId
+        : combatState?.defenderId === currentPlayerId
+          ? defendingOperativeId
+          : null;
+    if (!targetId) return;
+    const search = isE2E() ? location.search : "";
+    const targetPath = `/${username}/army/unit/${targetId}${search}`;
+    if (location.pathname === targetPath) return;
+    navigate(targetPath, {
+      state: {
+        slot: playerSlot,
+        gameCode,
+      },
+    });
+  }, [
+    combatState?.stage,
+    combatState?.attackerId,
+    combatState?.defenderId,
+    currentPlayerId,
+    username,
+    location.pathname,
+    location.search,
+    navigate,
+    playerSlot,
+    gameCode,
+  ]);
 
   const attackingOperative = state.game.find(
     (unit) => unit.id === combatState?.attackingOperativeId,
@@ -1285,7 +1333,11 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
   }, [combatState?.stage]);
 
   useEffect(() => {
-    if (combatState?.stage !== COMBAT_STAGES.ATTACK_ROLLING) return;
+    if (
+      combatState?.stage !== COMBAT_STAGES.ATTACK_ROLLING &&
+      combatState?.stage !== COMBAT_STAGES.ATTACK_RESOLUTION
+    )
+      return;
     const queue = combatState?.attackQueue || [];
     const currentIndex = combatState?.currentAttackIndex ?? 0;
     if (!queue[currentIndex]) return;
@@ -1343,13 +1395,21 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
   };
 
   const dispatchCombatEvent = (type, payload = {}) => {
+    const nextPayload = payload?.playerId
+      ? payload
+      : { ...payload, playerId: currentPlayerId };
     if (typeof window !== "undefined" && Array.isArray(window.__ktE2E_combatEvents)) {
-      window.__ktE2E_combatEvents.push({ type, payload });
+      window.__ktE2E_combatEvents.push({ type, payload: nextPayload });
     }
     const eventId = generateClientId();
     const ts = Date.now();
-    dispatchIntent({ type, payload, meta: { eventId, ts } });
-    sendMultiplayerEvent("COMBAT_EVENT", { type, payload, eventId, ts }, eventId, ts);
+    dispatchIntent({ type, payload: nextPayload, meta: { eventId, ts } });
+    sendMultiplayerEvent(
+      "COMBAT_EVENT",
+      { type, payload: nextPayload, eventId, ts },
+      eventId,
+      ts,
+    );
   };
 
   const dispatchGameEvent = (type, payload = {}) => {
@@ -1416,8 +1476,108 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
     window.ktDispatchCombatEvent = (type, payload = {}) => {
       dispatchCombatEvent(type, payload);
     };
+    if (e2e) {
+      window.ktE2E_forceCombatDone = ({
+        attackerSlot,
+        defenderSlot,
+        attackingOperativeId,
+        defendingOperativeId,
+        activePlayerId,
+        activeOperativeId,
+      } = {}) => {
+        const state = window.ktGetGameState?.();
+        if (state && typeof window.ktSetGameState === "function") {
+          if (Array.isArray(window.__ktE2E_combatEvents)) {
+            window.__ktE2E_combatEvents.push({
+              type: "START_RANGED_ATTACK",
+              payload: {
+                attackerId: attackerSlot ?? state.combatState?.attackerId ?? null,
+                defenderId: defenderSlot ?? state.combatState?.defenderId ?? null,
+                attackingOperativeId:
+                  attackingOperativeId ?? state.combatState?.attackingOperativeId ?? null,
+                defendingOperativeId:
+                  defendingOperativeId ?? state.combatState?.defendingOperativeId ?? null,
+                weaponId: null,
+                weaponProfile: null,
+              },
+            });
+            window.__ktE2E_combatEvents.push({
+              type: "RESOLVE_COMBAT_DONE",
+              payload: {},
+            });
+          }
+          window.ktSetGameState({
+            ...state,
+            firefight: {
+              ...(state.firefight || {}),
+              activePlayerId: activePlayerId ?? state.firefight?.activePlayerId ?? null,
+              activeOperativeId:
+                activeOperativeId ?? state.firefight?.activeOperativeId ?? null,
+            },
+            combatState: {
+              ...(state.combatState || {}),
+              attackerId: attackerSlot ?? state.combatState?.attackerId ?? null,
+              defenderId: defenderSlot ?? state.combatState?.defenderId ?? null,
+              attackingOperativeId:
+                attackingOperativeId ?? state.combatState?.attackingOperativeId ?? null,
+              defendingOperativeId:
+                defendingOperativeId ?? state.combatState?.defendingOperativeId ?? null,
+              stage: COMBAT_STAGES.DONE,
+            },
+          });
+          return;
+        }
+        if (activeOperativeId) {
+          dispatchGameEvent("SET_ACTIVE_OPERATIVE", {
+            playerId: activePlayerId ?? attackerSlot ?? null,
+            operativeId: activeOperativeId,
+          });
+        }
+        dispatchCombatEvent("START_RANGED_ATTACK", {
+          attackerId: attackerSlot ?? null,
+          defenderId: defenderSlot ?? null,
+          attackingOperativeId: attackingOperativeId ?? null,
+          defendingOperativeId: defendingOperativeId ?? null,
+          weaponId: null,
+          weaponProfile: null,
+        });
+        dispatchCombatEvent("RESOLVE_COMBAT_DONE");
+        setTimeout(() => {
+          dispatchCombatEvent("CLEAR_COMBAT_STATE");
+        }, 100);
+      };
+      window.ktE2E_endCombatNow = () => {
+        const state = window.ktGetGameState?.();
+        const attackerId = state?.combatState?.attackerId ?? "A";
+        const defenderId = state?.combatState?.defenderId ?? (attackerId === "A" ? "B" : "A");
+        const attackingOperativeId =
+          state?.combatState?.attackingOperativeId ||
+          state?.game?.find((unit) => unit.teamId === "alpha")?.id ||
+          null;
+        const defendingOperativeId =
+          state?.combatState?.defendingOperativeId ||
+          state?.game?.find((unit) => unit.teamId === "beta")?.id ||
+          null;
+        const activePlayerId = state?.firefight?.activePlayerId ?? attackerId;
+        const activeOperativeId = state?.firefight?.activeOperativeId ?? attackingOperativeId;
+        window.ktE2E_forceCombatDone?.({
+          attackerSlot: attackerId,
+          defenderSlot: defenderId,
+          attackingOperativeId,
+          defendingOperativeId,
+          activePlayerId,
+          activeOperativeId,
+        });
+      };
+    }
     return () => {
       delete window.ktDispatchCombatEvent;
+      if (window.ktE2E_forceCombatDone) {
+        delete window.ktE2E_forceCombatDone;
+      }
+      if (window.ktE2E_endCombatNow) {
+        delete window.ktE2E_endCombatNow;
+      }
     };
   }, [dispatchCombatEvent]);
 
@@ -2011,39 +2171,52 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
         defender={defendingOperative}
         weapon={combatState?.weaponProfile || selectedWeapon}
         combatStage={combatState?.stage}
-        attackDiceCount={selectedWeapon?.atk ?? 0}
+        attackRoll={combatState?.attackRoll}
+        defenseRoll={combatState?.defenseRoll}
+        rollsLocked={
+          combatState?.rollsLocked ||
+          (combatState?.rollReady?.A && combatState?.rollReady?.B)
+        }
+        attackLocked={combatState?.attackLocked}
+        defenseLocked={combatState?.defenseLocked}
+        attackDiceCount={combatState?.weaponProfile?.atk ?? selectedWeapon?.atk ?? 0}
         defenseDiceCount={3}
         onSetAttackRoll={(roll) => {
           dispatchCombatEvent("SET_ATTACK_ROLL", { roll });
         }}
         onLockAttack={() => {
-          dispatchCombatEvent("LOCK_ATTACK_ROLL");
+          dispatchCombatEvent("COMBAT_SET_ROLL_READY", {
+            playerId: combatState?.attackerId,
+            ready: true,
+          });
         }}
         onSetDefenseRoll={(roll) => {
           dispatchCombatEvent("SET_DEFENSE_ROLL", { roll });
         }}
         onLockDefense={() => {
-          dispatchCombatEvent("LOCK_DEFENSE_ROLL");
+          dispatchCombatEvent("COMBAT_SET_ROLL_READY", {
+            playerId: combatState?.defenderId,
+            ready: true,
+          });
         }}
         onApplyDamage={(targetUnitId, damage) => {
           dispatchDamageEvent(targetUnitId, damage);
         }}
         onResolveComplete={() => {
-          dispatchCombatEvent("SET_COMBAT_STAGE", {
-            stage: COMBAT_STAGES.READY_TO_RESOLVE_DAMAGE,
-          });
-          dispatchCombatEvent("RESOLVE_COMBAT");
+          dispatchCombatEvent("RESOLVE_COMBAT_DONE");
 
           const queue = combatState?.attackQueue || [];
           const idx = combatState?.currentAttackIndex ?? 0;
           if (queue.length > 0 && idx < queue.length - 1) {
             dispatchCombatEvent("ADVANCE_ATTACK_QUEUE");
           } else {
-            dispatchCombatEvent("CLEAR_COMBAT_STATE");
+            setTimeout(() => {
+              dispatchCombatEvent("CLEAR_COMBAT_STATE");
+            }, 0);
           }
         }}
         onCancel={() => {
-          dispatchCombatEvent("CLEAR_COMBAT_STATE");
+          dispatchCombatEvent("CANCEL_COMBAT");
         }}
       />
 

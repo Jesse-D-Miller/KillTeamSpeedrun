@@ -7,7 +7,7 @@ const ployModules = import.meta.glob(
 
 const normalizeData = (moduleData) => moduleData?.default || moduleData || null;
 
-function FirefightPloys({ armyKey, isVisible = true, isEnabled = true, onUsePloy }) {
+function FirefightPloys({ armyKey, cp = null, isVisible = true, isEnabled = true, onUsePloy }) {
   if (!isVisible) return null;
   if (!armyKey) return null;
 
@@ -28,20 +28,29 @@ function FirefightPloys({ armyKey, isVisible = true, isEnabled = true, onUsePloy
   return (
     <section className="kt-firefight-ploys">
       <div className="kt-firefight-ploys__list" role="list">
-        {ploys.map((ploy) => (
-          <button
-            key={ploy.id || ploy.name}
-            className="kt-firefight-ploys__item"
-            type="button"
-            disabled={!isEnabled}
-            onClick={() => onUsePloy?.(ploy)}
-          >
+        {ploys.map((ploy) => {
+          const cost = Number(ploy?.cost?.cp ?? 0);
+          const hasCost = Number.isFinite(cost);
+          const lacksCp = hasCost && Number.isFinite(Number(cp)) ? Number(cp) < cost : false;
+          const isDisabled = !isEnabled || lacksCp;
+          const ployKey = ploy.id || ploy.name || "ploy";
+          return (
+            <button
+              key={ployKey}
+              className="kt-firefight-ploys__item"
+              type="button"
+              data-testid={`firefight-ploy-${String(ployKey).toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+              data-ploy-cost={hasCost ? cost : undefined}
+              disabled={isDisabled}
+              onClick={() => onUsePloy?.(ploy)}
+            >
             <div className="kt-firefight-ploys__name">{ploy.name}</div>
             {ploy.cost?.cp != null && (
               <div className="kt-firefight-ploys__cost">CP {ploy.cost.cp}</div>
             )}
-          </button>
-        ))}
+            </button>
+          );
+        })}
       </div>
     </section>
   );

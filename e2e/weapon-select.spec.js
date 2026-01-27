@@ -137,7 +137,7 @@ test("shoot weapon select requires ready and starts attack when both ready", asy
     const state = window.ktGetGameState?.();
     return (
       state?.combatState?.attackingOperativeId === "alpha:kommando-bomb-squig" &&
-      state?.combatState?.stage === "ATTACK_ROLLING"
+      state?.combatState?.stage === "ATTACK_RESOLUTION"
     );
   });
 });
@@ -257,6 +257,9 @@ test("fight weapon select flow still works", async ({ page }) => {
 test("shoot flow shows no valid weapons when attacker lacks ranged", async ({ page }) => {
   await page.goto("/jesse/army?e2e=1&slot=A");
 
+  await page.waitForFunction(() => typeof window.ktSetGameState === "function");
+  await page.waitForFunction(() => window.ktGetGameState?.()?.game?.length > 0);
+
   await page.evaluate(() => {
     const state = window.ktGetGameState?.();
     if (!state?.game) return;
@@ -322,6 +325,11 @@ test("shoot flow shows no valid weapons when attacker lacks ranged", async ({ pa
       topBar: { ...(state?.topBar || {}), phase: "FIREFIGHT" },
       ui: { actionFlow },
     });
+  });
+
+  await page.waitForFunction(() => {
+    const state = window.ktGetGameState?.();
+    return state?.ui?.actionFlow?.mode === "shoot";
   });
 
   await expect(page.getByTestId("weapon-select-modal")).toBeVisible();

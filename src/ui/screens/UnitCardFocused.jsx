@@ -127,7 +127,7 @@ function UnitCardFocused() {
     isMyTurn &&
     isOwnedByMe &&
     isThisOperativeActive;
-  const canUseFirefightPloys = false;
+  const canUseFirefightPloys = isFirefightPhase && isMyTurn;
   const showTurnGlow =
     (gameState?.phase === "FIREFIGHT" && isMyTurn) ||
     (gameState?.phase === "STRATEGY" && gameState?.strategy?.turn === slot);
@@ -367,6 +367,15 @@ function UnitCardFocused() {
               armyKey={armyKeyForSlot}
               isVisible={true}
               isEnabled={isFirefightPhase && canUseFirefightPloys}
+              cp={effectiveCp}
+              onUsePloy={(ploy) => {
+                const cost = Number(ploy?.cost?.cp ?? 0);
+                dispatchGameEvent("USE_FIREFIGHT_PLOY", {
+                  playerId: slot,
+                  ployId: ploy?.id || ploy?.name,
+                  cost,
+                });
+              }}
             />
           </div>
         </div>

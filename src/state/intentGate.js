@@ -65,11 +65,16 @@ const PHASE_ALLOWED_EVENTS = {
     "LOCK_ATTACK_ROLL",
     "SET_DEFENSE_ROLL",
     "LOCK_DEFENSE_ROLL",
+    "LOCK_ROLLS",
     "SET_BLOCKS_RESULT",
     "RESOLVE_COMBAT",
+    "RESOLVE_COMBAT_DONE",
     "CLEAR_COMBAT_STATE",
+    "CANCEL_COMBAT",
     "SET_COMBAT_STAGE",
     "ADVANCE_ATTACK_QUEUE",
+    "COMBAT_SET_ROLL_READY",
+    "USE_FIREFIGHT_PLOY",
     "APPLY_DAMAGE",
     "DAMAGE_UNIT",
     "HEAL_UNIT",
@@ -215,14 +220,30 @@ export const validateGameIntent = (state, event) => {
       break;
     }
 
+    case "USE_FIREFIGHT_PLOY": {
+      const { playerId, ployId, cost } = event.payload || {};
+      if (!playerId) pushIssue(issues, "Missing playerId.");
+      if (!ployId) pushIssue(issues, "Missing ployId.");
+      if (cost != null && (!Number.isFinite(Number(cost)) || Number(cost) < 0)) {
+        pushIssue(issues, "Ploy cost must be a non-negative number.");
+      }
+      break;
+    }
+
     case "LOCK_ATTACK_ROLL":
     case "LOCK_DEFENSE_ROLL":
+    case "LOCK_ROLLS":
+    case "COMBAT_SET_ROLL_READY":
     case "SET_COMBAT_STAGE":
     case "SET_COMBAT_MODIFIERS":
     case "ADVANCE_ATTACK_QUEUE":
       break;
 
     case "SET_BLOCKS_RESULT":
+      break;
+
+    case "RESOLVE_COMBAT_DONE":
+    case "CANCEL_COMBAT":
       break;
 
     case "RESOLVE_COMBAT":

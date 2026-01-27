@@ -266,6 +266,17 @@ export const buildLogEntriesForEvent = (stateBefore, stateAfter, event) => {
       }
       break;
     }
+    case "COMBAT_SET_ROLL_READY": {
+      const playerId = payload?.playerId;
+      if (playerId) {
+        add({
+          type: "COMBAT_READY",
+          summary: `Player ${playerId} ready to resolve rolls`,
+          meta: { playerId },
+        });
+      }
+      break;
+    }
     case "SET_ATTACK_ROLL": {
       const roll = payload?.roll || [];
       const attackerId = stateAfter.combatState?.attackingOperativeId || payload?.attackingOperativeId;
@@ -308,6 +319,10 @@ export const buildLogEntriesForEvent = (stateBefore, stateAfter, event) => {
       });
       break;
     }
+    case "LOCK_ROLLS": {
+      add({ type: "ROLLS_LOCKED", summary: "Rolls locked" });
+      break;
+    }
     case "SET_BLOCKS_RESULT": {
       const remainingHits = payload?.remainingHits ?? null;
       const remainingCrits = payload?.remainingCrits ?? null;
@@ -335,7 +350,11 @@ export const buildLogEntriesForEvent = (stateBefore, stateAfter, event) => {
       break;
     }
     case "RESOLVE_COMBAT":
+    case "RESOLVE_COMBAT_DONE":
       add({ type: "COMBAT_RESOLVED", summary: "Attack resolved" });
+      break;
+    case "CANCEL_COMBAT":
+      add({ type: "COMBAT_CANCELLED", summary: "Combat cancelled" });
       break;
     case "FLOW_START_FIGHT": {
       const attackerId = payload?.attackerId;

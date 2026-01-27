@@ -174,7 +174,9 @@ function UnitCard({
           </div>
           <div className="statbox">
             <div className="statbox__label">WOUNDS</div>
-            <div className="statbox__value">{state.woundsCurrent}</div>
+            <div className="statbox__value" data-testid="wounds-current">
+              {state.woundsCurrent}
+            </div>
             <div className="statbox__sub">/ {stats.woundsMax}</div>
           </div>
         </div>

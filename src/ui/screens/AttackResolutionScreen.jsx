@@ -1,32 +1,160 @@
+// AttackResolutionScreen.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./AttackResolutionScreen.css";
-import AttackSummaryBar from "../components/AttackSummaryBar";
 import UnitCard from "../components/UnitCard";
 import { normalizeWeaponRules } from "../../engine/rules/weaponRules";
 import { allocateDefense } from "../../engine/rules/resolveDice";
 
+// Load all faction firefight ploys (eager so it works in UI immediately)
+const firefightPloyModules = import.meta.glob(
+  "../../data/killteams/**/**/*FirefightPloys.json",
+  { eager: true },
+);
+
 const PHASES = {
   PRE_ROLL: "PRE_ROLL",
-  ROLL_INPUT: "ROLL_INPUT",
-  REROLL: "REROLL",
-  LOCKED_ATTACK: "LOCKED_ATTACK",
-  DEFENSE: "DEFENSE",
+  ROLL: "ROLL",
+  POST_ROLL: "POST_ROLL",
   RESOLVED: "RESOLVED",
 };
 
-const buildDieArray = (hits, crits, hitValue = 4) => {
-  const safeHits = Math.max(0, Number(hits) || 0);
-  const safeCrits = Math.max(0, Number(crits) || 0);
-  const hitDice = Array.from({ length: safeHits }, () => hitValue);
-  const critDice = Array.from({ length: safeCrits }, () => 6);
-  return [...critDice, ...hitDice];
-};
-
-const clampNumber = (value, min, max) => {
-  const parsed = Number(value);
+const clampInt = (value, min, max) => {
+  const parsed = Number.parseInt(String(value), 10);
   if (!Number.isFinite(parsed)) return min;
   return Math.min(max, Math.max(min, parsed));
 };
+
+const normKey = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+
+function normalizeDataset(mod) {
+  if (!mod) return null;
+  const data = mod.default ?? mod;
+  if (!data?.ploys) return null;
+  return data;
+}
+
+function getKillTeamHint(attacker, defender) {
+  const candidates = [
+    attacker?.killTeam,
+    attacker?.killTeamName,
+    attacker?.faction,
+    attacker?.teamName,
+    attacker?.meta?.killTeam,
+    defender?.killTeam,
+    defender?.killTeamName,
+    defender?.faction,
+    defender?.teamName,
+    defender?.meta?.killTeam,
+  ].filter(Boolean);
+  return candidates[0] || "";
+}
+
+function computeDamagePreview({
+  weapon,
+  attackHits,
+  attackCrits,
+  defenseHits,
+  defenseCrits,
+}) {
+  const [normalDmg, critDmg] = String(weapon?.dmg || "0/0")
+    .split("/")
+    .map((v) => Number(v));
+
+  const normalDamage = Number.isFinite(normalDmg) ? normalDmg : 0;
+  const critDamage = Number.isFinite(critDmg) ? critDmg : 0;
+
+  const allocation = allocateDefense({
+    attackHits,
+    attackCrits,
+    defenseHits,
+    defenseCrits,
+    normalDamage,
+    critDamage,
+  });
+
+  const totalDamage =
+    allocation.remainingHits * normalDamage +
+    allocation.remainingCrits * critDamage;
+
+  return {
+    normalDamage,
+    critDamage,
+    remainingHits: allocation.remainingHits,
+    remainingCrits: allocation.remainingCrits,
+    totalDamage,
+  };
+}
+
+/**
+ * Counter input: typing (no clamp per keystroke) + +/- buttons.
+ * Clamp on blur and on +/-.
+ */
+function CountInput({ label, value, max, min = 0, onChange, disabled, testId }) {
+  const [draft, setDraft] = useState(String(value));
+
+  useEffect(() => {
+    setDraft(String(value));
+  }, [value]);
+
+  const commit = (next) => {
+    const safe = clampInt(next, min, max);
+    onChange(safe);
+    setDraft(String(safe));
+  };
+
+  const onType = (e) => {
+    const next = e.target.value;
+    if (next === "" || /^-?\d+$/.test(next)) setDraft(next);
+  };
+
+  const onBlur = () => {
+    if (draft === "") return commit(min);
+    commit(draft);
+  };
+
+  return (
+    <div className="attack-resolution__count">
+      <div className="attack-resolution__label">{label}</div>
+      <div className="attack-resolution__count-row">
+        <button
+          type="button"
+          className="attack-resolution__count-btn"
+          aria-label={`${label} minus`}
+          onClick={() => commit((Number(value) || 0) - 1)}
+          disabled={disabled || (Number(value) || 0) <= min}
+        >
+          −
+        </button>
+
+        <input
+          className="attack-resolution__input attack-resolution__count-input"
+          inputMode="numeric"
+          value={draft}
+          onChange={onType}
+          onBlur={onBlur}
+          aria-label={label}
+          data-testid={testId}
+          disabled={disabled}
+        />
+
+        <button
+          type="button"
+          className="attack-resolution__count-btn"
+          aria-label={`${label} plus`}
+          onClick={() => commit((Number(value) || 0) + 1)}
+          disabled={disabled || (Number(value) || 0) >= max}
+        >
+          +
+        </button>
+      </div>
+
+      <div className="attack-resolution__count-hint">0–{max}</div>
+    </div>
+  );
+}
 
 function AttackResolutionScreen({
   open,
@@ -35,6 +163,11 @@ function AttackResolutionScreen({
   defender,
   weapon,
   combatStage,
+  attackRoll,
+  defenseRoll,
+  rollsLocked: rollsLockedFromState,
+  attackLocked,
+  defenseLocked,
   attackDiceCount,
   defenseDiceCount,
   onSetAttackRoll,
@@ -46,149 +179,163 @@ function AttackResolutionScreen({
   onCancel,
 }) {
   const [phase, setPhase] = useState(PHASES.PRE_ROLL);
-  const [attackHits, setAttackHits] = useState(0);
-  const [attackCrits, setAttackCrits] = useState(0);
-  const [defenseHits, setDefenseHits] = useState(0);
-  const [defenseCrits, setDefenseCrits] = useState(0);
+
+  // Final-entry (attacker only; ignores defender blocks)
+  const [finalAttackHits, setFinalAttackHits] = useState(0);
+  const [finalAttackCrits, setFinalAttackCrits] = useState(0);
+
   const [usedRules, setUsedRules] = useState({});
+  const [preRollFlags, setPreRollFlags] = useState({
+    cover: false,
+    obscured: false,
+    vantage: false,
+  });
+
+  const [rollsLocked, setRollsLocked] = useState(false);
+
   const [logs, setLogs] = useState([]);
   const logIdRef = useRef(0);
 
-  const hitThreshold = Number(weapon?.hit ?? 6);
-  const saveThreshold = Number(defender?.stats?.save ?? 6);
+  const isFight =
+    weapon?.mode === "melee" ||
+    String(combatStage || "").toLowerCase().includes("fight");
+
+  const attackerSuccessThreshold = Number(weapon?.hit ?? 6);
+  const defenderSuccessThreshold = isFight
+    ? Number(
+        defender?.state?.selectedWeaponHit ??
+          defender?.meleeHit ??
+          weapon?.hit ??
+          6,
+      )
+    : Number(defender?.stats?.save ?? 6);
+
   const maxAttackDice = Math.max(0, Number(attackDiceCount || 0));
   const maxDefenseDice = Math.max(0, Number(defenseDiceCount || 0));
 
+  const isAttackerRole = role === "attacker";
+  const isDefenderRole = role === "defender";
+  const attackerReady = Boolean(rollsLocked || attackLocked);
+  const defenderReady = Boolean(rollsLocked || defenseLocked);
+  const youReady = isAttackerRole ? attackerReady : isDefenderRole ? defenderReady : false;
+  const opponentReady = isAttackerRole
+    ? defenderReady
+    : isDefenderRole
+      ? attackerReady
+      : false;
+
   const addLog = (group, message) => {
     logIdRef.current += 1;
-    setLogs((prev) => [
-      ...prev,
-      { id: logIdRef.current, group, message, ts: Date.now() },
-    ]);
+    const entry = { id: logIdRef.current, group, message, ts: Date.now() };
+    setLogs((prev) => [entry, ...prev]); // newest first
   };
 
   useEffect(() => {
     if (!open) return;
+
     setUsedRules({});
     setLogs([]);
-    setAttackHits(0);
-    setAttackCrits(0);
-    setDefenseHits(0);
-    setDefenseCrits(0);
 
-    if (role === "attacker") {
-      if (combatStage === "ATTACK_ROLLING") {
-        setPhase(PHASES.PRE_ROLL);
-      } else if (combatStage === "ATTACK_LOCKED" || combatStage === "DEFENSE_ROLLING") {
-        setPhase(PHASES.LOCKED_ATTACK);
-      } else if (combatStage === "DONE") {
-        setPhase(PHASES.RESOLVED);
-      }
-      return;
-    }
+    setFinalAttackHits(0);
+    setFinalAttackCrits(0);
 
-    if (role === "defender") {
-      if (combatStage === "DEFENSE_ROLLING") {
-        setPhase(PHASES.DEFENSE);
-      } else if (combatStage === "DONE") {
-        setPhase(PHASES.RESOLVED);
-      } else {
-        setPhase(PHASES.LOCKED_ATTACK);
-      }
-    }
-  }, [open, role, combatStage]);
+    setPreRollFlags({ cover: false, obscured: false, vantage: false });
+    setRollsLocked(Boolean(rollsLockedFromState));
+
+    // Keep this simple: both players start on PRE_ROLL visually.
+    // Your multiplayer stage can still exist; we just aren't gatekeeping UI anymore.
+    setPhase(PHASES.PRE_ROLL);
+  }, [open, role, combatStage, rollsLockedFromState]);
 
   useEffect(() => {
     if (!open) return;
-    if (role !== "attacker") return;
-    if (combatStage === "ATTACK_LOCKED" || combatStage === "DEFENSE_ROLLING") {
-      setPhase(PHASES.LOCKED_ATTACK);
-    }
-  }, [open, role, combatStage]);
+    if (typeof rollsLockedFromState !== "boolean") return;
+    setRollsLocked(rollsLockedFromState);
+  }, [open, rollsLockedFromState]);
 
+  useEffect(() => {
+    if (!open) return;
+    if (rollsLocked) {
+      setPhase(PHASES.POST_ROLL);
+    }
+  }, [open, rollsLocked]);
+
+  // Weapon rules buckets
   const rules = useMemo(() => {
     if (!weapon) return [];
     return normalizeWeaponRules(weapon).map((rule) => {
-      const timing = ["accurate"].includes(rule.id) ? "PRE_ROLL" : "REROLL";
-      return {
-        ...rule,
-        timing,
-      };
+      const timing = ["accurate"].includes(rule.id) ? "PRE_ROLL" : "POST_ROLL";
+      return { ...rule, timing };
     });
   }, [weapon]);
 
-  const rerollActions = rules.filter((rule) => rule.timing === "REROLL");
-  const preRollActions = rules.filter((rule) => rule.timing === "PRE_ROLL");
+  const preRollActions = rules.filter((r) => r.timing === "PRE_ROLL");
+  const postRollActions = rules.filter((r) => {
+    if (r.timing !== "POST_ROLL") return false;
+    const id = String(r.id || "").toLowerCase();
+    return id !== "range" && !id.startsWith("range");
+  });
 
-  const handleAttackInput = (nextHits, nextCrits) => {
-    const safeHits = clampNumber(nextHits, 0, maxAttackDice);
-    const safeCrits = clampNumber(nextCrits, 0, maxAttackDice);
-    if (safeHits + safeCrits > maxAttackDice) return;
-    setAttackHits(safeHits);
-    setAttackCrits(safeCrits);
-    addLog("Roll", `Attacker set hits ${safeHits}, crits ${safeCrits}.`);
-  };
+  // Firefight ploys dataset selection
+  const firefightPloys = useMemo(() => {
+    const datasets = Object.values(firefightPloyModules)
+      .map(normalizeDataset)
+      .filter(Boolean);
 
-  const handleDefenseInput = (nextHits, nextCrits) => {
-    const safeHits = clampNumber(nextHits, 0, maxDefenseDice);
-    const safeCrits = clampNumber(nextCrits, 0, maxDefenseDice);
-    if (safeHits + safeCrits > maxDefenseDice) return;
-    setDefenseHits(safeHits);
-    setDefenseCrits(safeCrits);
-    addLog("Roll", `Defender set saves ${safeHits}, crit saves ${safeCrits}.`);
-  };
+    if (datasets.length === 0) return { label: "No ploys found", ploys: [] };
 
-  const applyRerollBoost = (ruleId, label) => {
+    const hint = getKillTeamHint(attacker, defender);
+    const target = normKey(hint);
+
+    const exact = datasets.find((d) => normKey(d.killTeam) === target);
+    const fallback = exact || datasets[0];
+
+    return {
+      label: fallback?.killTeam
+        ? `${fallback.killTeam} Firefight Ploys`
+        : "Firefight Ploys",
+      ploys: Array.isArray(fallback?.ploys) ? fallback.ploys : [],
+    };
+  }, [attacker, defender]);
+
+  const markPostRollRuleUsed = (ruleId, label) => {
     if (usedRules[ruleId]) return;
-    if (attackHits + attackCrits >= maxAttackDice) return;
-    setAttackHits((prev) => prev + 1);
+    if (!rollsLocked) return;
     setUsedRules((prev) => ({ ...prev, [ruleId]: true }));
-    addLog("Re-Roll", `${label} applied (+1 hit).`);
+    addLog("Post-Roll", `${label} applied.`);
   };
 
-  const handleLockAttack = () => {
-    const attackDice = buildDieArray(attackHits, attackCrits, hitThreshold);
-    onSetAttackRoll?.(attackDice);
-    onLockAttack?.();
-    addLog("Lock", "Attacker locked in results.");
-    setPhase(PHASES.LOCKED_ATTACK);
-  };
-
-  const resolveDamage = () => {
-    const [normalDmg, critDmg] = String(weapon?.dmg || "0/0")
-      .split("/")
-      .map((value) => Number(value));
-    const allocation = allocateDefense({
-      attackHits,
-      attackCrits,
-      defenseHits,
-      defenseCrits,
-      normalDamage: Number.isFinite(normalDmg) ? normalDmg : 0,
-      critDamage: Number.isFinite(critDmg) ? critDmg : 0,
+  // Final entry ignores defender blocks
+  const finalPreview = useMemo(() => {
+    return computeDamagePreview({
+      weapon,
+      attackHits: finalAttackHits,
+      attackCrits: finalAttackCrits,
+      defenseHits: 0,
+      defenseCrits: 0,
     });
-    const totalDamage =
-      allocation.remainingHits * (Number.isFinite(normalDmg) ? normalDmg : 0) +
-      allocation.remainingCrits * (Number.isFinite(critDmg) ? critDmg : 0);
+  }, [weapon, finalAttackHits, finalAttackCrits]);
+
+  const resolveFromFinalWindow = () => {
     addLog(
       "Damage",
-      `Remaining hits ${allocation.remainingHits}, crits ${allocation.remainingCrits}. Total damage ${totalDamage}.`,
+      `Final: hits ${finalAttackHits}, crits ${finalAttackCrits}. Total damage ${finalPreview.totalDamage}.`,
     );
-    if (defender?.id && totalDamage > 0) {
-      onApplyDamage?.(defender.id, totalDamage);
+
+    if (defender?.id && finalPreview.totalDamage > 0) {
+      onApplyDamage?.(defender.id, finalPreview.totalDamage);
     }
+
     onResolveComplete?.();
     setPhase(PHASES.RESOLVED);
   };
 
-  const handleLockDefense = () => {
-    const defenseDice = buildDieArray(defenseHits, defenseCrits, saveThreshold);
-    onSetDefenseRoll?.(defenseDice);
-    onLockDefense?.();
-    addLog("Lock", "Defender locked in saves.");
-    resolveDamage();
-  };
-
   if (!open || !attacker || !defender || !weapon) return null;
+
+  const defenderSuccessLabel = isFight ? "HIT" : "SAVE";
+  const defenderCritLabel = isFight ? "CRIT" : "CRIT SAVE";
+  const defenderRollLabel = isFight ? "Hits" : "Saves";
+  const defenderCritRollLabel = isFight ? "Crits" : "Crit Saves";
 
   return (
     <div className="kt-modal" data-testid="attack-resolution-modal">
@@ -203,7 +350,9 @@ function AttackResolutionScreen({
         >
           ×
         </button>
+
         <div className="attack-resolution">
+          {/* LEFT: Battle Log */}
           <aside className="attack-resolution__log">
             <div className="attack-resolution__log-title">Battle Log</div>
             <div className="attack-resolution__log-list">
@@ -212,13 +361,18 @@ function AttackResolutionScreen({
               )}
               {logs.map((entry) => (
                 <div key={entry.id} className="attack-resolution__log-entry">
-                  <span className="attack-resolution__log-group">{entry.group}</span>
+                  <span className="attack-resolution__log-group">
+                    {entry.group}
+                  </span>
                   <span>{entry.message}</span>
                 </div>
               ))}
             </div>
           </aside>
+
+          {/* RIGHT: Main */}
           <section className="attack-resolution__main">
+            {/* Header cards */}
             <div className="attack-resolution__header">
               <UnitCard
                 unit={attacker}
@@ -248,87 +402,98 @@ function AttackResolutionScreen({
               />
             </div>
 
-            <AttackSummaryBar attacker={attacker} defender={defender} weapon={weapon} />
+            {/* Summary */}
+            <div className="attack-resolution__summary-row">
+              <div className="attack-resolution__summary-col">
+                <span>ATK {maxAttackDice}</span>
+                <span>HIT {attackerSuccessThreshold}+</span>
+                <span>CRIT 6+</span>
+              </div>
+              <div className="attack-resolution__summary-col">
+                <span>
+                  {defenderSuccessLabel} {defenderSuccessThreshold}+
+                </span>
+                <span>{defenderCritLabel} 6+</span>
+              </div>
+            </div>
 
+            {/* Pre-roll */}
             <div className="attack-resolution__panel">
               <div className="attack-resolution__section">
-                <div className="attack-resolution__section-title">Fast Resolve</div>
-                <div className="attack-resolution__inputs">
-                  <div>
-                    <div className="attack-resolution__label">Attacker Hits</div>
-                    <input
-                      className="attack-resolution__input"
-                      type="number"
-                      min="0"
-                      max={maxAttackDice}
-                      value={attackHits}
-                      onChange={(event) =>
-                        handleAttackInput(event.target.value, attackCrits)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <div className="attack-resolution__label">Attacker Crits</div>
-                    <input
-                      className="attack-resolution__input"
-                      type="number"
-                      min="0"
-                      max={maxAttackDice}
-                      value={attackCrits}
-                      onChange={(event) =>
-                        handleAttackInput(attackHits, event.target.value)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <div className="attack-resolution__label">Defender Saves</div>
-                    <input
-                      className="attack-resolution__input"
-                      type="number"
-                      min="0"
-                      max={maxDefenseDice}
-                      value={defenseHits}
-                      onChange={(event) =>
-                        handleDefenseInput(event.target.value, defenseCrits)
-                      }
-                    />
-                  </div>
-                  <div>
-                    <div className="attack-resolution__label">Defender Crit Saves</div>
-                    <input
-                      className="attack-resolution__input"
-                      type="number"
-                      min="0"
-                      max={maxDefenseDice}
-                      value={defenseCrits}
-                      onChange={(event) =>
-                        handleDefenseInput(defenseHits, event.target.value)
-                      }
-                    />
-                  </div>
-                </div>
-                <button
-                  className="kt-modal__btn kt-modal__btn--primary"
-                  type="button"
-                  onClick={() => {
-                    addLog("Fast", "Fast-resolved attack input by player.");
-                    resolveDamage();
-                  }}
-                >
-                  Resolve
-                </button>
-              </div>
+                <div className="attack-resolution__section-title">Pre-Roll</div>
 
-              {phase === PHASES.PRE_ROLL && role === "attacker" && (
-                <div className="attack-resolution__section">
-                  <div className="attack-resolution__section-title">Pre-Roll</div>
-                  <div className="attack-resolution__rules">
-                    {preRollActions.length === 0 && (
-                      <div className="attack-resolution__empty">No pre-roll rules.</div>
-                    )}
-                    {preRollActions.map((rule) => (
+                <div className="attack-resolution__checkboxes">
+                  {role === "attacker" && (
+                    <label className="attack-resolution__checkbox">
+                      <input
+                        type="checkbox"
+                        checked={preRollFlags.vantage}
+                        onChange={(event) => {
+                          const next = event.target.checked;
+                          setPreRollFlags((prev) => ({ ...prev, vantage: next }));
+                          addLog(
+                            "Pre-Roll",
+                            `Vantage ${next ? "enabled" : "cleared"}.`,
+                          );
+                        }}
+                      />
+                      Vantage
+                    </label>
+                  )}
+
+                  {role === "defender" && (
+                    <>
+                      <label className="attack-resolution__checkbox">
+                        <input
+                          type="checkbox"
+                          checked={preRollFlags.cover}
+                          onChange={(event) => {
+                            const next = event.target.checked;
+                            setPreRollFlags((prev) => ({ ...prev, cover: next }));
+                            addLog(
+                              "Pre-Roll",
+                              `Cover ${next ? "enabled" : "cleared"}.`,
+                            );
+                          }}
+                        />
+                        Cover
+                      </label>
+
+                      <label className="attack-resolution__checkbox">
+                        <input
+                          type="checkbox"
+                          checked={preRollFlags.obscured}
+                          onChange={(event) => {
+                            const next = event.target.checked;
+                            setPreRollFlags((prev) => ({
+                              ...prev,
+                              obscured: next,
+                            }));
+                            addLog(
+                              "Pre-Roll",
+                              `Obscured ${next ? "enabled" : "cleared"}.`,
+                            );
+                          }}
+                        />
+                        Obscured
+                      </label>
+                    </>
+                  )}
+                </div>
+
+                <div className="attack-resolution__rules">
+                  {role !== "attacker" ? (
+                    <div className="attack-resolution__empty">
+                      No pre-roll rules for defender yet.
+                    </div>
+                  ) : preRollActions.length === 0 ? (
+                    <div className="attack-resolution__empty">
+                      No pre-roll rules.
+                    </div>
+                  ) : (
+                    preRollActions.map((rule) => (
                       <button
-                        key={rule.id}
+                        key={`pre-${rule.id}`}
                         className="attack-resolution__rule"
                         type="button"
                         onClick={() => {
@@ -339,161 +504,203 @@ function AttackResolutionScreen({
                       >
                         {rule.id} {rule.value ?? ""}
                       </button>
-                    ))}
-                  </div>
-                  <button
-                    className="kt-modal__btn kt-modal__btn--primary"
-                    type="button"
-                    onClick={() => {
-                      addLog("Pre-Roll", "Pre-roll complete.");
-                      setPhase(PHASES.ROLL_INPUT);
-                    }}
-                  >
-                    Continue
-                  </button>
+                    ))
+                  )}
                 </div>
-              )}
 
-              {phase === PHASES.ROLL_INPUT && role === "attacker" && (
-                <div className="attack-resolution__section">
-                  <div className="attack-resolution__section-title">Roll Input</div>
-                  <div className="attack-resolution__inputs">
-                    <div>
-                      <div className="attack-resolution__label">Hits</div>
-                      <input
-                        className="attack-resolution__input"
-                        type="number"
-                        min="0"
-                        max={maxAttackDice}
-                        value={attackHits}
-                        onChange={(event) =>
-                          handleAttackInput(event.target.value, attackCrits)
-                        }
-                      />
-                    </div>
-                    <div>
-                      <div className="attack-resolution__label">Crits</div>
-                      <input
-                        className="attack-resolution__input"
-                        type="number"
-                        min="0"
-                        max={maxAttackDice}
-                        value={attackCrits}
-                        onChange={(event) =>
-                          handleAttackInput(attackHits, event.target.value)
-                        }
-                      />
-                    </div>
+                <div className="attack-resolution__dice-strip">
+                  <div className="attack-resolution__dice-line">
+                    <strong>Attacker:</strong>&nbsp;Roll {maxAttackDice} · success
+                    on {attackerSuccessThreshold}+ · crit on 6+
                   </div>
-                  <button
-                    className="kt-modal__btn kt-modal__btn--primary"
-                    type="button"
-                    onClick={() => {
-                      addLog("Roll", "Roll input confirmed.");
-                      setPhase(PHASES.REROLL);
-                    }}
-                  >
-                    Continue
-                  </button>
+                  <div className="attack-resolution__dice-line">
+                    <strong>Defender:</strong>&nbsp;Roll {maxDefenseDice} · success
+                    on {defenderSuccessThreshold}+ · crit on 6+
+                  </div>
                 </div>
-              )}
 
-              {phase === PHASES.REROLL && role === "attacker" && (
-                <div className="attack-resolution__section">
-                  <div className="attack-resolution__section-title">Re-Rolls</div>
-                  <div className="attack-resolution__rules">
-                    {rerollActions.length === 0 && (
-                      <div className="attack-resolution__empty">No rerolls.</div>
-                    )}
-                    {rerollActions.map((rule) => (
-                      <button
-                        key={rule.id}
-                        className="attack-resolution__rule"
-                        type="button"
-                        onClick={() =>
-                          applyRerollBoost(rule.id, rule.id.toUpperCase())
-                        }
-                        disabled={usedRules[rule.id]}
-                      >
-                        {rule.id}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    className="kt-modal__btn kt-modal__btn--primary"
-                    type="button"
-                    onClick={handleLockAttack}
-                    disabled={attackHits + attackCrits === 0}
-                  >
-                    Lock In Attack
-                  </button>
-                </div>
-              )}
-
-              {phase === PHASES.LOCKED_ATTACK && (
-                <div className="attack-resolution__section">
-                  <div className="attack-resolution__section-title">Attack Locked</div>
-                  <div className="attack-resolution__empty">
-                    Waiting for defense...
-                  </div>
-                </div>
-              )}
-
-              {phase === PHASES.DEFENSE && role === "defender" && (
-                <div className="attack-resolution__section">
-                  <div className="attack-resolution__section-title">Defense</div>
-                  <div className="attack-resolution__inputs">
-                    <div>
-                      <div className="attack-resolution__label">Saves</div>
-                      <input
-                        className="attack-resolution__input"
-                        type="number"
-                        min="0"
-                        max={maxDefenseDice}
-                        value={defenseHits}
-                        onChange={(event) =>
-                          handleDefenseInput(event.target.value, defenseCrits)
-                        }
-                      />
-                    </div>
-                    <div>
-                      <div className="attack-resolution__label">Crit Saves</div>
-                      <input
-                        className="attack-resolution__input"
-                        type="number"
-                        min="0"
-                        max={maxDefenseDice}
-                        value={defenseCrits}
-                        onChange={(event) =>
-                          handleDefenseInput(defenseHits, event.target.value)
-                        }
-                      />
-                    </div>
-                  </div>
-                  <button
-                    className="kt-modal__btn kt-modal__btn--primary"
-                    type="button"
-                    onClick={handleLockDefense}
-                    disabled={defenseHits + defenseCrits === 0}
-                  >
-                    Lock In Defense
-                  </button>
-                </div>
-              )}
-
-              {phase === PHASES.RESOLVED && (
-                <div className="attack-resolution__section">
-                  <div className="attack-resolution__section-title">Resolved</div>
-                  <div className="attack-resolution__empty">
-                    Combat resolved.
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
 
+            {/* Roll section (centered; attacker row then defender row) */}
+            <div className="attack-resolution__panel">
+              <div className="attack-resolution__section">
+                <div className="attack-resolution__section-title">Roll</div>
+
+                <div className="attack-resolution__instruction" data-testid="roll-instructions">
+                  <div className="attack-resolution__instruction-title">
+                    Roll your dice now
+                  </div>
+                  <div className="attack-resolution__instruction-line">
+                    <strong>Attacker:</strong> Roll {maxAttackDice} · success on
+                    {" "}{attackerSuccessThreshold}+ · crit on 6+
+                  </div>
+                  <div className="attack-resolution__instruction-line">
+                    <strong>Defender:</strong> Roll {maxDefenseDice} · success on
+                    {" "}{defenderSuccessThreshold}+ · crit on 6+
+                  </div>
+
+                </div>
+
+                {rollsLocked && (
+                  <div className="attack-resolution__empty">
+                    Rolls are locked. Use Post-Roll Rules below as a checklist to
+                    help allocate real dice correctly.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Post-roll rules (numbered; attacker-only; only usable after lock) */}
+            <div className="attack-resolution__panel">
+              <div className="attack-resolution__section">
+                <div className="attack-resolution__section-title">
+                  Post-Roll Rules
+                </div>
+
+                {role !== "attacker" ? (
+                  <div className="attack-resolution__empty">
+                    (Attacker-only for now — defender post-roll rules not wired
+                    yet.)
+                  </div>
+                ) : postRollActions.length === 0 ? (
+                  <div className="attack-resolution__empty">
+                    No post-roll rules.
+                  </div>
+                ) : (
+                  <ol className="attack-resolution__rule-steps">
+                    {postRollActions.map((rule) => (
+                      <li key={`post-${rule.id}`} className="attack-resolution__rule-step">
+                        <button
+                          className="attack-resolution__rule"
+                          type="button"
+                          onClick={() => markPostRollRuleUsed(rule.id, rule.id.toUpperCase())}
+                          disabled={!rollsLocked || usedRules[rule.id]}
+                          title={!rollsLocked ? "Lock rolls first" : undefined}
+                        >
+                          {rule.id}
+                        </button>
+                        {rule.value != null && (
+                          <span className="attack-resolution__rule-note">
+                            {String(rule.value)}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                    <li className="attack-resolution__rule-step">
+                      <button
+                        className="attack-resolution__rule attack-resolution__rule--secondary"
+                        type="button"
+                        onClick={() => addLog("Post-Roll", "CP re-roll used (placeholder).")}
+                        disabled={!rollsLocked}
+                        title={!rollsLocked ? "Lock rolls first" : undefined}
+                      >
+                        CP Re-roll
+                      </button>
+                      <span className="attack-resolution__rule-note">
+                        (After other rerolls, if needed)
+                      </span>
+                    </li>
+                  </ol>
+                )}
+              </div>
+            </div>
+
+            {/* Final entry (attacker only; ignores defender blocks) */}
+            <div className="attack-resolution__panel">
+              <div className="attack-resolution__section">
+                <div className="attack-resolution__section-title">Final Entry</div>
+
+                <div className="attack-resolution__roll-grid">
+                  <div className="attack-resolution__roll-row attack-resolution__roll-row--final">
+                    <CountInput
+                      label="Final Hits"
+                      value={finalAttackHits}
+                      max={maxAttackDice}
+                      onChange={(next) => setFinalAttackHits(next)}
+                      disabled={!isAttackerRole}
+                      testId="final-hits"
+                    />
+                    <CountInput
+                      label="Final Crits"
+                      value={finalAttackCrits}
+                      max={maxAttackDice}
+                      onChange={(next) => setFinalAttackCrits(next)}
+                      disabled={!isAttackerRole}
+                      testId="final-crits"
+                    />
+                  </div>
+                </div>
+
+                <div className="attack-resolution__damage-preview">
+                  <div className="attack-resolution__damage-line">
+                    <span>Remaining:</span>
+                    <strong>
+                      {finalPreview.remainingHits} hits ·{" "}
+                      {finalPreview.remainingCrits} crits
+                    </strong>
+                  </div>
+                  <div className="attack-resolution__damage-line">
+                    <span>Weapon:</span>
+                    <strong>
+                      {finalPreview.normalDamage}/{finalPreview.critDamage}
+                    </strong>
+                  </div>
+                  <div className="attack-resolution__damage-total">
+                    Total Damage: <strong>{finalPreview.totalDamage}</strong>
+                  </div>
+                  <div className="attack-resolution__damage-sub">
+                    (Final entry ignores defender blocks — fast mode.)
+                  </div>
+                </div>
+
+                <button
+                  className="kt-modal__btn kt-modal__btn--primary"
+                  type="button"
+                  onClick={() => {
+                    addLog("Final", "Resolved via final entry window.");
+                    resolveFromFinalWindow();
+                  }}
+                  disabled={!isAttackerRole}
+                >
+                  Apply Damage
+                </button>
+              </div>
+            </div>
+
+            {/* Firefight Ploys (row style) */}
             <div className="attack-resolution__ploys">
-              <div className="attack-resolution__section-title">Firefight Ploys</div>
-              <div className="attack-resolution__empty">No ploys available.</div>
+              <div className="attack-resolution__section-title">
+                {firefightPloys.label}
+              </div>
+
+              {firefightPloys.ploys.length === 0 ? (
+                <div className="attack-resolution__empty">No ploys available.</div>
+              ) : (
+                <div className="attack-resolution__ploy-list">
+                  {firefightPloys.ploys.map((ploy) => (
+                    <button
+                      key={ploy.id}
+                      type="button"
+                      className="attack-resolution__ploy"
+                      onClick={() => {
+                        const cost = ploy?.cost?.cp ? `${ploy.cost.cp}CP` : "—";
+                        addLog("Ploy", `Used ${ploy.name} (${cost}).`);
+                      }}
+                    >
+                      <div className="attack-resolution__ploy-name">{ploy.name}</div>
+                      <div className="attack-resolution__ploy-meta">
+                        <span className="attack-resolution__ploy-cost">
+                          {ploy?.cost?.cp ? `${ploy.cost.cp}CP` : "—"}
+                        </span>
+                        <span className="attack-resolution__ploy-timing">
+                          {ploy.timing || "—"}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </section>
         </div>

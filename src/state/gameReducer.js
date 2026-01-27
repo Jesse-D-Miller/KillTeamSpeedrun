@@ -7,6 +7,7 @@ import {
 import { buildLogEntriesForEvent } from "./logTemplates";
 
 export const COMBAT_STAGES = {
+	ATTACK_RESOLUTION: "ATTACK_RESOLUTION",
 	ATTACK_ROLLING: "ATTACK_ROLLING",
 	ATTACK_LOCKED: "ATTACK_LOCKED",
 	DEFENSE_ROLLING: "DEFENSE_ROLLING",
@@ -23,11 +24,17 @@ export const initialCombatState = {
 	defendingOperativeId: null,
 	weaponId: null,
 	weaponProfile: null,
-	stage: COMBAT_STAGES.ATTACK_ROLLING,
+	stage: COMBAT_STAGES.ATTACK_RESOLUTION,
 	attackRoll: [],
 	attackLocked: false,
 	defenseRoll: [],
 	defenseLocked: false,
+	rollsLocked: false,
+	rollReady: { A: false, B: false },
+	final: {
+		hits: 0,
+		crits: 0,
+	},
 	blocksResolved: false,
 	blocks: null,
 	attackQueue: [],
@@ -303,11 +310,17 @@ function reduceGameState(state, action) {
 					defendingOperativeId: defendingOperativeId ?? null,
 					weaponId: weaponId ?? null,
 					weaponProfile: weaponProfile ?? null,
-					stage: COMBAT_STAGES.ATTACK_ROLLING,
+					stage: COMBAT_STAGES.ATTACK_RESOLUTION,
 					attackRoll: [],
 					attackLocked: false,
 					defenseRoll: [],
 					defenseLocked: false,
+					rollsLocked: false,
+					rollReady: { A: false, B: false },
+					final: {
+						hits: 0,
+						crits: 0,
+					},
 					blocksResolved: false,
 					blocks: null,
 					attackQueue: Array.isArray(action.payload?.attackQueue)
@@ -330,10 +343,16 @@ function reduceGameState(state, action) {
 		}
 
 			case "SET_ATTACK_ROLL": {
-				const { roll, inputs } = action.payload || {};
+				const { roll, inputs, playerId } = action.payload || {};
+				if (!playerId || playerId !== state.combatState?.attackerId) return state;
 				if (!Array.isArray(roll)) return state;
-				if (state.combatState?.stage !== COMBAT_STAGES.ATTACK_ROLLING) return state;
+				if (
+					state.combatState?.stage !== COMBAT_STAGES.ATTACK_ROLLING &&
+					state.combatState?.stage !== COMBAT_STAGES.ATTACK_RESOLUTION
+				)
+					return state;
 				if (state.combatState?.attackLocked) return state;
+				if (state.combatState?.rollsLocked) return state;
 				return {
 					...state,
 					combatState: {
@@ -386,11 +405,12 @@ function reduceGameState(state, action) {
 					...state,
 					combatState: {
 						...state.combatState,
-						stage: COMBAT_STAGES.ATTACK_ROLLING,
+						stage: COMBAT_STAGES.ATTACK_RESOLUTION,
 						attackRoll: [],
 						attackLocked: false,
 						defenseRoll: [],
 						defenseLocked: false,
+						rollsLocked: false,
 						blocksResolved: false,
 						blocks: null,
 						currentAttackIndex: nextIndex,
@@ -411,6 +431,18 @@ function reduceGameState(state, action) {
 			}
 
 			case "LOCK_ATTACK_ROLL": {
+				if (state.combatState?.stage === COMBAT_STAGES.ATTACK_RESOLUTION) {
+					if (state.combatState?.rollsLocked) return state;
+					return {
+						...state,
+						combatState: {
+							...state.combatState,
+							attackLocked: true,
+							defenseLocked: true,
+							rollsLocked: true,
+						},
+					};
+				}
 				if (state.combatState?.stage !== COMBAT_STAGES.ATTACK_ROLLING) return state;
 				if (state.combatState?.attackLocked) return state;
 				return {
@@ -424,10 +456,16 @@ function reduceGameState(state, action) {
 			}
 
 			case "SET_DEFENSE_ROLL": {
-				const { roll } = action.payload || {};
+				const { roll, playerId } = action.payload || {};
+				if (!playerId || playerId !== state.combatState?.defenderId) return state;
 				if (!Array.isArray(roll)) return state;
-				if (state.combatState?.stage !== COMBAT_STAGES.DEFENSE_ROLLING) return state;
+				if (
+					state.combatState?.stage !== COMBAT_STAGES.DEFENSE_ROLLING &&
+					state.combatState?.stage !== COMBAT_STAGES.ATTACK_RESOLUTION
+				)
+					return state;
 				if (state.combatState?.defenseLocked) return state;
+				if (state.combatState?.rollsLocked) return state;
 				return {
 					...state,
 					combatState: {
@@ -439,6 +477,18 @@ function reduceGameState(state, action) {
 			}
 
 			case "LOCK_DEFENSE_ROLL": {
+				if (state.combatState?.stage === COMBAT_STAGES.ATTACK_RESOLUTION) {
+					if (state.combatState?.rollsLocked) return state;
+					return {
+						...state,
+						combatState: {
+							...state.combatState,
+							attackLocked: true,
+							defenseLocked: true,
+							rollsLocked: true,
+						},
+					};
+				}
 				if (state.combatState?.stage !== COMBAT_STAGES.DEFENSE_ROLLING) return state;
 				if (state.combatState?.defenseLocked) return state;
 				return {
@@ -447,6 +497,39 @@ function reduceGameState(state, action) {
 						...state.combatState,
 						defenseLocked: true,
 						stage: COMBAT_STAGES.DEFENSE_LOCKED,
+					},
+				};
+			}
+
+			case "COMBAT_SET_ROLL_READY": {
+				const { playerId, ready } = action.payload || {};
+				if (playerId !== "A" && playerId !== "B") return state;
+				if (typeof ready !== "boolean") return state;
+				const nextReady = {
+					...(state.combatState?.rollReady || { A: false, B: false }),
+					[playerId]: ready,
+				};
+				const bothReady = Boolean(nextReady.A && nextReady.B);
+				return {
+					...state,
+					combatState: {
+						...state.combatState,
+						rollReady: nextReady,
+						rollsLocked: bothReady || state.combatState?.rollsLocked,
+					},
+				};
+			}
+
+			case "LOCK_ROLLS": {
+				if (state.combatState?.stage !== COMBAT_STAGES.ATTACK_RESOLUTION) return state;
+				if (state.combatState?.rollsLocked) return state;
+				return {
+					...state,
+					combatState: {
+						...state.combatState,
+						attackLocked: true,
+						defenseLocked: true,
+						rollsLocked: true,
 					},
 				};
 			}
@@ -480,7 +563,24 @@ function reduceGameState(state, action) {
 				};
 			}
 
+			case "RESOLVE_COMBAT_DONE": {
+				return {
+					...state,
+					combatState: {
+						...state.combatState,
+						stage: COMBAT_STAGES.DONE,
+					},
+				};
+			}
+
 			case "CLEAR_COMBAT_STATE": {
+				return {
+					...state,
+					combatState: initialCombatState,
+				};
+			}
+
+			case "CANCEL_COMBAT": {
 				return {
 					...state,
 					combatState: initialCombatState,
@@ -1716,6 +1816,22 @@ function reduceGameState(state, action) {
 						},
 					};
 				}),
+			};
+		}
+
+		case "USE_FIREFIGHT_PLOY": {
+			const { playerId, cost = 0 } = action.payload || {};
+			if (playerId !== "A" && playerId !== "B") return state;
+			const numericCost = Number(cost) || 0;
+			if (numericCost < 0) return state;
+			const currentCp = state.cp?.[playerId] ?? 0;
+			if (currentCp - numericCost < 0) return state;
+			return {
+				...state,
+				cp: {
+					...(state.cp || { A: 0, B: 0 }),
+					[playerId]: currentCp - numericCost,
+				},
 			};
 		}
 

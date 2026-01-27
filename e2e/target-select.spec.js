@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { lastGameEvent } from "./helpers";
+import { lastCombatEvent, lastGameEvent } from "./helpers";
 
 test("target select renders and confirm is disabled until a primary is selected", async ({ page }) => {
   await page.goto(
@@ -32,7 +32,7 @@ test("cancel closes and dispatches FLOW_CANCEL in shoot mode", async ({ page }) 
   await expect(page).toHaveURL(/\/jesse\/army/);
 });
 
-test("confirm shoot dispatches FLOW_SET_TARGET and returns to /army", async ({ page }) => {
+test("confirm shoot dispatches START_RANGED_ATTACK and returns to /army", async ({ page }) => {
   await page.goto(
     "/jesse/target-select?e2e=1&mode=shoot&slot=A&attackerId=alpha:kommando-bomb-squig",
   );
@@ -45,9 +45,9 @@ test("confirm shoot dispatches FLOW_SET_TARGET and returns to /army", async ({ p
   await firstTarget.press("Enter");
   await page.getByTestId("target-confirm").click();
 
-  const gameEv = await lastGameEvent(page);
-  expect(gameEv.type).toBe("FLOW_SET_TARGET");
-  expect(gameEv.payload.defenderId).toBe(targetId);
+  const combatEv = await lastCombatEvent(page);
+  expect(combatEv.type).toBe("START_RANGED_ATTACK");
+  expect(combatEv.payload.defendingOperativeId).toBe(targetId);
 
   await expect(page).toHaveURL(/\/jesse\/army/);
 });
@@ -91,9 +91,9 @@ test("blast weapon allows secondary selection and passes inputs", async ({ page 
 
   await page.getByTestId("target-confirm").click();
 
-  const gameEv = await lastGameEvent(page);
-  expect(gameEv.type).toBe("FLOW_SET_TARGET");
-  expect(gameEv.payload.defenderId).toBe(id0);
-  expect(gameEv.payload.primaryTargetId).toBe(id0);
-  expect(gameEv.payload.secondaryTargetIds).toContain(id1);
+  const combatEv = await lastCombatEvent(page);
+  expect(combatEv.type).toBe("START_RANGED_ATTACK");
+  expect(combatEv.payload.defendingOperativeId).toBe(id0);
+  expect(combatEv.payload.inputs.primaryTargetId).toBe(id0);
+  expect(combatEv.payload.inputs.secondaryTargetIds).toContain(id1);
 });
