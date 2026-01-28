@@ -2454,6 +2454,10 @@ function TargetSelectRoute() {
 }
 
 function E2EAttackResolutionRoute() {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const targetOrderParam = String(params.get("targetOrder") || "engage").toLowerCase();
+  const defenderOrder = targetOrderParam === "conceal" ? "conceal" : "engage";
   const [rollsLocked, setRollsLocked] = useState(true);
   const [attackRoll, setAttackRoll] = useState([]);
   const [defenseRoll, setDefenseRoll] = useState([]);
@@ -2466,7 +2470,7 @@ function E2EAttackResolutionRoute() {
       stats: { move: 6, save: 4, apl: 3, woundsMax: 12 },
       state: {
         woundsCurrent: 12,
-        order: "engage",
+        order: defenderOrder,
         apCurrent: 3,
         selectedWeapon: "E2E Blaster",
         readyState: "READY",
@@ -2484,7 +2488,7 @@ function E2EAttackResolutionRoute() {
       rules: [],
       abilities: [],
     }),
-    [],
+    [defenderOrder],
   );
 
   const defender = useMemo(

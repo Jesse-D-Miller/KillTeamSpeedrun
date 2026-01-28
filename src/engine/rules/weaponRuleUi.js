@@ -404,6 +404,7 @@ export function getClickableWeaponRulesForPhase(ctx, phase) {
 
       return {
         id: rule.id,
+        value: rule.value,
         label,
         phase,
         enabled: gate.ok,

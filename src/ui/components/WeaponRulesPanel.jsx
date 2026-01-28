@@ -118,7 +118,11 @@ export default function WeaponRulesPanel({ ctx, phase, onCtxChange, testId }) {
               it.applied ? "is-applied" : ""
             } ${it.enabled ? "" : "is-disabled"}`}
             aria-disabled={!it.enabled}
-            data-testid={`rule-chip-${it.id}-${phase.toLowerCase()}`}
+            data-testid={
+              it.id === "accurate" && Number.isFinite(Number(it.value))
+                ? `wr-chip-accurate-${Number(it.value)}`
+                : `rule-chip-${it.id}-${phase.toLowerCase()}`
+            }
             onClick={() => {
               if (it.enabled) {
                 it.onClick({ preview: it.responsibility !== "SEMI" });

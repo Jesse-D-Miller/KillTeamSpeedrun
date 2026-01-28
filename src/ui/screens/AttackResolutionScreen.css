@@ -440,6 +440,31 @@
   opacity: 0.7;
 }
 
+.attack-resolution__vantage {
+  display: grid;
+  gap: 8px;
+}
+
+.attack-resolution__vantage-chooser {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.attack-resolution__vantage-chooser .kt-modal__btn {
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
+.attack-resolution__inline-note {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+
 /* Ploys: row */
 .attack-resolution__ploys {
   border-top: 1px solid rgba(255, 255, 255, 0.1);

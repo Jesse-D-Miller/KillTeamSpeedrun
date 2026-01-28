@@ -7,6 +7,7 @@ import { normalizeWeaponRules } from "../../engine/rules/weaponRules";
 import { allocateDefense } from "../../engine/rules/resolveDice";
 import { applyConditionNotes } from "../../engine/rules/combatConditions";
 import { shouldOpenHotModal } from "../../engine/rules/hotResolution";
+import { applyVantage } from "../../engine/rules/vantageRule";
 
 // Load all faction firefight ploys (eager so it works in UI immediately)
 const firefightPloyModules = import.meta.glob(
@@ -207,12 +208,17 @@ function AttackResolutionScreen({
 
   const [hotModalOpen, setHotModalOpen] = useState(false);
   const [hotDamageDraft, setHotDamageDraft] = useState("0");
+  const [vantagePickerOpen, setVantagePickerOpen] = useState(false);
+  const [vantageDistance, setVantageDistance] = useState(null);
 
   const isFight =
     weapon?.mode === "melee" ||
     String(combatStage || "").toLowerCase().includes("fight");
 
   const attackerSuccessThreshold = Number(weapon?.hit ?? 6);
+  const defenderOrder = String(defender?.state?.order || "").toLowerCase();
+  const defenderIsConceal = defenderOrder === "conceal";
+  const defenderIsEngage = defenderOrder !== "conceal";
   const defenderSuccessThreshold = isFight
     ? Number(
         defender?.state?.selectedWeaponHit ??
@@ -282,6 +288,8 @@ function AttackResolutionScreen({
 
     setPreRollFlags({ cover: false, obscured: false, vantage: false });
     setRollsLocked(Boolean(rollsLockedFromState));
+    setVantagePickerOpen(false);
+    setVantageDistance(null);
 
     // Keep this simple: both players start on PRE_ROLL visually.
     // Your multiplayer stage can still exist; we just aren't gatekeeping UI anymore.
@@ -303,6 +311,9 @@ function AttackResolutionScreen({
       : weapon
         ? normalizeWeaponRules(weapon)
         : [];
+    const hasAccurate = normalizedRules.some(
+      (rule) => String(rule?.id || "").toLowerCase() === "accurate",
+    );
     const normalizedAttackDice = Array.isArray(attackRoll)
       ? attackRoll.map((value) => ({ value: Number(value), tags: [] }))
       : [];
@@ -322,12 +333,35 @@ function AttackResolutionScreen({
         attackCrits,
         ...(e2eOverrides?.inputs || {}),
       },
-      modifiers: { ...(e2eOverrides?.modifiers || {}) },
+      modifiers: {
+        ...(e2eOverrides?.modifiers || {}),
+        coverSelected: preRollFlags.cover,
+      },
       ui: { prompts: [], notes: [], appliedRules: {} },
       effects: { attacker: [], defender: [] },
       log: [],
     };
-  }, [open, phase, weapon, attackRoll, role, finalAttackCrits]);
+    if (preRollFlags.vantage && !hasAccurate) {
+      return applyVantage(base, {
+        targetOrder: defenderIsConceal ? "conceal" : "engage",
+        distance: defenderIsEngage ? Number(vantageDistance) : undefined,
+      });
+    }
+
+    return base;
+  }, [
+    open,
+    phase,
+    weapon,
+    attackRoll,
+    role,
+    finalAttackCrits,
+    preRollFlags.vantage,
+    preRollFlags.cover,
+    defenderIsEngage,
+    defenderIsConceal,
+    vantageDistance,
+  ]);
 
   const combatCtx = useMemo(() => {
     if (!baseCtx) return null;
@@ -573,39 +607,19 @@ function AttackResolutionScreen({
                     ))}
                   </div>
                 ) : null}
+                {preRollFlags.vantage && defenderIsConceal ? (
+                  <div
+                    className="attack-resolution__inline-note"
+                    data-testid="rule-note-vantage-defender"
+                  >
+                    Vantage (vs Conceal and cover save is true): you can retain 2 normal
+                    saves OR 1 crit save.
+                  </div>
+                ) : null}
               </div>
             </div>
 
-            <div className="attack-resolution__notes">
-              <div className="attack-resolution__notes-col" data-testid="notes-attacker">
-                <div className="attack-resolution__notes-title">Attacker Notes</div>
-                {(combatCtx.ui?.notes || [])
-                  .filter((note) => note?.target === "attacker")
-                  .map((note, index) => (
-                    <div
-                      key={`${note.ruleId}-${index}`}
-                      className="attack-resolution__note"
-                      data-testid={`rule-note-${note.ruleId}-attacker`}
-                    >
-                      {note.text}
-                    </div>
-                  ))}
-              </div>
-              <div className="attack-resolution__notes-col" data-testid="notes-defender">
-                <div className="attack-resolution__notes-title">Defender Notes</div>
-                {(combatCtx.ui?.notes || [])
-                  .filter((note) => note?.target === "defender")
-                  .map((note, index) => (
-                    <div
-                      key={`${note.ruleId}-${index}`}
-                      className="attack-resolution__note"
-                      data-testid={`rule-note-${note.ruleId}-defender`}
-                    >
-                      {note.text}
-                    </div>
-                  ))}
-              </div>
-            </div>
+
 
             {/* Summary */}
             <div className="attack-resolution__summary-row">
@@ -627,123 +641,165 @@ function AttackResolutionScreen({
               <div className="attack-resolution__section">
                 <div className="attack-resolution__section-title">Pre-Roll</div>
 
-                <div className="attack-resolution__checkboxes">
-                  {role === "attacker" && (
-                    <label className="attack-resolution__checkbox">
-                      <input
-                        type="checkbox"
-                        checked={preRollFlags.vantage}
-                        onChange={(event) => {
-                          const next = event.target.checked;
-                          setPreRollFlags((prev) => ({ ...prev, vantage: next }));
-                          addLog(
-                            "Pre-Roll",
-                            `Vantage ${next ? "enabled" : "cleared"}.`,
-                          );
-                        }}
-                      />
-                      Vantage
-                    </label>
-                  )}
-
-                  {role === "defender" && (
-                    <>
-                      <label className="attack-resolution__checkbox">
-                        <input
-                          type="checkbox"
-                          checked={preRollFlags.cover}
-                          onChange={(event) => {
-                            const next = event.target.checked;
-                            setPreRollFlags((prev) => ({ ...prev, cover: next }));
-                            addLog(
-                              "Pre-Roll",
-                              `Cover ${next ? "enabled" : "cleared"}.`,
-                            );
-                          }}
-                        />
-                        Cover
-                      </label>
-
-                      <label className="attack-resolution__checkbox">
-                        <input
-                          type="checkbox"
-                          checked={preRollFlags.obscured}
-                          onChange={(event) => {
-                            const next = event.target.checked;
-                            setPreRollFlags((prev) => ({
-                              ...prev,
-                              obscured: next,
-                            }));
-                            addLog(
-                              "Pre-Roll",
-                              `Obscured ${next ? "enabled" : "cleared"}.`,
-                            );
-                          }}
-                        />
-                        Obscured
-                      </label>
-                    </>
-                  )}
-                </div>
-
                 <div className="attack-resolution__rules">
+                  <div className="wr-panel attack-resolution__conditions">
+                    <div className="wr-title">Combat Conditions</div>
+                    <div className="wr-grid">
+                      {role === "defender" ? (
+                        <>
+                          <button
+                            type="button"
+                            className={`wr-chip wr-chip--auto ${
+                              preRollFlags.cover ? "is-applied" : ""
+                            } ${preRollFlags.vantage && defenderIsEngage ? "is-disabled" : ""}`}
+                            aria-disabled={preRollFlags.vantage && defenderIsEngage}
+                            data-testid="condition-cover"
+                            onClick={() => {
+                              if (preRollFlags.vantage && defenderIsEngage) return;
+                              setPreRollFlags((prev) => ({
+                                ...prev,
+                                cover: !prev.cover,
+                              }));
+                              addLog(
+                                "Pre-Roll",
+                                `Cover ${!preRollFlags.cover ? "enabled" : "cleared"}.`,
+                              );
+                            }}
+                          >
+                            <div className="wr-chip-label">Cover Save</div>
+                            <div className="wr-chip-preview">
+                              Defender can retain 1 success from cover.
+                            </div>
+                            <div className="wr-chip-badges">
+                              {preRollFlags.cover ? (
+                                <span className="wr-chip-badge wr-chip-badge--applied">
+                                  Applied
+                                </span>
+                              ) : null}
+                            </div>
+                          </button>
+
+                          <button
+                            type="button"
+                            className={`wr-chip wr-chip--auto ${
+                              preRollFlags.obscured ? "is-applied" : ""
+                            }`}
+                            aria-disabled="false"
+                            data-testid="condition-obscured"
+                            onClick={() => {
+                              setPreRollFlags((prev) => ({
+                                ...prev,
+                                obscured: !prev.obscured,
+                              }));
+                              addLog(
+                                "Pre-Roll",
+                                `Obscured ${!preRollFlags.obscured ? "enabled" : "cleared"}.`,
+                              );
+                            }}
+                          >
+                            <div className="wr-chip-label">Obscured</div>
+                            <div className="wr-chip-preview">
+                              Obscured affects hit retention.
+                            </div>
+                            <div className="wr-chip-badges">
+                              {preRollFlags.obscured ? (
+                                <span className="wr-chip-badge wr-chip-badge--applied">
+                                  Applied
+                                </span>
+                              ) : null}
+                            </div>
+                          </button>
+                        </>
+                      ) : (
+                        <div className="attack-resolution__vantage">
+                          <button
+                            type="button"
+                            className={`wr-chip wr-chip--auto ${
+                              preRollFlags.vantage ? "is-applied" : ""
+                            }`}
+                            aria-disabled="false"
+                            data-testid="condition-vantage"
+                            onClick={() => {
+                              if (defenderIsConceal) {
+                                setPreRollFlags((prev) => ({
+                                  ...prev,
+                                  vantage: true,
+                                }));
+                                setVantagePickerOpen(false);
+                                addLog("Pre-Roll", "Vantage applied vs Conceal.");
+                                return;
+                              }
+                              setVantagePickerOpen((prev) => !prev);
+                            }}
+                          >
+                            <div className="wr-chip-label">Vantage</div>
+                            <div className="wr-chip-preview">
+                              Vantage may deny cover retains.
+                            </div>
+                            <div className="wr-chip-badges">
+                              {preRollFlags.vantage ? (
+                                <span className="wr-chip-badge wr-chip-badge--applied">
+                                  Applied
+                                </span>
+                              ) : null}
+                            </div>
+                          </button>
+                          {defenderIsEngage && vantagePickerOpen ? (
+                            <div
+                              className="attack-resolution__vantage-chooser"
+                              data-testid="vantage-chooser"
+                            >
+                              <button
+                                type="button"
+                                className="kt-modal__btn"
+                                data-testid="vantage-choose-4"
+                                onClick={() => {
+                                  setPreRollFlags((prev) => ({
+                                    ...prev,
+                                    vantage: true,
+                                    cover: false,
+                                  }));
+                                  setVantageDistance(4);
+                                  setVantagePickerOpen(false);
+                                  addLog("Pre-Roll", "Vantage 4\" selected (Accurate 2).");
+                                }}
+                              >
+                                4" Vantage
+                              </button>
+                              <button
+                                type="button"
+                                className="kt-modal__btn"
+                                data-testid="vantage-choose-2"
+                                onClick={() => {
+                                  setPreRollFlags((prev) => ({
+                                    ...prev,
+                                    vantage: true,
+                                    cover: false,
+                                  }));
+                                  setVantageDistance(2);
+                                  setVantagePickerOpen(false);
+                                  addLog("Pre-Roll", "Vantage 2\" selected (Accurate 1).");
+                                }}
+                              >
+                                2" Vantage
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   {role !== "attacker" ? (
                     <div className="attack-resolution__empty">
                       No pre-roll rules for defender yet.
                     </div>
                   ) : (
-                    <>
-                      <div className="wr-panel attack-resolution__conditions">
-                        <div className="wr-title">Combat Conditions</div>
-                        <div className="wr-grid">
-                          {[
-                            {
-                              id: "cover",
-                              label: "Cover Save",
-                              checked: preRollFlags.cover,
-                              description: "Defender can retain 1 success from cover.",
-                            },
-                            {
-                              id: "obscured",
-                              label: "Obscured",
-                              checked: preRollFlags.obscured,
-                              description: "Obscured affects hit retention.",
-                            },
-                            {
-                              id: "vantage",
-                              label: "Vantage",
-                              checked: preRollFlags.vantage,
-                              description: "Vantage may deny cover retains.",
-                            },
-                          ].map((item) => (
-                            <div
-                              key={item.id}
-                              className={`wr-chip wr-chip--auto ${
-                                item.checked ? "is-applied" : "is-disabled"
-                              }`}
-                              aria-disabled={!item.checked}
-                              data-testid={`condition-chip-${item.id}`}
-                            >
-                              <div className="wr-chip-label">{item.label}</div>
-                              <div className="wr-chip-preview">{item.description}</div>
-                              <div className="wr-chip-badges">
-                                {item.checked ? (
-                                  <span className="wr-chip-badge wr-chip-badge--applied">
-                                    Applied
-                                  </span>
-                                ) : null}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      <WeaponRulesPanel
-                        ctx={combatCtx}
-                        phase={PHASES.PRE_ROLL}
-                        onCtxChange={handleCtxChange}
-                        testId={undefined}
-                      />
-                    </>
+                    <WeaponRulesPanel
+                      ctx={combatCtx}
+                      phase={PHASES.PRE_ROLL}
+                      onCtxChange={handleCtxChange}
+                      testId={undefined}
+                    />
                   )}
                 </div>
 

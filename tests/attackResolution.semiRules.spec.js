@@ -74,9 +74,6 @@ test("shock click adds defender pill and note", async ({ page }) => {
 
   const pill = page.getByTestId("effect-pill-shock-defender");
   await expect(pill).toBeVisible();
-  await expect(page.getByTestId("notes-defender")).toContainText(
-    "Shock: In post-roll, discard 1 normal success; if none, discard 1 crit.",
-  );
 });
 
 test("hot click shows modal on resolve and logs resolution", async ({ page }) => {

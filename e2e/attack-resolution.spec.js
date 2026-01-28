@@ -45,6 +45,55 @@ async function relayEvents(from, to) {
 		},
 		{ gameEvents, combatEvents },
 	);
+
+	await from.evaluate(() => {
+		window.__ktE2E_gameEvents = [];
+		window.__ktE2E_combatEvents = [];
+	});
+}
+
+async function getFirstWeaponName(page, role, mode) {
+	return await page.evaluate(
+		({ role: roleValue, mode: modeValue }) => {
+			const state = window.ktGetGameState?.();
+			const flow = state?.ui?.actionFlow;
+			const unitId = roleValue === "attacker" ? flow?.attackerId : flow?.defenderId;
+			const unit = state?.game?.find((entry) => entry.id === unitId);
+			const weapons = Array.isArray(unit?.weapons) ? unit.weapons : [];
+			const filtered = modeValue
+				? weapons.filter((w) => w.mode === modeValue)
+				: weapons;
+			return filtered[0]?.name || weapons[0]?.name || null;
+		},
+		{ role, mode },
+	);
+}
+
+async function selectWeaponAndReady(page, role, mode) {
+	const weaponName = await getFirstWeaponName(page, role, mode);
+	await page.getByTestId(`weapon-option-${role}-${weaponName}`).click();
+	const readyButton = page.getByTestId(`weapon-ready-${role}`);
+	await expect(readyButton).toBeEnabled();
+	await readyButton.click();
+}
+
+async function lockDefenderWeapon(page) {
+	const weaponName = await page.evaluate(() => {
+		const state = window.ktGetGameState?.();
+		const flow = state?.ui?.actionFlow;
+		const defenderId = flow?.defenderId;
+		const defender = state?.game?.find((unit) => unit.id === defenderId);
+		const weapons = Array.isArray(defender?.weapons) ? defender.weapons : [];
+		const ranged = weapons.filter((weapon) => weapon.mode === "ranged");
+		return ranged[0]?.name || weapons[0]?.name || null;
+	});
+	await page.evaluate((weapon) => {
+		window.ktDispatchGameEvent?.("FLOW_SET_WEAPON", {
+			role: "defender",
+			weaponName: weapon,
+		});
+		window.ktDispatchGameEvent?.("FLOW_LOCK_WEAPON", { role: "defender" });
+	}, weaponName);
 }
 
 async function openAttackResolutionForBoth(browser, options = {}) {
@@ -88,6 +137,7 @@ async function openAttackResolutionForBoth(browser, options = {}) {
 	await expect(pageA.getByTestId("unit-focused")).toBeVisible();
 	await pageA.getByTestId("action-activate-engage").click();
 	await pageA.getByTestId("action-shoot").click();
+	await relayEvents(pageA, pageB);
 
 	await expect(pageA.getByTestId("target-select-screen")).toBeVisible();
 	await expect(pageA.getByTestId("target-select-modal")).toBeVisible();
@@ -101,11 +151,16 @@ async function openAttackResolutionForBoth(browser, options = {}) {
 	await expect(confirmBtn).toBeEnabled();
 	await confirmBtn.click();
 
+	await expect(pageA.getByTestId("weapon-select-modal")).toBeVisible();
+	await relayEvents(pageA, pageB);
+
+	await selectWeaponAndReady(pageA, "attacker", "ranged");
+	await lockDefenderWeapon(pageA);
+
 	const modalA = pageA.getByTestId("attack-resolution-modal");
 	await expect(modalA).toBeVisible();
 
 	await relayEvents(pageA, pageB);
-
 	const modalB = pageB.getByTestId("attack-resolution-modal");
 	await expect(modalB).toBeVisible();
 

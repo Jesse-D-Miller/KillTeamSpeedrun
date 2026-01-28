@@ -40,7 +40,7 @@ test("hot click shows attacker pill and modal on apply", async ({ page }) => {
   await expect(page.getByRole("dialog", { name: "Hot Damage" })).toBeVisible();
 });
 
-test("shock click adds defender pill and note", async ({ page }) => {
+test("shock click adds defender pill", async ({ page }) => {
   await openAttackResolution(page, { weaponRules: [{ id: "shock" }] });
 
   const chip = page.locator(".wr-chip", { hasText: "Shock" });
@@ -48,17 +48,6 @@ test("shock click adds defender pill and note", async ({ page }) => {
   await chip.click();
 
   await expect(page.getByTestId("effect-pill-shock-defender")).toBeVisible();
-  await expect(page.getByTestId("notes-defender")).toContainText(
-    "Shock: In post-roll, discard 1 normal success; if none, discard 1 crit.",
-  );
-});
-
-test("brutal auto note appears without clicking", async ({ page }) => {
-  await openAttackResolution(page, { weaponRules: [{ id: "brutal" }] });
-
-  await expect(page.getByTestId("notes-defender")).toContainText(
-    "Brutal: you can only block with crits.",
-  );
 });
 
 test("piercing crits disabled without crit", async ({ page }) => {

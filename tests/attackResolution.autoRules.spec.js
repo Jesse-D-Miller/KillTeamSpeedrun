@@ -11,7 +11,7 @@ async function openAttackResolution(page, { weaponRules } = {}) {
   await expect(page.getByTestId("attack-resolution-modal")).toBeVisible();
 }
 
-test("brutal shows defender auto note and applied chip", async ({ page }) => {
+test("brutal shows applied chip", async ({ page }) => {
   await openAttackResolution(page, { weaponRules: [{ id: "brutal" }] });
 
   const chip = page.locator(".wr-chip", { hasText: "Brutal" });
@@ -19,31 +19,18 @@ test("brutal shows defender auto note and applied chip", async ({ page }) => {
   await expect(chip).toHaveClass(/wr-chip--auto/);
   await expect(chip).toHaveClass(/is-applied/);
 
-  const defenderNotes = page.getByTestId("notes-defender");
-  await expect(defenderNotes).toContainText("only block with crits");
 });
 
-test("cover/obscured/vantage toggles update notes", async ({ page }) => {
+test("vantage shows chooser and applies Accurate", async ({ page }) => {
   await openAttackResolution(page);
 
-  const defenderNotes = page.getByTestId("notes-defender");
-  const attackerNotes = page.getByTestId("notes-attacker");
+  const vantage = page.getByTestId("condition-vantage");
+  await expect(vantage).toBeVisible();
+  await vantage.click();
 
-  const cover = page.getByLabel("Cover");
-  await cover.check();
-  await expect(defenderNotes).toContainText("Cover save available");
-  await cover.uncheck();
-  await expect(defenderNotes).not.toContainText("Cover save available");
+  const option4 = page.getByTestId("vantage-choose-4");
+  await expect(option4).toBeVisible();
+  await option4.click();
 
-  const obscured = page.getByLabel("Obscured");
-  await obscured.check();
-  await expect(attackerNotes).toContainText("Obscured affects hit retention");
-  await obscured.uncheck();
-  await expect(attackerNotes).not.toContainText("Obscured affects hit retention");
-
-  const vantage = page.getByLabel("Vantage");
-  await vantage.check();
-  await expect(attackerNotes).toContainText("Vantage may deny cover retains");
-  await vantage.uncheck();
-  await expect(attackerNotes).not.toContainText("Vantage may deny cover retains");
+  await expect(page.locator(".wr-chip", { hasText: "Accurate 2" })).toBeVisible();
 });
