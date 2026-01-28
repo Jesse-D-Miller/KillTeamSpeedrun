@@ -11,6 +11,24 @@ const nowIso = () => new Date().toISOString();
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
+const normalizeRuleId = (id) =>
+  String(id || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-");
+
+const weaponHasRule = (weapon, ruleId) => {
+  const normalizedRuleId = normalizeRuleId(ruleId);
+  const raw = weapon?.wr ?? weapon?.rules ?? [];
+  const list = Array.isArray(raw) ? raw : [raw];
+  return list.some((entry) => {
+    const id = typeof entry === "string" ? entry : entry?.id;
+    if (!id) return false;
+    const normalized = normalizeRuleId(id);
+    return normalized === normalizedRuleId || normalized.startsWith(`${normalizedRuleId}-`);
+  });
+};
+
 const getPlayerById = (session, playerId) =>
   session.players.find((player) => player.id === playerId) || null;
 
@@ -868,16 +886,20 @@ export const applyEvent = (session, event) => {
       if (attacker.state?.woundsCurrent <= 0) return nextSession;
       if (defender.state?.woundsCurrent <= 0) return nextSession;
 
-      if (attackType === "shoot" && attacker.state?.order === "conceal") {
+      const weapon = attacker.weapons?.find((w) => w.id === weaponId);
+      if (!weapon) return nextSession;
+
+      if (
+        attackType === "shoot" &&
+        attacker.state?.order === "conceal" &&
+        !weaponHasRule(weapon, "silent")
+      ) {
         return nextSession;
       }
 
       const stats = attacker.base?.stats ?? attacker.stats;
       const aplCurrent = attacker.state?.activation?.aplCurrent ?? stats?.apl ?? 0;
       if (aplCurrent < 1) return nextSession;
-
-      const weapon = attacker.weapons?.find((w) => w.id === weaponId);
-      if (!weapon) return nextSession;
 
       const updated = replaceOperative(nextSession, attackerFound.team.id, attackerId, (op) => ({
         ...op,

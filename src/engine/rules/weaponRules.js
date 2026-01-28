@@ -49,6 +49,12 @@ const getLethalThreshold = (ctx) => {
   return critThreshold;
 };
 
+const getCritThresholdHint = (ctx) => {
+  const critThresholdRaw = Number(ctx?.modifiers?.lethalThreshold);
+  if (!Number.isFinite(critThresholdRaw)) return null;
+  return `${critThresholdRaw}+`;
+};
+
 const classifyDie = (value, hit, critThreshold) => {
   if (value >= critThreshold) return "crit";
   if (value >= hit) return "hit";
@@ -260,10 +266,12 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
           !ctx.modifiers?.balancedUsed &&
           Array.isArray(ctx.attackDice) &&
           ctx.attackDice.length > 0;
+        const critHint = getCritThresholdHint(ctx);
+        const critSuffix = critHint ? ` (crits on ${critHint})` : "";
         addPrompt(ctx, {
           ruleId: "balanced",
           phase,
-          text: "Balanced: reroll one die (lowest miss > hit > crit).",
+          text: `Balanced: reroll one die (lowest miss > hit > crit)${critSuffix}.`,
           enabled,
         });
       },
@@ -287,6 +295,9 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
             type: classifyDie(suggested.value, hit, critThreshold),
           };
 
+          const critHint = getCritThresholdHint(ctx);
+          const critSuffix = critHint ? ` (crits on ${critHint})` : "";
+
           ctx.modifiers.balancedUsed = true;
           ctx.ui.suggestedInputs.balancedTarget = {
             value: suggested.value,
@@ -297,7 +308,7 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
             ruleId: "balanced",
             phase: "ROLL",
             steps: [
-              "Reroll one attack die (recommend: lowest miss, then lowest hit, then lowest crit).",
+              `Reroll one attack die (recommend: lowest miss, then lowest hit, then lowest crit)${critSuffix}.`,
             ],
             enabled: true,
           });
@@ -472,16 +483,18 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
           if (ctx?.inputs?.phase !== "ROLL") return;
           if (ctx?.inputs?.clickedRuleId !== "ceaseless") return;
           if (ctx?.modifiers?.ceaselessUsed) return;
-          const chosen =
-            Number(ctx?.inputs?.ceaselessGroupValue) ||
-            computeCeaselessGroup(ctx)?.value ||
-            null;
+          const provided = Number(ctx?.inputs?.ceaselessGroupValue);
+          const computed = computeCeaselessGroup(ctx)?.value;
+          const chosen = Number.isFinite(provided) ? provided : computed ?? null;
+          if (!Number.isFinite(chosen)) return;
           ctx.modifiers.ceaselessUsed = true;
           ctx.ui.suggestedInputs.ceaselessGroupValue = chosen;
-          ctx.ui.prompts.push({
+          addPrompt(ctx, {
             ruleId: "ceaseless",
             phase: "ROLL",
-            text: "Ceaseless: reroll all dice showing the most common miss value.",
+            steps: [
+              `Reroll all dice showing value ${chosen} (largest miss group).`,
+            ],
             enabled: true,
           });
           ctx.log.push({
@@ -536,17 +549,22 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
     devastating: {
       id: "devastating",
       uiLabel: "Devastating",
-      phases: ["LOCK_IN"],
+      phases: ["POST_ROLL"],
       getUiHints: (ctx, rule, phase) => {
-        if (phase !== "LOCK_IN") return;
+        if (phase !== "POST_ROLL") return;
         ensureCtxScaffold(ctx);
         const x = Number(rule.value);
         if (!Number.isFinite(x) || x <= 0) return;
-        ctx.ui.suggestedInputs.devastatingDamagePerCrit = x;
+        const retainedCrits = (ctx.attackDice || []).filter((die) => {
+          const tags = Array.isArray(die?.tags) ? die.tags : [];
+          return tags.includes("retained") && tags.includes("crit");
+        }).length;
+        if (retainedCrits <= 0) return;
+        ctx.ui.suggestedInputs.devastatingCrits = retainedCrits;
         addPrompt(ctx, {
           ruleId: "devastating",
           phase,
-          text: `Devastating ${x}: deal ${x} damage per retained crit on lock-in.`,
+          text: `Devastating ${x}: apply ${x} damage per retained crit now.`,
           enabled: true,
         });
       },
@@ -555,69 +573,40 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
         RULES.devastating.hooks.ON_CLICK?.(ctx, rule);
       },
       hooks: {
-        ON_LOCK_IN_ATTACK: (ctx, rule) => {
-          ensureCtxScaffold(ctx);
-          // Only proc when lock-in happens
-          if (!ctx?.inputs?.attackLockedIn) return;
-
-          // Prevent double-proc
-          if (ctx.modifiers.devastatingApplied) return;
-
-          const xRaw = Number(rule?.value);
-          const x = Number.isFinite(xRaw) ? xRaw : 0;
-          if (x <= 0) return;
-
-          const attackDice = Array.isArray(ctx.attackDice)
-            ? ctx.attackDice
-            : [];
-
-          // Count retained crits by tags
-          const retainedCrits = attackDice.filter((die) => {
-            const tags = Array.isArray(die?.tags) ? die.tags : [];
-            return tags.includes("retained") && tags.includes("crit");
-          }).length;
-
-          if (retainedCrits <= 0) return;
-
-          const damage = retainedCrits * x;
-          ctx.ui.suggestedInputs.applyDamage = damage;
-
-          ctx.modifiers.devastatingApplied = true;
-
-          ctx.log.push({
-            type: "RULE_DEVASTATING_APPLY",
-            detail: {
-              x,
-              retainedCrits,
-              damage,
-              phase: "LOCK_IN",
-            },
-          });
-        },
         ON_CLICK: (ctx, rule) => {
           ensureCtxScaffold(ctx);
-          if (ctx?.inputs?.phase !== "LOCK_IN") return;
+          if (ctx?.inputs?.phase !== "POST_ROLL") return;
           if (ctx?.inputs?.clickedRuleId !== "devastating") return;
           if (ctx.modifiers.devastatingApplied) return;
           const xRaw = Number(rule?.value);
           const x = Number.isFinite(xRaw) ? xRaw : 0;
           if (x <= 0) return;
-          const retainedCrits = Number(ctx?.inputs?.retainedCrits ?? 0);
+          const provided = Number(ctx?.inputs?.retainedCrits);
+          const computed = (ctx.attackDice || []).filter((die) => {
+            const tags = Array.isArray(die?.tags) ? die.tags : [];
+            return tags.includes("retained") && tags.includes("crit");
+          }).length;
+          const retainedCrits = Number.isFinite(provided) ? provided : computed;
+          if (!Number.isFinite(retainedCrits) || retainedCrits <= 0) return;
           const damage = retainedCrits * x;
+          ctx.ui.suggestedInputs.devastatingCrits = retainedCrits;
           ctx.ui.suggestedInputs.applyDamage = damage;
           ctx.modifiers.devastatingApplied = true;
-          if (ctx?.inputs?.killed) {
-            ctx.modifiers.combatEnded = true;
-            ctx.modifiers.targetKilled = true;
-          }
+          addPrompt(ctx, {
+            ruleId: "devastating",
+            phase: "POST_ROLL",
+            steps: [
+              `Apply ${x} damage per retained crit now (${damage} total).`,
+            ],
+            enabled: true,
+          });
           ctx.log.push({
-            type: "RULE_DEVASTATING_CLICK",
+            type: "RULE_DEVASTATING_RESOLVE",
             detail: {
-              phase: "LOCK_IN",
+              phase: "POST_ROLL",
               x,
               retainedCrits,
               damage,
-              killed: Boolean(ctx?.inputs?.killed),
             },
           });
         },
@@ -627,9 +616,9 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
     brutal: {
       id: "brutal",
       uiLabel: "Brutal",
-      phases: ["RESOLVE_BLOCKS"],
+      phases: ["POST_ROLL"],
       getUiHints: (ctx, rule, phase) => {
-        if (phase !== "RESOLVE_BLOCKS") return;
+        if (phase !== "POST_ROLL") return;
         ensureCtxScaffold(ctx);
         addPrompt(ctx, {
           ruleId: "brutal",
@@ -639,7 +628,7 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
         });
       },
       apply: (ctx, rule, phase) => {
-        if (phase !== "RESOLVE_BLOCKS") return;
+        if (phase !== "POST_ROLL") return;
         ensureCtxScaffold(ctx);
         const coverBlocks = Array.isArray(ctx.coverBlocks)
           ? ctx.coverBlocks
@@ -656,12 +645,13 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
         );
 
         ctx.eligibleBlocks = [...coverBlocks, ...critBlocks];
-        ctx.ui.disabledOptions.defenseBlocks = "normal";
+        ctx.ui.disabledOptions.blockNormal = true;
         ctx.log.push({
-          type: "RULE_BRUTAL",
+          type: "RULE_BRUTAL_APPLIED",
           detail: {
             removedNormalBlocks: normalBlocks.length,
             remainingCritBlocks: critBlocks.length,
+            coverBlocks: coverBlocks.length,
           },
         });
       },
@@ -669,47 +659,14 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
         RULES.brutal.hooks.ON_CLICK?.(ctx, rule);
       },
       hooks: {
-        ON_RESOLVE_BLOCKS: (ctx) => {
-          ensureCtxScaffold(ctx);
-          const coverBlocks = Array.isArray(ctx.coverBlocks)
-            ? ctx.coverBlocks
-            : [];
-
-          const critBlocks = (ctx.defenseDice || []).filter(
-            (die) => Array.isArray(die.tags) && die.tags.includes("crit"),
-          );
-          const normalBlocks = (ctx.defenseDice || []).filter(
-            (die) =>
-              Array.isArray(die.tags) &&
-              die.tags.includes("success") &&
-              !die.tags.includes("crit"),
-          );
-
-          ctx.eligibleBlocks = [...coverBlocks, ...critBlocks];
-          ctx.ui.disabledOptions.defenseBlocks = "normal";
-          ctx.ui.prompts.push({
-            ruleId: "brutal",
-            phase: "RESOLVE_BLOCKS",
-            text: "Brutal: only crits can block (cover still applies).",
-            enabled: true,
-          });
-
-          ctx.log.push({
-            type: "RULE_BRUTAL",
-            detail: {
-              removedNormalBlocks: normalBlocks.length,
-              remainingCritBlocks: critBlocks.length,
-            },
-          });
-        },
         ON_CLICK: (ctx) => {
           ensureCtxScaffold(ctx);
-          if (ctx?.inputs?.phase !== "RESOLVE_BLOCKS") return;
+          if (ctx?.inputs?.phase !== "POST_ROLL") return;
           if (ctx?.inputs?.clickedRuleId !== "brutal") return;
-          ctx.ui.disabledOptions.defenseBlocks = "normal";
+          ctx.ui.disabledOptions.blockNormal = true;
           ctx.log.push({
             type: "RULE_BRUTAL_CLICK",
-            detail: { phase: "RESOLVE_BLOCKS" },
+            detail: { phase: "POST_ROLL" },
           });
         },
       },
@@ -728,7 +685,53 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
           enabled: true,
         });
       },
-      apply: () => {},
+      apply: (ctx, rule, phase) => {
+        if (phase !== "PRE_ROLL") return;
+        ensureCtxScaffold(ctx);
+
+        const noteRaw = String(rule?.note || "").toLowerCase();
+        const dashOnly = noteRaw.includes("dash");
+        const repositionOnly = noteRaw.includes("reposition");
+
+        const movementAction =
+          ctx?.inputs?.movementAction ??
+          ctx?.inputs?.moveAction ??
+          ctx?.inputs?.lastMoveAction ??
+          ctx?.inputs?.movedAction ??
+          null;
+
+        const moved = Boolean(movementAction);
+        const moveKey = String(movementAction || "").toLowerCase();
+
+        let blocked = false;
+        let reason = null;
+
+        if (moved) {
+          if (dashOnly) {
+            blocked = moveKey !== "dash";
+            reason = blocked ? "DASH_ONLY" : null;
+          } else if (repositionOnly) {
+            blocked = moveKey !== "reposition";
+            reason = blocked ? "REPOSITION_ONLY" : null;
+          } else {
+            blocked = true;
+            reason = "MOVED";
+          }
+        }
+
+        ctx.ui.disabledOptions.shootAfterMove = blocked;
+        ctx.log.push({
+          type: "RULE_HEAVY_GATING",
+          detail: {
+            phase: "PRE_ROLL",
+            movementAction: movementAction || null,
+            blocked,
+            reason,
+            dashOnly,
+            repositionOnly,
+          },
+        });
+      },
     },
     hot: {
       id: "hot",
@@ -745,6 +748,37 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
         });
       },
       apply: () => {},
+      onClick: (ctx, rule) => {
+        RULES.hot.hooks.ON_CLICK?.(ctx, rule);
+      },
+      hooks: {
+        ON_CLICK: (ctx, rule) => {
+          ensureCtxScaffold(ctx);
+          if (ctx?.inputs?.phase !== "POST_ROLL") return;
+          if (ctx?.inputs?.clickedRuleId !== "hot") return;
+          if (ctx.modifiers?.hotResolved) return;
+
+          const xRaw = Number(rule?.value);
+          const mortalWounds = Number.isFinite(xRaw) && xRaw > 0 ? xRaw : 3;
+
+          ctx.modifiers.hotResolved = true;
+          addPrompt(ctx, {
+            ruleId: "hot",
+            phase: "POST_ROLL",
+            steps: [
+              `Roll 1d6; on 1 take ${mortalWounds} MW.`,
+            ],
+            enabled: true,
+          });
+          ctx.log.push({
+            type: "RULE_HOT_CLICK",
+            detail: {
+              phase: "POST_ROLL",
+              mortalWounds,
+            },
+          });
+        },
+      },
     },
     limited: {
       id: "limited",
@@ -753,48 +787,139 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
       getUiHints: (ctx, rule, phase) => {
         if (phase !== "PRE_ROLL") return;
         ensureCtxScaffold(ctx);
+        const maxRaw = Number(rule.value);
+        const max = Number.isFinite(maxRaw) && maxRaw >= 0 ? maxRaw : 0;
+        const currentRaw = Number(ctx?.modifiers?.limitedRemaining);
+        const remaining = Number.isFinite(currentRaw) ? currentRaw : max;
+        ctx.modifiers.limitedRemaining = remaining;
+
+        ctx.ui.notes.push(`Limited: remaining ${remaining}`);
+
+        if (remaining <= 0) {
+          addPrompt(ctx, {
+            ruleId: "limited",
+            phase,
+            text: "Limited: No uses left.",
+            enabled: false,
+          });
+          ctx.ui.disabledOptions.limited = true;
+          return;
+        }
+
         addPrompt(ctx, {
           ruleId: "limited",
           phase,
-          text: "Limited: check remaining uses before rolling.",
+          text: `Limited: remaining ${remaining}.`,
           enabled: true,
         });
       },
       apply: () => {},
+      onClick: (ctx, rule) => {
+        RULES.limited.hooks.ON_CLICK?.(ctx, rule);
+      },
+      hooks: {
+        ON_CLICK: (ctx, rule) => {
+          ensureCtxScaffold(ctx);
+          if (ctx?.inputs?.phase !== "PRE_ROLL") return;
+          if (ctx?.inputs?.clickedRuleId !== "limited") return;
+
+          const maxRaw = Number(rule.value);
+          const max = Number.isFinite(maxRaw) && maxRaw >= 0 ? maxRaw : 0;
+          const currentRaw = Number(ctx?.modifiers?.limitedRemaining);
+          const current = Number.isFinite(currentRaw) ? currentRaw : max;
+          if (current <= 0) return;
+
+          const next = Math.max(0, current - 1);
+          ctx.modifiers.limitedRemaining = next;
+          ctx.ui.notes.push(`Limited: remaining ${next}`);
+          if (next <= 0) {
+            ctx.ui.disabledOptions.limited = true;
+            addPrompt(ctx, {
+              ruleId: "limited",
+              phase: "PRE_ROLL",
+              text: "Limited: No uses left.",
+              enabled: false,
+            });
+          }
+
+          ctx.log.push({
+            type: "RULE_LIMITED_CONSUME",
+            detail: {
+              phase: "PRE_ROLL",
+              remaining: next,
+              max,
+            },
+          });
+        },
+      },
     },
     piercing: {
       id: "piercing",
       uiLabel: "Piercing",
-      phases: ["RESOLVE_BLOCKS"],
+      phases: ["PRE_ROLL"],
       getUiHints: (ctx, rule, phase) => {
-        if (phase !== "RESOLVE_BLOCKS") return;
+        if (phase !== "PRE_ROLL") return;
         ensureCtxScaffold(ctx);
         const value = Number(rule.value);
         const suffix = Number.isFinite(value) ? ` ${value}` : "";
         addPrompt(ctx, {
           ruleId: "piercing",
           phase,
-          text: `Piercing${suffix}: reduce defender blocks accordingly.`,
+          text: `Piercing${suffix}: defender rolls fewer dice.`,
           enabled: true,
         });
       },
-      apply: () => {},
+      apply: (ctx, rule, phase) => {
+        if (phase !== "PRE_ROLL") return;
+        ensureCtxScaffold(ctx);
+        const value = Number(rule.value);
+        if (!Number.isFinite(value) || value <= 0) return;
+        ctx.ui.suggestedInputs.defenseDiceMod = -value;
+        ctx.log.push({
+          type: "RULE_PIERCING_APPLIED",
+          detail: { phase: "PRE_ROLL", value },
+        });
+      },
     },
     "piercing-crits": {
       id: "piercing-crits",
       uiLabel: "Piercing Crits",
-      phases: ["RESOLVE_BLOCKS"],
+      phases: ["POST_ROLL"],
       getUiHints: (ctx, rule, phase) => {
-        if (phase !== "RESOLVE_BLOCKS") return;
+        if (phase !== "POST_ROLL") return;
         ensureCtxScaffold(ctx);
+        const retainedCrits = (ctx.attackDice || []).filter((die) => {
+          const tags = Array.isArray(die?.tags) ? die.tags : [];
+          return tags.includes("retained") && tags.includes("crit");
+        }).length;
+        if (retainedCrits <= 0) return;
         addPrompt(ctx, {
           ruleId: "piercing-crits",
           phase,
-          text: "Piercing Crits: adjust blocks for critical hits.",
+          text: "Piercing Crits: reduce defender dice for retained crits.",
           enabled: true,
         });
       },
-      apply: () => {},
+      apply: (ctx, rule, phase) => {
+        if (phase !== "POST_ROLL") return;
+        ensureCtxScaffold(ctx);
+        const retainedCrits = (ctx.attackDice || []).filter((die) => {
+          const tags = Array.isArray(die?.tags) ? die.tags : [];
+          return tags.includes("retained") && tags.includes("crit");
+        }).length;
+        if (retainedCrits <= 0) return;
+        const value = Number(rule.value);
+        if (!Number.isFinite(value) || value <= 0) return;
+        ctx.ui.suggestedInputs.defenseDiceMod = -value;
+        ctx.log.push({
+          type: "RULE_PIERCING_CRITS_APPLIED",
+          detail: {
+            phase: "POST_ROLL",
+            value,
+            retainedCrits,
+          },
+        });
+      },
     },
     punishing: {
       id: "punishing",
@@ -803,30 +928,97 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
       getUiHints: (ctx, rule, phase) => {
         if (phase !== "POST_ROLL") return;
         ensureCtxScaffold(ctx);
+        if (ctx?.modifiers?.severeActive) {
+          addPrompt(ctx, {
+            ruleId: "punishing",
+            phase,
+            text: "Punishing: disabled while Severe is active.",
+            enabled: false,
+          });
+          ctx.ui.disabledOptions.punishing = "severe";
+          return;
+        }
+        const hit = getWeaponHit(ctx);
+        const critThreshold = getLethalThreshold(ctx);
+        const retainedCrits = (ctx.attackDice || []).filter((die) => {
+          const tags = Array.isArray(die?.tags) ? die.tags : [];
+          return tags.includes("retained") && tags.includes("crit");
+        }).length;
+        const misses = (ctx.attackDice || []).filter((die) => {
+          const tags = Array.isArray(die?.tags) ? die.tags : [];
+          if (tags.includes("miss")) return true;
+          if (!Number.isFinite(hit)) return false;
+          return classifyDie(Number(die.value ?? 0), hit, critThreshold) === "miss";
+        }).length;
+        if (retainedCrits <= 0 || misses <= 0) return;
         addPrompt(ctx, {
           ruleId: "punishing",
           phase,
-          text: "Punishing: resolve punishing effect after rolling.",
+          text: "If you retained a crit, you may retain one fail as a hit.",
           enabled: true,
         });
       },
       apply: () => {},
+      onClick: (ctx, rule) => {
+        RULES.punishing.hooks.ON_CLICK?.(ctx, rule);
+      },
+      hooks: {
+        ON_CLICK: (ctx) => {
+          ensureCtxScaffold(ctx);
+          if (ctx?.inputs?.phase !== "POST_ROLL") return;
+          if (ctx?.inputs?.clickedRuleId !== "punishing") return;
+          if (ctx.modifiers?.punishingUsed) return;
+          ctx.modifiers.punishingUsed = true;
+          addPrompt(ctx, {
+            ruleId: "punishing",
+            phase: "POST_ROLL",
+            steps: ["Retain one failed die as a hit."],
+            enabled: true,
+          });
+          ctx.log.push({
+            type: "RULE_PUNISHING_CLICK",
+            detail: { phase: "POST_ROLL" },
+          });
+        },
+      },
     },
     range: {
       id: "range",
       uiLabel: "Range",
-      phases: ["DECLARE_ATTACK"],
+      phases: ["PRE_ROLL"],
       getUiHints: (ctx, rule, phase) => {
-        if (phase !== "DECLARE_ATTACK") return;
+        if (phase !== "PRE_ROLL") return;
         ensureCtxScaffold(ctx);
+        const value = Number(rule.value);
+        const suffix = Number.isFinite(value) ? ` ${value}\"` : "";
         addPrompt(ctx, {
           ruleId: "range",
           phase,
-          text: "Range: confirm target is within range.",
+          text: `Range${suffix}: target must be within range.`,
           enabled: true,
         });
       },
-      apply: () => {},
+      apply: (ctx, rule, phase) => {
+        if (phase !== "PRE_ROLL") return;
+        ensureCtxScaffold(ctx);
+        const value = Number(rule.value);
+        if (!Number.isFinite(value) || value <= 0) return;
+        const distanceRaw =
+          ctx?.inputs?.targetDistance ??
+          ctx?.inputs?.rangeDistance ??
+          ctx?.inputs?.distanceToTarget ??
+          null;
+        const distance = Number(distanceRaw);
+        if (!Number.isFinite(distance)) return;
+        if (distance > value) {
+          ctx.ui.disabledOptions.canSelectTarget = true;
+          ctx.ui.notes.push("Out of Range");
+          ctx.log.push({
+            type: "RULE_RANGE_BLOCKED",
+            detail: { phase: "PRE_ROLL", distance, range: value },
+          });
+        }
+      },
     },
     relentless: {
       id: "relentless",
@@ -843,6 +1035,46 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
         });
       },
       apply: () => {},
+      onClick: (ctx, rule) => {
+        RULES.relentless.hooks.ON_CLICK?.(ctx, rule);
+      },
+      hooks: {
+        ON_CLICK: (ctx) => {
+          ensureCtxScaffold(ctx);
+          if (ctx?.inputs?.phase !== "ROLL") return;
+          if (ctx?.inputs?.clickedRuleId !== "relentless") return;
+          if (ctx.modifiers?.relentlessUsed) return;
+
+          const indices = Array.isArray(ctx?.inputs?.rerollIndices)
+            ? ctx.inputs.rerollIndices.filter((value) => Number.isFinite(Number(value)))
+            : [];
+
+          if (indices.length === 0) {
+            addPrompt(ctx, {
+              ruleId: "relentless",
+              phase: "ROLL",
+              steps: ["Select which attack dice to reroll."],
+              enabled: true,
+            });
+            return;
+          }
+
+          ctx.modifiers.relentlessUsed = true;
+          addPrompt(ctx, {
+            ruleId: "relentless",
+            phase: "ROLL",
+            steps: ["Reroll those dice now."],
+            enabled: true,
+          });
+          ctx.log.push({
+            type: "RULE_RELENTLESS_CLICK",
+            detail: {
+              phase: "ROLL",
+              rerollIndices: indices.map(Number),
+            },
+          });
+        },
+      },
     },
     rending: {
       id: "rending",
@@ -851,46 +1083,133 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
       getUiHints: (ctx, rule, phase) => {
         if (phase !== "POST_ROLL") return;
         ensureCtxScaffold(ctx);
+        if (ctx?.modifiers?.severeActive) {
+          addPrompt(ctx, {
+            ruleId: "rending",
+            phase,
+            text: "Rending: disabled while Severe is active.",
+            enabled: false,
+          });
+          ctx.ui.disabledOptions.rending = "severe";
+          return;
+        }
+        const critHint = getCritThresholdHint(ctx);
+        const critSuffix = critHint ? ` (crits on ${critHint})` : "";
+        const retainedCrits = (ctx.attackDice || []).filter((die) => {
+          const tags = Array.isArray(die?.tags) ? die.tags : [];
+          return tags.includes("retained") && tags.includes("crit");
+        }).length;
+        const retainedHits = (ctx.attackDice || []).filter((die) => {
+          const tags = Array.isArray(die?.tags) ? die.tags : [];
+          return tags.includes("retained") && tags.includes("hit");
+        }).length;
+        if (retainedCrits <= 0 || retainedHits <= 0) return;
         addPrompt(ctx, {
           ruleId: "rending",
           phase,
-          text: "Rending: resolve rending conversions.",
+          text: `Rending: upgrade one retained hit to a crit${critSuffix}.`,
           enabled: true,
         });
       },
       apply: () => {},
+      onClick: (ctx, rule) => {
+        RULES.rending.hooks.ON_CLICK?.(ctx, rule);
+      },
+      hooks: {
+        ON_CLICK: (ctx) => {
+          ensureCtxScaffold(ctx);
+          if (ctx?.inputs?.phase !== "POST_ROLL") return;
+          if (ctx?.inputs?.clickedRuleId !== "rending") return;
+          if (ctx.modifiers?.rendingUsed) return;
+          ctx.modifiers.rendingUsed = true;
+          addPrompt(ctx, {
+            ruleId: "rending",
+            phase: "POST_ROLL",
+            steps: ["Upgrade one retained hit → retained crit."],
+            enabled: true,
+          });
+          ctx.log.push({
+            type: "RULE_RENDING_CLICK",
+            detail: { phase: "POST_ROLL" },
+          });
+        },
+      },
     },
     saturate: {
       id: "saturate",
       uiLabel: "Saturate",
-      phases: ["RESOLVE_BLOCKS"],
+      phases: ["PRE_ROLL"],
       getUiHints: (ctx, rule, phase) => {
-        if (phase !== "RESOLVE_BLOCKS") return;
+        if (phase !== "PRE_ROLL") return;
         ensureCtxScaffold(ctx);
         addPrompt(ctx, {
           ruleId: "saturate",
           phase,
-          text: "Saturate: reduce defender cover benefits.",
+          text: "Saturate: cover retains are not allowed.",
           enabled: true,
         });
       },
-      apply: () => {},
+      apply: (ctx, rule, phase) => {
+        if (phase !== "PRE_ROLL") return;
+        ensureCtxScaffold(ctx);
+        ctx.ui.disabledOptions.retainCover = true;
+        if (Array.isArray(ctx.coverBlocks)) {
+          ctx.coverBlocks = [];
+        }
+        ctx.log.push({
+          type: "RULE_SATURATE_APPLIED",
+          detail: { phase: "PRE_ROLL" },
+        });
+      },
     },
     seek: {
       id: "seek",
       uiLabel: "Seek",
-      phases: ["DECLARE_ATTACK"],
+      phases: ["PRE_ROLL"],
       getUiHints: (ctx, rule, phase) => {
-        if (phase !== "DECLARE_ATTACK") return;
+        if (phase !== "PRE_ROLL") return;
         ensureCtxScaffold(ctx);
         addPrompt(ctx, {
           ruleId: "seek",
           phase,
-          text: "Seek: ignore obscuring/cover per rule.",
+          text: "Seek: ignore cover for targeting per rule.",
           enabled: true,
         });
       },
-      apply: () => {},
+      apply: (ctx, rule, phase) => {
+        if (phase !== "PRE_ROLL") return;
+        ensureCtxScaffold(ctx);
+        const raw = String(rule?.value ?? rule?.note ?? "light").toLowerCase();
+        const seekType = raw.includes("heavy") ? "heavy" : "light";
+        ctx.modifiers.seek = seekType;
+
+        const targetCoverType = String(
+          ctx?.inputs?.targetCoverType ?? ctx?.inputs?.coverType ?? "",
+        ).toLowerCase();
+        const blockedByCover = Boolean(
+          ctx?.inputs?.targetBlockedByCover ?? ctx?.inputs?.blockedByCover,
+        );
+
+        const coversMatch =
+          targetCoverType &&
+          (seekType === "heavy"
+            ? targetCoverType === "heavy" || targetCoverType === "light"
+            : targetCoverType === "light");
+
+        if (blockedByCover && coversMatch) {
+          ctx.ui.disabledOptions.canSelectTarget = false;
+        }
+
+        ctx.log.push({
+          type: "RULE_SEEK_APPLIED",
+          detail: {
+            phase: "PRE_ROLL",
+            seekType,
+            targetCoverType: targetCoverType || null,
+            blockedByCover,
+          },
+        });
+      },
     },
     severe: {
       id: "severe",
@@ -899,14 +1218,45 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
       getUiHints: (ctx, rule, phase) => {
         if (phase !== "POST_ROLL") return;
         ensureCtxScaffold(ctx);
+        const retainedCrits = (ctx.attackDice || []).filter((die) => {
+          const tags = Array.isArray(die?.tags) ? die.tags : [];
+          return tags.includes("retained") && tags.includes("crit");
+        }).length;
+        const retainedHits = (ctx.attackDice || []).filter((die) => {
+          const tags = Array.isArray(die?.tags) ? die.tags : [];
+          return tags.includes("retained") && tags.includes("hit");
+        }).length;
+        if (retainedCrits > 0) return;
+        if (retainedHits <= 0) return;
         addPrompt(ctx, {
           ruleId: "severe",
           phase,
-          text: "Severe: resolve severe effect after rolling.",
+          text: "Severe: if no crits retained, upgrade one hit to a crit.",
           enabled: true,
         });
       },
       apply: () => {},
+      onClick: (ctx, rule) => {
+        RULES.severe.hooks.ON_CLICK?.(ctx, rule);
+      },
+      hooks: {
+        ON_CLICK: (ctx) => {
+          ensureCtxScaffold(ctx);
+          if (ctx?.inputs?.phase !== "POST_ROLL") return;
+          if (ctx?.inputs?.clickedRuleId !== "severe") return;
+          ctx.modifiers.severeActive = true;
+          addPrompt(ctx, {
+            ruleId: "severe",
+            phase: "POST_ROLL",
+            steps: ["Upgrade one retained hit → crit."],
+            enabled: true,
+          });
+          ctx.log.push({
+            type: "RULE_SEVERE_CLICK",
+            detail: { phase: "POST_ROLL" },
+          });
+        },
+      },
     },
     shock: {
       id: "shock",
@@ -921,24 +1271,46 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
           text: "Shock: resolve shock effects after rolling.",
           enabled: true,
         });
+        ctx.ui.notes.push(
+          "Shock: first crit strike discards a normal defense success (or crit if none)",
+        );
       },
       apply: () => {},
+      onClick: (ctx, rule) => {
+        RULES.shock.hooks.ON_CLICK?.(ctx, rule);
+      },
+      hooks: {
+        ON_CLICK: (ctx) => {
+          ensureCtxScaffold(ctx);
+          if (ctx?.inputs?.phase !== "POST_ROLL") return;
+          if (ctx?.inputs?.clickedRuleId !== "shock") return;
+          ctx.modifiers.shockArmed = true;
+          ctx.log.push({
+            type: "RULE_SHOCK_ARM",
+            detail: { phase: "POST_ROLL" },
+          });
+        },
+      },
     },
     silent: {
       id: "silent",
       uiLabel: "Silent",
-      phases: ["DECLARE_ATTACK"],
+      phases: ["PRE_ROLL"],
       getUiHints: (ctx, rule, phase) => {
-        if (phase !== "DECLARE_ATTACK") return;
+        if (phase !== "PRE_ROLL") return;
         ensureCtxScaffold(ctx);
         addPrompt(ctx, {
           ruleId: "silent",
           phase,
-          text: "Silent: resolve silent targeting constraints.",
+          text: "Silent: you can shoot while concealed.",
           enabled: true,
         });
       },
-      apply: () => {},
+      apply: (ctx, rule, phase) => {
+        if (phase !== "PRE_ROLL") return;
+        ensureCtxScaffold(ctx);
+        ctx.modifiers.canShootWhileConcealed = true;
+      },
     },
     stun: {
       id: "stun",
@@ -947,6 +1319,11 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
       getUiHints: (ctx, rule, phase) => {
         if (phase !== "POST_ROLL") return;
         ensureCtxScaffold(ctx);
+        const retainedCrits = (ctx.attackDice || []).filter((die) => {
+          const tags = Array.isArray(die?.tags) ? die.tags : [];
+          return tags.includes("retained") && tags.includes("crit");
+        }).length;
+        if (retainedCrits <= 0) return;
         addPrompt(ctx, {
           ruleId: "stun",
           phase,
@@ -955,22 +1332,121 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
         });
       },
       apply: () => {},
+      onClick: (ctx, rule) => {
+        RULES.stun.hooks.ON_CLICK?.(ctx, rule);
+      },
+      hooks: {
+        ON_CLICK: (ctx) => {
+          ensureCtxScaffold(ctx);
+          if (ctx?.inputs?.phase !== "POST_ROLL") return;
+          if (ctx?.inputs?.clickedRuleId !== "stun") return;
+
+          if (!ctx.target) ctx.target = {};
+          if (!ctx.target.effects) ctx.target.effects = {};
+          ctx.target.effects.stun = {
+            aplMod: -1,
+            expires: "end_next_activation",
+          };
+
+          addPrompt(ctx, {
+            ruleId: "stun",
+            phase: "POST_ROLL",
+            steps: ["Mark target as Stunned (-1 APL)."],
+            enabled: true,
+          });
+
+          ctx.log.push({
+            type: "RULE_STUN_APPLY",
+            detail: { phase: "POST_ROLL" },
+          });
+        },
+      },
     },
     torrent: {
       id: "torrent",
       uiLabel: "Torrent",
-      phases: ["DECLARE_ATTACK"],
+      phases: ["PRE_ROLL"],
       getUiHints: (ctx, rule, phase) => {
-        if (phase !== "DECLARE_ATTACK") return;
+        if (phase !== "PRE_ROLL") return;
         ensureCtxScaffold(ctx);
-        addPrompt(ctx, {
-          ruleId: "torrent",
-          phase,
-          text: "Torrent: resolve torrent targeting rules.",
-          enabled: true,
+        const x = Number(rule.value);
+        if (Number.isFinite(x) && x > 0) {
+          ctx.ui.suggestedInputs.torrentRange = x;
+        }
+
+        const primaryTargetId = ctx?.inputs?.primaryTargetId;
+        const secondaryTargetIds = Array.isArray(ctx?.inputs?.secondaryTargetIds)
+          ? ctx.inputs.secondaryTargetIds.filter(Boolean)
+          : [];
+        const uniqSecondaries = [];
+        const seen = new Set([primaryTargetId]);
+        for (const id of secondaryTargetIds) {
+          if (seen.has(id)) continue;
+          seen.add(id);
+          uniqSecondaries.push(id);
+        }
+
+        if (primaryTargetId) {
+          ctx.attackQueue = [
+            { targetId: primaryTargetId, isTorrentSecondary: false },
+            ...uniqSecondaries.map((id) => ({
+              targetId: id,
+              isTorrentSecondary: true,
+            })),
+          ];
+
+          addPrompt(ctx, {
+            ruleId: "torrent",
+            phase,
+            steps: [
+              `Resolve attacks against: ${ctx.attackQueue
+                .map((item) => item.targetId)
+                .join(", ")}.`,
+            ],
+            enabled: true,
+          });
+        } else {
+          addPrompt(ctx, {
+            ruleId: "torrent",
+            phase,
+            text: "Torrent: select all valid targets before rolling.",
+            enabled: true,
+          });
+        }
+      },
+      apply: (ctx, rule, phase) => {
+        if (phase !== "PRE_ROLL") return;
+        ensureCtxScaffold(ctx);
+        const primaryTargetId = ctx?.inputs?.primaryTargetId;
+        if (!primaryTargetId) return;
+        const secondaryTargetIds = Array.isArray(ctx?.inputs?.secondaryTargetIds)
+          ? ctx.inputs.secondaryTargetIds.filter(Boolean)
+          : [];
+        const uniqSecondaries = [];
+        const seen = new Set([primaryTargetId]);
+        for (const id of secondaryTargetIds) {
+          if (seen.has(id)) continue;
+          seen.add(id);
+          uniqSecondaries.push(id);
+        }
+        ctx.attackQueue = [
+          { targetId: primaryTargetId, isTorrentSecondary: false },
+          ...uniqSecondaries.map((id) => ({
+            targetId: id,
+            isTorrentSecondary: true,
+          })),
+        ];
+        ctx.modifiers.ignoreConcealForTargeting = true;
+        ctx.log.push({
+          type: "RULE_TORRENT_DECLARE",
+          detail: {
+            x: rule?.value ?? null,
+            primaryTargetId,
+            secondaryTargetIds: uniqSecondaries,
+            queueSize: ctx.attackQueue.length,
+          },
         });
       },
-      apply: () => {},
     },
   };
 
