@@ -61,6 +61,19 @@ const classifyDie = (value, hit, critThreshold) => {
   return "miss";
 };
 
+const countRetainedCrits = (ctx) => {
+  const hit = getWeaponHit(ctx);
+  const critThreshold = getLethalThreshold(ctx);
+  const attackDice = Array.isArray(ctx.attackDice) ? ctx.attackDice : [];
+  return attackDice.filter((die) => {
+    const tags = Array.isArray(die?.tags) ? die.tags : [];
+    if (!tags.includes("retained")) return false;
+    if (tags.includes("crit")) return true;
+    if (!Number.isFinite(hit)) return false;
+    return classifyDie(Number(die?.value ?? 0), hit, critThreshold) === "crit";
+  }).length;
+};
+
 const computeCeaselessGroup = (ctx) => {
   const hit = getWeaponHit(ctx);
   if (!Number.isFinite(hit)) return null;
@@ -555,10 +568,7 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
         ensureCtxScaffold(ctx);
         const x = Number(rule.value);
         if (!Number.isFinite(x) || x <= 0) return;
-        const retainedCrits = (ctx.attackDice || []).filter((die) => {
-          const tags = Array.isArray(die?.tags) ? die.tags : [];
-          return tags.includes("retained") && tags.includes("crit");
-        }).length;
+        const retainedCrits = countRetainedCrits(ctx);
         if (retainedCrits <= 0) return;
         ctx.ui.suggestedInputs.devastatingCrits = retainedCrits;
         addPrompt(ctx, {
@@ -582,10 +592,7 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
           const x = Number.isFinite(xRaw) ? xRaw : 0;
           if (x <= 0) return;
           const provided = Number(ctx?.inputs?.retainedCrits);
-          const computed = (ctx.attackDice || []).filter((die) => {
-            const tags = Array.isArray(die?.tags) ? die.tags : [];
-            return tags.includes("retained") && tags.includes("crit");
-          }).length;
+          const computed = countRetainedCrits(ctx);
           const retainedCrits = Number.isFinite(provided) ? provided : computed;
           if (!Number.isFinite(retainedCrits) || retainedCrits <= 0) return;
           const damage = retainedCrits * x;
@@ -888,10 +895,7 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
       getUiHints: (ctx, rule, phase) => {
         if (phase !== "POST_ROLL") return;
         ensureCtxScaffold(ctx);
-        const retainedCrits = (ctx.attackDice || []).filter((die) => {
-          const tags = Array.isArray(die?.tags) ? die.tags : [];
-          return tags.includes("retained") && tags.includes("crit");
-        }).length;
+        const retainedCrits = countRetainedCrits(ctx);
         if (retainedCrits <= 0) return;
         addPrompt(ctx, {
           ruleId: "piercing-crits",
@@ -903,10 +907,7 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
       apply: (ctx, rule, phase) => {
         if (phase !== "POST_ROLL") return;
         ensureCtxScaffold(ctx);
-        const retainedCrits = (ctx.attackDice || []).filter((die) => {
-          const tags = Array.isArray(die?.tags) ? die.tags : [];
-          return tags.includes("retained") && tags.includes("crit");
-        }).length;
+        const retainedCrits = countRetainedCrits(ctx);
         if (retainedCrits <= 0) return;
         const value = Number(rule.value);
         if (!Number.isFinite(value) || value <= 0) return;
@@ -1319,10 +1320,7 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
       getUiHints: (ctx, rule, phase) => {
         if (phase !== "POST_ROLL") return;
         ensureCtxScaffold(ctx);
-        const retainedCrits = (ctx.attackDice || []).filter((die) => {
-          const tags = Array.isArray(die?.tags) ? die.tags : [];
-          return tags.includes("retained") && tags.includes("crit");
-        }).length;
+        const retainedCrits = countRetainedCrits(ctx);
         if (retainedCrits <= 0) return;
         addPrompt(ctx, {
           ruleId: "stun",
