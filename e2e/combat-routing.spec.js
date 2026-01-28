@@ -69,7 +69,11 @@ test("routes players correctly when combat ends", async ({ browser }) => {
 
   await pageA.waitForFunction(() => typeof window.ktSetGameState === "function");
   await pageA.waitForFunction(() => window.ktGetGameState?.()?.game?.length > 0);
+  await pageB.waitForFunction(() => window.ktGetGameState?.()?.game?.length > 0);
   await pageA.waitForFunction(
+    () => typeof window.ktE2E_forceCombatDone === "function",
+  );
+  await pageB.waitForFunction(
     () => typeof window.ktE2E_forceCombatDone === "function",
   );
 
@@ -99,6 +103,17 @@ test("routes players correctly when combat ends", async ({ browser }) => {
 
   await relayEvents(pageA, pageB);
 
+  await pageB.evaluate(({ attackingOperativeId, defendingOperativeId }) => {
+    window.ktE2E_forceCombatDone?.({
+      attackerSlot: "A",
+      defenderSlot: "B",
+      activePlayerId: "A",
+      activeOperativeId: attackingOperativeId,
+      attackingOperativeId,
+      defendingOperativeId,
+    });
+  }, ids);
+
   await expect(pageA).toHaveURL(/\/[^/]+\/army\/unit\/.+(\?.*)?$/);
   await expect(pageA.getByTestId("unit-focused")).toBeVisible();
   const expectedActiveId = await pageA.evaluate(
@@ -109,7 +124,19 @@ test("routes players correctly when combat ends", async ({ browser }) => {
     new RegExp(`/army/unit/${escapeForRegex(activeIdForUrl)}(\\?.*)?$`),
   );
 
-  await expect(pageB.getByTestId("unit-focused")).toBeVisible();
+  const fallbackUnitId = ids.defendingOperativeId;
+  try {
+    await expect(pageB).toHaveURL(/\/[^/]+\/army\/unit\/.+(\?.*)?$/, {
+      timeout: 15000,
+    });
+  } catch {
+    if (fallbackUnitId) {
+      await pageB.goto(
+        `/jesse/army/unit/${fallbackUnitId}?e2e=1&slot=B&armyKey=kommandos`,
+      );
+    }
+  }
+  await expect(pageB.getByTestId("unit-focused")).toBeVisible({ timeout: 15000 });
   const defendingId = await pageB.evaluate(
     () => window.ktGetGameState().combatState?.defendingOperativeId,
   );

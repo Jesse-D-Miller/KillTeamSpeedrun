@@ -79,6 +79,9 @@ test("engage: reselecting Vantage switches accurate without stacking", async ({ 
   await expect(page.getByTestId("wr-chip-accurate-2")).toBeVisible();
 
   await vantage.click();
+  await expect(page.getByTestId("wr-chip-accurate-2")).toHaveCount(0);
+
+  await vantage.click();
   await page.getByTestId("vantage-choose-2").click();
 
   await expect(page.getByTestId("wr-chip-accurate-1")).toBeVisible();
@@ -86,4 +89,21 @@ test("engage: reselecting Vantage switches accurate without stacking", async ({ 
 
   const cover = page.getByTestId("condition-cover");
   await expect(cover).toHaveAttribute("aria-disabled", "true");
+});
+
+test("engage: clicking applied Vantage clears effects", async ({ page }) => {
+  await page.goto("/e2e/attack-resolution?targetOrder=engage");
+  await expect(page.getByTestId("attack-resolution-modal")).toBeVisible();
+
+  const vantage = page.getByTestId("condition-vantage");
+  await vantage.click();
+  await page.getByTestId("vantage-choose-4").click();
+
+  await expect(page.getByTestId("wr-chip-accurate-2")).toBeVisible();
+
+  await vantage.click();
+
+  await expect(page.getByTestId("wr-chip-accurate-2")).toHaveCount(0);
+  const cover = page.getByTestId("condition-cover");
+  await expect(cover).toHaveAttribute("aria-disabled", "false");
 });

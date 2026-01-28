@@ -6,10 +6,9 @@ export function getVantageOptions(targetOrder) {
   return [];
 }
 
-export function applyVantage(ctx, { targetOrder, distance } = {}) {
+export function applyVantage(ctx, { targetOrder, mode, active } = {}) {
   const nextCtx = {
     ...ctx,
-    weaponRules: Array.isArray(ctx?.weaponRules) ? [...ctx.weaponRules] : [],
     modifiers: { ...(ctx?.modifiers || {}) },
     ui: {
       ...(ctx?.ui || {}),
@@ -21,28 +20,56 @@ export function applyVantage(ctx, { targetOrder, distance } = {}) {
   const order = String(targetOrder || "").toLowerCase();
   const isEngage = order === "engage";
   const isConceal = order === "conceal";
-  const noteId = "vantage-conceal";
-  const noteText =
-    "Vantage (vs Conceal and cover save is true): you can retain 2 normal saves OR 1 crit save.";
+  const concealNoteId = "vantage-conceal";
+  const concealNoteText =
+    "Vantage (vs Conceal): you can retain 2 normal saves OR 1 crit save.";
+  const engageNoteId = "vantage";
+  const engageNoteText =
+    "Vantage: you gain Accurate. Apply in Pre-Roll.";
 
-  nextCtx.weaponRules = nextCtx.weaponRules.filter(
-    (rule) => !(rule?.id === "accurate" && rule?.source === "vantage"),
-  );
+  const prevCoverSelected = nextCtx.modifiers.coverSelected;
+  const prevCoverSaved = nextCtx.modifiers.coverWasCheckedBeforeVantage;
+  const engageActive =
+    isEngage && active && (mode === "4in" || mode === "2in");
 
-  if (isEngage && (distance === 4 || distance === 2)) {
-    const accurateValue = distance === 4 ? 2 : 1;
-    nextCtx.weaponRules.push({ id: "accurate", value: accurateValue, source: "vantage" });
-    nextCtx.modifiers.coverDisabled = true;
+  nextCtx.modifiers.vantageState = null;
+  nextCtx.modifiers.coverDisabledByVantage = false;
+
+  if (!engageActive && typeof prevCoverSaved === "boolean") {
+    nextCtx.modifiers.coverSelected = prevCoverSaved;
+    nextCtx.modifiers.coverWasCheckedBeforeVantage = undefined;
+  }
+
+  if (engageActive) {
+    const accurateValue = mode === "4in" ? 2 : 1;
+    nextCtx.modifiers.vantageState = { mode, accurateValue };
+    nextCtx.modifiers.coverDisabledByVantage = true;
+    nextCtx.modifiers.coverWasCheckedBeforeVantage =
+      typeof prevCoverSaved === "boolean" ? prevCoverSaved : Boolean(prevCoverSelected);
     nextCtx.modifiers.coverSelected = false;
   }
 
-  nextCtx.ui.notes = nextCtx.ui.notes.filter((note) => note?.ruleId !== noteId);
-  if (isConceal) {
+  nextCtx.ui.notes = nextCtx.ui.notes.filter(
+    (note) => note?.ruleId !== concealNoteId && note?.ruleId !== engageNoteId,
+  );
+  if (isEngage && (mode === "4in" || mode === "2in") && active) {
+    nextCtx.ui.notes.push({
+      target: "attacker",
+      type: "RULE_NOTE",
+      ruleId: engageNoteId,
+      text: engageNoteText.replace(
+        "Accurate",
+        `Accurate ${mode === "4in" ? 2 : 1}`,
+      ),
+    });
+  }
+  if (isConceal && active) {
+    nextCtx.modifiers.vantageState = { mode: "conceal", accurateValue: 0 };
     nextCtx.ui.notes.push({
       target: "defender",
       type: "RULE_NOTE",
-      ruleId: noteId,
-      text: noteText,
+      ruleId: concealNoteId,
+      text: concealNoteText,
     });
   }
 

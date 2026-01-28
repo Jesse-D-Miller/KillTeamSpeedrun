@@ -62,7 +62,9 @@ export function formatWeaponRuleLabel(rule) {
     case "lethal":
       return `Lethal ${Number(rule.value)}+`;
     case "accurate":
-      return `Accurate ${Number(rule.value)}`;
+      return rule?.source === "vantage"
+        ? `Accurate ${Number(rule.value)} (Vantage)`
+        : `Accurate ${Number(rule.value)}`;
     case "piercing":
       return `Piercing ${Number(rule.value)}`;
     case "piercing-crits":
@@ -101,7 +103,9 @@ export function getWeaponRuleBoiledDown(ctx, rule, phase = ctx?.phase) {
 
   switch (id) {
     case "accurate":
-      return `Before rolling, you may convert up to ${x} attack dice into auto-retained hits (roll fewer dice).`;
+      return rule?.source === "vantage"
+        ? `Before rolling, retain ${x} hit(s).`
+        : `Before rolling, you may convert up to ${x} attack dice into auto-retained hits (roll fewer dice).`;
     case "balanced":
       return `Once, you may reroll 1 attack die (recommend: lowest miss; otherwise lowest hit; otherwise lowest crit).`;
     case "ceaseless":
@@ -402,9 +406,14 @@ export function getClickableWeaponRulesForPhase(ctx, phase) {
         ? getRulePillPreview(rule)
         : null;
 
+      const sourceKey = rule?.source ? String(rule.source) : "weapon";
+      const anchorId = `${rule.id}-${rule.value ?? ""}-${sourceKey}`;
+
       return {
         id: rule.id,
         value: rule.value,
+        source: rule?.source,
+        anchorId,
         label,
         phase,
         enabled: gate.ok,

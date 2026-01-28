@@ -40,10 +40,21 @@ function TargetSelectScreen() {
     ...(gameCode ? { gameCode } : {}),
   };
 
+  const resolvedAttackerId =
+    attackerId ||
+    gameState?.ui?.actionFlow?.attackerId ||
+    gameState?.firefight?.activeOperativeId ||
+    null;
+
   const attacker = useMemo(() => {
-    if (!gameState?.game || !attackerId) return null;
-    return gameState.game.find((unit) => unit.id === attackerId) || null;
-  }, [gameState, attackerId]);
+    if (!gameState?.game) return null;
+    if (resolvedAttackerId) {
+      const direct = gameState.game.find((unit) => unit.id === resolvedAttackerId) || null;
+      if (direct) return direct;
+    }
+    const slotTeamId = slot === "B" ? "beta" : "alpha";
+    return gameState.game.find((unit) => unit.teamId === slotTeamId) || null;
+  }, [gameState, resolvedAttackerId, slot]);
 
   const targets = useMemo(() => {
     if (!gameState?.game || !attacker?.teamId) return [];

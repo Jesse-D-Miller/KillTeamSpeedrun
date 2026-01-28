@@ -7,7 +7,6 @@ import { normalizeWeaponRules } from "../../engine/rules/weaponRules";
 import { allocateDefense } from "../../engine/rules/resolveDice";
 import { applyConditionNotes } from "../../engine/rules/combatConditions";
 import { shouldOpenHotModal } from "../../engine/rules/hotResolution";
-import { applyVantage } from "../../engine/rules/vantageRule";
 
 // Load all faction firefight ploys (eager so it works in UI immediately)
 const firefightPloyModules = import.meta.glob(
@@ -169,6 +168,7 @@ function AttackResolutionScreen({
   combatStage,
   attackRoll,
   defenseRoll,
+  combatModifiers,
   rollsLocked: rollsLockedFromState,
   attackLocked,
   defenseLocked,
@@ -178,6 +178,7 @@ function AttackResolutionScreen({
   onLockAttack,
   onSetDefenseRoll,
   onLockDefense,
+  onSetCombatModifiers,
   onApplyDamage,
   onResolveComplete,
   onCancel,
@@ -198,7 +199,6 @@ function AttackResolutionScreen({
   const [preRollFlags, setPreRollFlags] = useState({
     cover: false,
     obscured: false,
-    vantage: false,
   });
 
   const [rollsLocked, setRollsLocked] = useState(false);
@@ -208,17 +208,14 @@ function AttackResolutionScreen({
 
   const [hotModalOpen, setHotModalOpen] = useState(false);
   const [hotDamageDraft, setHotDamageDraft] = useState("0");
-  const [vantagePickerOpen, setVantagePickerOpen] = useState(false);
-  const [vantageDistance, setVantageDistance] = useState(null);
+  const [vantageChooserOpen, setVantageChooserOpen] = useState(false);
 
   const isFight =
     weapon?.mode === "melee" ||
     String(combatStage || "").toLowerCase().includes("fight");
 
   const attackerSuccessThreshold = Number(weapon?.hit ?? 6);
-  const defenderOrder = String(defender?.state?.order || "").toLowerCase();
-  const defenderIsConceal = defenderOrder === "conceal";
-  const defenderIsEngage = defenderOrder !== "conceal";
+  const coverDisabledByVantage = Boolean(combatModifiers?.coverDisabledByVantage);
   const defenderSuccessThreshold = isFight
     ? Number(
         defender?.state?.selectedWeaponHit ??
@@ -264,12 +261,21 @@ function AttackResolutionScreen({
     }
   };
 
+  const conditionFlags = useMemo(
+    () => ({
+      cover: preRollFlags.cover && !coverDisabledByVantage,
+      obscured: preRollFlags.obscured,
+      vantage: false,
+    }),
+    [preRollFlags.cover, preRollFlags.obscured, coverDisabledByVantage],
+  );
+
   useEffect(() => {
     setUiState((prev) => {
-      const next = applyConditionNotes(prev, preRollFlags);
+      const next = applyConditionNotes(prev, conditionFlags);
       return { ...prev, ui: next.ui };
     });
-  }, [preRollFlags]);
+  }, [conditionFlags]);
 
   useEffect(() => {
     if (!open) return;
@@ -286,15 +292,28 @@ function AttackResolutionScreen({
     setFinalAttackHits(0);
     setFinalAttackCrits(0);
 
-    setPreRollFlags({ cover: false, obscured: false, vantage: false });
+    setPreRollFlags({ cover: false, obscured: false });
     setRollsLocked(Boolean(rollsLockedFromState));
-    setVantagePickerOpen(false);
-    setVantageDistance(null);
+    setVantageChooserOpen(false);
 
     // Keep this simple: both players start on PRE_ROLL visually.
     // Your multiplayer stage can still exist; we just aren't gatekeeping UI anymore.
     setPhase(PHASES.PRE_ROLL);
   }, [open, role, combatStage, rollsLockedFromState]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (typeof window === "undefined") return;
+    const overrides = window.__ktE2E_attackResOverrides;
+    if (!overrides) return;
+
+    if (overrides.combatModifiers) {
+      onSetCombatModifiers?.(overrides.combatModifiers);
+    }
+    if (overrides.preRollFlags && role === "defender") {
+      setPreRollFlags((prev) => ({ ...prev, ...overrides.preRollFlags }));
+    }
+  }, [open, role, onSetCombatModifiers]);
 
   const baseCtx = useMemo(() => {
     if (!open) return null;
@@ -311,9 +330,6 @@ function AttackResolutionScreen({
       : weapon
         ? normalizeWeaponRules(weapon)
         : [];
-    const hasAccurate = normalizedRules.some(
-      (rule) => String(rule?.id || "").toLowerCase() === "accurate",
-    );
     const normalizedAttackDice = Array.isArray(attackRoll)
       ? attackRoll.map((value) => ({ value: Number(value), tags: [] }))
       : [];
@@ -334,6 +350,7 @@ function AttackResolutionScreen({
         ...(e2eOverrides?.inputs || {}),
       },
       modifiers: {
+        ...(combatModifiers || {}),
         ...(e2eOverrides?.modifiers || {}),
         coverSelected: preRollFlags.cover,
       },
@@ -341,14 +358,6 @@ function AttackResolutionScreen({
       effects: { attacker: [], defender: [] },
       log: [],
     };
-    if (preRollFlags.vantage && !hasAccurate) {
-      return applyVantage(base, {
-        targetOrder: defenderIsConceal ? "conceal" : "engage",
-        distance: defenderIsEngage ? Number(vantageDistance) : undefined,
-      });
-    }
-
-    return base;
   }, [
     open,
     phase,
@@ -356,29 +365,62 @@ function AttackResolutionScreen({
     attackRoll,
     role,
     finalAttackCrits,
-    preRollFlags.vantage,
     preRollFlags.cover,
-    defenderIsEngage,
-    defenderIsConceal,
-    vantageDistance,
+    combatModifiers,
   ]);
 
-  const combatCtx = useMemo(() => {
-    if (!baseCtx) return null;
+  const mergeCombatCtx = (base, overlay) => {
+    if (!base) return null;
     return {
-      ...baseCtx,
-      modifiers: { ...baseCtx.modifiers, ...uiState.modifiers },
+      ...base,
+      modifiers: { ...base.modifiers, ...overlay.modifiers },
       ui: {
-        ...(baseCtx.ui || {}),
-        ...(uiState.ui || {}),
-        prompts: Array.isArray(uiState.ui?.prompts) ? uiState.ui.prompts : [],
-        notes: Array.isArray(uiState.ui?.notes) ? uiState.ui.notes : [],
-        appliedRules: { ...(uiState.ui?.appliedRules || {}) },
+        ...(base.ui || {}),
+        ...(overlay.ui || {}),
+        prompts: Array.isArray(overlay.ui?.prompts) ? overlay.ui.prompts : [],
+        notes: Array.isArray(overlay.ui?.notes) ? overlay.ui.notes : [],
+        appliedRules: { ...(overlay.ui?.appliedRules || {}) },
       },
-      effects: uiState.effects || baseCtx.effects,
-      log: Array.isArray(uiState.log) ? uiState.log : baseCtx.log,
+      effects: overlay.effects || base.effects,
+      log: Array.isArray(overlay.log) ? overlay.log : base.log,
     };
-  }, [baseCtx, uiState]);
+  };
+
+  const combatCtx = useMemo(() => mergeCombatCtx(baseCtx, uiState), [baseCtx, uiState]);
+
+  const setCombatCtx = (updater) => {
+    setUiState((prevOverlay) => {
+      if (!baseCtx) return prevOverlay;
+      const prevCombat = mergeCombatCtx(baseCtx, prevOverlay);
+      const nextCombat = typeof updater === "function" ? updater(prevCombat) : updater;
+
+      return {
+        ...prevOverlay,
+        ui: nextCombat?.ui || prevOverlay.ui,
+        effects: nextCombat?.effects || prevOverlay.effects,
+        modifiers: nextCombat?.modifiers || prevOverlay.modifiers,
+        log: nextCombat?.log || prevOverlay.log,
+      };
+    });
+  };
+
+  const modifiersRef = useRef(null);
+  const areModifiersEqual = (left, right) => {
+    if (left === right) return true;
+    if (!left || !right) return false;
+    const leftKeys = Object.keys(left);
+    const rightKeys = Object.keys(right);
+    if (leftKeys.length !== rightKeys.length) return false;
+    return leftKeys.every((key) => Object.is(left[key], right[key]));
+  };
+
+  useEffect(() => {
+    if (!onSetCombatModifiers) return;
+    if (!combatCtx?.modifiers) return;
+    if (areModifiersEqual(modifiersRef.current, combatCtx.modifiers)) return;
+    modifiersRef.current = combatCtx.modifiers;
+    onSetCombatModifiers(combatCtx.modifiers);
+  }, [combatCtx?.modifiers, onSetCombatModifiers]);
 
   useEffect(() => {
     if (!open) return;
@@ -455,6 +497,59 @@ function AttackResolutionScreen({
     onResolveComplete?.();
     setPhase(PHASES.RESOLVED);
   };
+
+  const isVantageApplied = Boolean(combatCtx?.modifiers?.vantageState);
+  const clearVantage = () => {
+    setCombatCtx((prev) => ({
+      ...prev,
+      modifiers: {
+        ...(prev.modifiers || {}),
+        vantageState: null,
+        coverDisabledByVantage: false,
+      },
+    }));
+    setVantageChooserOpen(false);
+  };
+
+  useEffect(() => {
+    if (!open || role !== "defender") return;
+    if (!coverDisabledByVantage) return;
+    if (typeof combatCtx?.modifiers?.coverWasCheckedBeforeVantage !== "boolean") {
+      setCombatCtx((prev) => ({
+        ...prev,
+        modifiers: {
+          ...(prev.modifiers || {}),
+          coverWasCheckedBeforeVantage: Boolean(preRollFlags.cover),
+        },
+      }));
+    }
+    if (!preRollFlags.cover) return;
+    setPreRollFlags((prev) => ({ ...prev, cover: false }));
+    addLog("Pre-Roll", "Cover cleared by Vantage.");
+  }, [
+    open,
+    role,
+    coverDisabledByVantage,
+    preRollFlags.cover,
+    combatCtx?.modifiers?.coverWasCheckedBeforeVantage,
+  ]);
+
+  useEffect(() => {
+    if (!open || role !== "defender") return;
+    if (coverDisabledByVantage) return;
+    const saved = combatCtx?.modifiers?.coverWasCheckedBeforeVantage;
+    if (typeof saved !== "boolean") return;
+    setPreRollFlags((prev) => ({ ...prev, cover: saved }));
+    setCombatCtx((prev) => ({
+      ...prev,
+      modifiers: {
+        ...(prev.modifiers || {}),
+        coverDisabledByVantage: false,
+        vantageState: null,
+        coverWasCheckedBeforeVantage: undefined,
+      },
+    }));
+  }, [open, role, coverDisabledByVantage, combatCtx?.modifiers?.coverWasCheckedBeforeVantage]);
 
   if (!open || !attacker || !defender || !weapon || !combatCtx) return null;
 
@@ -607,15 +702,7 @@ function AttackResolutionScreen({
                     ))}
                   </div>
                 ) : null}
-                {preRollFlags.vantage && defenderIsConceal ? (
-                  <div
-                    className="attack-resolution__inline-note"
-                    data-testid="rule-note-vantage-defender"
-                  >
-                    Vantage (vs Conceal and cover save is true): you can retain 2 normal
-                    saves OR 1 crit save.
-                  </div>
-                ) : null}
+                {null}
               </div>
             </div>
 
@@ -650,12 +737,15 @@ function AttackResolutionScreen({
                           <button
                             type="button"
                             className={`wr-chip wr-chip--auto ${
-                              preRollFlags.cover ? "is-applied" : ""
-                            } ${preRollFlags.vantage && defenderIsEngage ? "is-disabled" : ""}`}
-                            aria-disabled={preRollFlags.vantage && defenderIsEngage}
+                              preRollFlags.cover && !coverDisabledByVantage
+                                ? "is-applied"
+                                : ""
+                            } ${coverDisabledByVantage ? "is-disabled" : ""}`}
+                            disabled={coverDisabledByVantage}
+                            aria-disabled={coverDisabledByVantage}
                             data-testid="condition-cover"
                             onClick={() => {
-                              if (preRollFlags.vantage && defenderIsEngage) return;
+                              if (coverDisabledByVantage) return;
                               setPreRollFlags((prev) => ({
                                 ...prev,
                                 cover: !prev.cover,
@@ -671,7 +761,7 @@ function AttackResolutionScreen({
                               Defender can retain 1 success from cover.
                             </div>
                             <div className="wr-chip-badges">
-                              {preRollFlags.cover ? (
+                              {preRollFlags.cover && !coverDisabledByVantage ? (
                                 <span className="wr-chip-badge wr-chip-badge--applied">
                                   Applied
                                 </span>
@@ -715,21 +805,17 @@ function AttackResolutionScreen({
                           <button
                             type="button"
                             className={`wr-chip wr-chip--auto ${
-                              preRollFlags.vantage ? "is-applied" : ""
+                              isVantageApplied ? "is-applied" : ""
                             }`}
                             aria-disabled="false"
                             data-testid="condition-vantage"
                             onClick={() => {
-                              if (defenderIsConceal) {
-                                setPreRollFlags((prev) => ({
-                                  ...prev,
-                                  vantage: true,
-                                }));
-                                setVantagePickerOpen(false);
-                                addLog("Pre-Roll", "Vantage applied vs Conceal.");
+                              if (isVantageApplied) {
+                                clearVantage();
+                                addLog("Pre-Roll", "Vantage cleared.");
                                 return;
                               }
-                              setVantagePickerOpen((prev) => !prev);
+                              setVantageChooserOpen(true);
                             }}
                           >
                             <div className="wr-chip-label">Vantage</div>
@@ -737,14 +823,14 @@ function AttackResolutionScreen({
                               Vantage may deny cover retains.
                             </div>
                             <div className="wr-chip-badges">
-                              {preRollFlags.vantage ? (
+                              {isVantageApplied ? (
                                 <span className="wr-chip-badge wr-chip-badge--applied">
                                   Applied
                                 </span>
                               ) : null}
                             </div>
                           </button>
-                          {defenderIsEngage && vantagePickerOpen ? (
+                          {vantageChooserOpen ? (
                             <div
                               className="attack-resolution__vantage-chooser"
                               data-testid="vantage-chooser"
@@ -754,13 +840,15 @@ function AttackResolutionScreen({
                                 className="kt-modal__btn"
                                 data-testid="vantage-choose-4"
                                 onClick={() => {
-                                  setPreRollFlags((prev) => ({
+                                  setCombatCtx((prev) => ({
                                     ...prev,
-                                    vantage: true,
-                                    cover: false,
+                                    modifiers: {
+                                      ...(prev.modifiers || {}),
+                                      vantageState: { mode: "4in", accurateValue: 2 },
+                                      coverDisabledByVantage: true,
+                                    },
                                   }));
-                                  setVantageDistance(4);
-                                  setVantagePickerOpen(false);
+                                  setVantageChooserOpen(false);
                                   addLog("Pre-Roll", "Vantage 4\" selected (Accurate 2).");
                                 }}
                               >
@@ -771,13 +859,15 @@ function AttackResolutionScreen({
                                 className="kt-modal__btn"
                                 data-testid="vantage-choose-2"
                                 onClick={() => {
-                                  setPreRollFlags((prev) => ({
+                                  setCombatCtx((prev) => ({
                                     ...prev,
-                                    vantage: true,
-                                    cover: false,
+                                    modifiers: {
+                                      ...(prev.modifiers || {}),
+                                      vantageState: { mode: "2in", accurateValue: 1 },
+                                      coverDisabledByVantage: true,
+                                    },
                                   }));
-                                  setVantageDistance(2);
-                                  setVantagePickerOpen(false);
+                                  setVantageChooserOpen(false);
                                   addLog("Pre-Roll", "Vantage 2\" selected (Accurate 1).");
                                 }}
                               >
@@ -789,6 +879,15 @@ function AttackResolutionScreen({
                       )}
                     </div>
                   </div>
+                  <div className="attack-resolution__e2e-state">
+                    <div data-testid="vantage-state">
+                      {combatCtx.modifiers?.vantageState?.mode || "none"}
+                    </div>
+                    <div data-testid="cover-state">
+                      {preRollFlags.cover && !coverDisabledByVantage ? "on" : "off"}
+                    </div>
+                  </div>
+
                   {role !== "attacker" ? (
                     <div className="attack-resolution__empty">
                       No pre-roll rules for defender yet.

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./WeaponRulesPanel.css";
 import { applyAutoRulesForPhase, getClickableWeaponRulesForPhase } from "../../engine/rules/weaponRuleUi";
+import { getEffectiveWeaponRules } from "../../engine/rules/effectiveWeaponRules";
 
 function useOutsideClick(ref, onOutside) {
   useEffect(() => {
@@ -19,9 +20,33 @@ function useOutsideClick(ref, onOutside) {
 }
 
 export default function WeaponRulesPanel({ ctx, phase, onCtxChange, testId }) {
+  const effectiveRules = useMemo(() => {
+    const rules = getEffectiveWeaponRules(ctx) || [];
+    const accurateValue = Number(ctx?.modifiers?.vantageState?.accurateValue);
+    if (!Number.isFinite(accurateValue) || accurateValue <= 0) return rules;
+    const hasAccurate = rules.some((rule) =>
+      typeof rule === "string"
+        ? String(rule).toLowerCase().includes("accurate")
+        : rule?.id === "accurate" && Number(rule?.value) === accurateValue,
+    );
+    if (hasAccurate) return rules;
+    return [
+      ...rules,
+      {
+        id: "accurate",
+        value: accurateValue,
+        source: "vantage",
+      },
+    ];
+  }, [ctx]);
+  const effectiveCtx = useMemo(
+    () => (ctx ? { ...ctx, weaponRules: effectiveRules } : ctx),
+    [ctx, effectiveRules],
+  );
+
   const items = useMemo(
-    () => getClickableWeaponRulesForPhase(ctx, phase),
-    [ctx, phase],
+    () => getClickableWeaponRulesForPhase(effectiveCtx, phase),
+    [effectiveCtx, phase],
   );
 
   const [popover, setPopover] = useState(null);
@@ -72,16 +97,16 @@ export default function WeaponRulesPanel({ ctx, phase, onCtxChange, testId }) {
 
   useEffect(() => {
     if (!onCtxChange) return;
-    const result = applyAutoRulesForPhase(ctx, phase);
+    const result = applyAutoRulesForPhase(effectiveCtx, phase);
     if (result.changed) {
       onCtxChange(result.ctx);
     }
-  }, [ctx, phase, onCtxChange]);
+  }, [effectiveCtx, phase, onCtxChange]);
 
   if (!items.length) return null;
 
-  const openPopoverFor = (ruleId, title, text) => {
-    const el = document.querySelector(`[data-wr-anchor="${ruleId}"]`);
+  const openPopoverFor = (anchorId, title, text) => {
+    const el = document.querySelector(`[data-wr-anchor="${anchorId}"]`);
     const r = el?.getBoundingClientRect?.();
     const scrollX = window.scrollX || window.pageXOffset || 0;
     const scrollY = window.scrollY || window.pageYOffset || 0;
@@ -99,7 +124,7 @@ export default function WeaponRulesPanel({ ctx, phase, onCtxChange, testId }) {
       ? Math.min(window.innerHeight - 12 + scrollY, r.bottom + 8 + scrollY)
       : 80;
 
-    setPopover({ ruleId, title, text, x, y, width });
+    setPopover({ ruleId: anchorId, title, text, x, y, width });
   };
 
   return (
@@ -111,8 +136,8 @@ export default function WeaponRulesPanel({ ctx, phase, onCtxChange, testId }) {
       <div className="wr-grid">
         {items.map((it) => (
           <button
-            key={`${phase}-${it.id}-${it.label}`}
-            data-wr-anchor={it.id}
+            key={`${phase}-${it.anchorId}`}
+            data-wr-anchor={it.anchorId}
             type="button"
             className={`wr-chip ${it.colorClass || ""} ${
               it.applied ? "is-applied" : ""
@@ -120,7 +145,9 @@ export default function WeaponRulesPanel({ ctx, phase, onCtxChange, testId }) {
             aria-disabled={!it.enabled}
             data-testid={
               it.id === "accurate" && Number.isFinite(Number(it.value))
-                ? `wr-chip-accurate-${Number(it.value)}`
+                ? it.source === "vantage"
+                  ? `wr-chip-accurate-vantage-${Number(it.value)}`
+                  : `wr-chip-accurate-${Number(it.value)}`
                 : `rule-chip-${it.id}-${phase.toLowerCase()}`
             }
             onClick={() => {
@@ -128,22 +155,22 @@ export default function WeaponRulesPanel({ ctx, phase, onCtxChange, testId }) {
                 it.onClick({ preview: it.responsibility !== "SEMI" });
               }
 
-              if (Array.isArray(ctx.log)) {
-                ctx.log.push({
+              if (Array.isArray(effectiveCtx?.log)) {
+                effectiveCtx.log.push({
                   type: "UI_WR_CLICK",
                   detail: { ruleId: it.id, phase },
                 });
               }
 
               onCtxChange?.({
-                ...ctx,
-                ui: { ...ctx.ui },
-                modifiers: { ...ctx.modifiers },
-                log: [...(ctx.log || [])],
+                ...effectiveCtx,
+                ui: { ...(effectiveCtx?.ui || {}) },
+                modifiers: { ...(effectiveCtx?.modifiers || {}) },
+                log: [...(effectiveCtx?.log || [])],
               });
 
               const tooltipText = it.disabledReason ? it.disabledReason : it.preview;
-              openPopoverFor(it.id, it.label, tooltipText);
+              openPopoverFor(it.anchorId, it.label, tooltipText);
             }}
             aria-label={it.label}
           >

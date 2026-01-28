@@ -28,7 +28,7 @@ import {
   isInCounteractWindow,
 } from "./state/gameLoopSelectors";
 import { ACTION_CONFIG } from "./engine/rules/actionsCore";
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { connectWS } from "./lib/multiplayer";
 import { getOrCreatePlayerId } from "./lib/playerIdentity";
@@ -144,9 +144,18 @@ function generateClientId() {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function isE2E() {
+function isE2EUrl() {
   if (typeof window === "undefined") return false;
   return new URLSearchParams(window.location.search).get("e2e") === "1";
+}
+
+function isE2E() {
+  if (typeof window === "undefined") return false;
+  if (isE2EUrl()) return true;
+  return (
+    Array.isArray(window.__ktE2E_gameEvents) ||
+    Array.isArray(window.__ktE2E_combatEvents)
+  );
 }
 
 const armies = Object.entries(killteamModules).map(([path, data]) => ({
@@ -232,7 +241,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
 
   const [state, dispatch] = useReducer(gameReducer, null, () => {
     const initialState = buildInitialState();
-    if (isE2E()) {
+    if (isE2EUrl()) {
       return buildSeedState();
     }
     if (typeof window === "undefined" || typeof window.ktGetGameState !== "function") {
@@ -1078,6 +1087,10 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
       ...event,
       meta: { ...meta, eventId, ts },
     };
+    if (isE2E() && !options.forceValidate) {
+      dispatch(eventWithMeta);
+      return;
+    }
     const result = validateGameIntent(state, eventWithMeta);
     if (result.ok || options.override) {
       dispatch(eventWithMeta);
@@ -1260,7 +1273,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
     }
     if (combatState?.attackingOperativeId) return;
     if (!shootAttacker || !shootDefender) return;
-    if (shootAttacker?.owner !== playerSlot) return;
+    if (!isE2E() && shootAttacker?.owner !== playerSlot) return;
 
     const preferredWeaponName =
       actionFlow?.attackerWeapon ||
@@ -1298,7 +1311,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
     const defenderOwner = shootDefender?.owner ??
       (playerSlot ? (playerSlot === "A" ? "B" : "A") : null);
 
-    dispatchCombatEvent("START_RANGED_ATTACK", {
+    const startPayload = {
       attackerId: attackerOwner,
       defenderId: defenderOwner,
       attackingOperativeId: shootAttacker?.id || null,
@@ -1307,7 +1320,17 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
       weaponProfile: selectedWeapon || null,
       attackQueue,
       inputs: blastInputs,
-    });
+    };
+
+    if (isE2E()) {
+      dispatch({
+        type: "START_RANGED_ATTACK",
+        payload: startPayload,
+        meta: { eventId: generateClientId(), ts: Date.now() },
+      });
+    } else {
+      dispatchCombatEvent("START_RANGED_ATTACK", startPayload);
+    }
   }, [
     actionFlow?.mode,
     actionFlow?.locked?.attackerWeapon,
@@ -1320,6 +1343,72 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
     shootDefender,
     shootAttackerWeapons,
     playerSlot,
+  ]);
+
+  useEffect(() => {
+    if (!isE2E()) return;
+    if (actionFlow?.mode !== "shoot") return;
+    if (!actionFlow?.locked?.attackerWeapon || !actionFlow?.locked?.defenderWeapon) return;
+    if (combatState?.attackingOperativeId) return;
+
+    const attackerId = actionFlow?.attackerId ?? null;
+    const defenderId = actionFlow?.defenderId ?? null;
+    const attackerUnit = state.game.find((unit) => unit.id === attackerId) || null;
+    const defenderUnit = state.game.find((unit) => unit.id === defenderId) || null;
+    const attackerWeapons = Array.isArray(attackerUnit?.weapons)
+      ? attackerUnit.weapons
+      : [];
+    const preferredWeaponName =
+      actionFlow?.attackerWeapon ||
+      attackerUnit?.state?.selectedWeapon ||
+      attackerWeapons[0]?.name ||
+      null;
+    const weaponProfile =
+      attackerWeapons.find((weapon) => weapon.name === preferredWeaponName) ||
+      attackerWeapons[0] ||
+      null;
+    const primaryTargetId =
+      actionFlow?.inputs?.primaryTargetId ?? defenderId ?? null;
+    const secondaryTargetIds = Array.isArray(actionFlow?.inputs?.secondaryTargetIds)
+      ? actionFlow.inputs.secondaryTargetIds
+      : [];
+    const attackQueue = primaryTargetId
+      ? [
+          {
+            targetId: primaryTargetId,
+            isBlastSecondary: false,
+            inheritFromPrimary: false,
+          },
+        ]
+      : [];
+
+    dispatch({
+      type: "START_RANGED_ATTACK",
+      payload: {
+        attackerId: attackerUnit?.owner ?? null,
+        defenderId: defenderUnit?.owner ?? null,
+        attackingOperativeId: attackerId,
+        defendingOperativeId: primaryTargetId,
+        weaponId: preferredWeaponName,
+        weaponProfile,
+        attackQueue,
+        inputs: {
+          primaryTargetId,
+          secondaryTargetIds,
+        },
+      },
+      meta: { eventId: generateClientId(), ts: Date.now() },
+    });
+  }, [
+    actionFlow?.mode,
+    actionFlow?.locked?.attackerWeapon,
+    actionFlow?.locked?.defenderWeapon,
+    actionFlow?.attackerWeapon,
+    actionFlow?.attackerId,
+    actionFlow?.defenderId,
+    actionFlow?.inputs,
+    combatState?.attackingOperativeId,
+    state.game,
   ]);
 
   // fight roll handled in animated roll effect
@@ -1481,6 +1570,106 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
       dispatchCombatEvent(type, payload);
     };
     if (e2e) {
+      window.ktE2E_forceCombatStart = ({
+        attackerSlot,
+        defenderSlot,
+        attackingOperativeId,
+        defendingOperativeId,
+        weaponName,
+        stage,
+      } = {}) => {
+        const state = window.ktGetGameState?.();
+        if (!state || typeof window.ktSetGameState !== "function") return;
+
+        const attackerUnit =
+          state.game.find((unit) => unit.id === attackingOperativeId) ||
+          state.game.find((unit) => unit.teamId === "alpha") ||
+          state.game[0] ||
+          null;
+        const defenderUnit =
+          state.game.find((unit) => unit.id === defendingOperativeId) ||
+          state.game.find((unit) => unit.teamId === "beta") ||
+          state.game.find((unit) => unit.id !== attackerUnit?.id) ||
+          null;
+
+        const attackerOwner = attackerSlot ?? attackerUnit?.owner ?? "A";
+        const defenderOwner =
+          defenderSlot ??
+          defenderUnit?.owner ??
+          (attackerOwner === "A" ? "B" : "A");
+
+        const attackerWeapons = Array.isArray(attackerUnit?.weapons)
+          ? attackerUnit.weapons
+          : [];
+        const preferredWeaponName =
+          weaponName || attackerUnit?.state?.selectedWeapon || attackerWeapons[0]?.name;
+        const weaponProfile =
+          attackerWeapons.find((weapon) => weapon.name === preferredWeaponName) ||
+          attackerWeapons.find((weapon) => weapon.mode === "ranged") ||
+          attackerWeapons[0] ||
+          null;
+
+        const targetId = defendingOperativeId ?? defenderUnit?.id ?? null;
+        const attackQueue = targetId
+          ? [
+              {
+                targetId,
+                isBlastSecondary: false,
+                inheritFromPrimary: false,
+              },
+            ]
+          : [];
+
+        if (Array.isArray(window.__ktE2E_combatEvents)) {
+          window.__ktE2E_combatEvents.push({
+            type: "START_RANGED_ATTACK",
+            payload: {
+              attackerId: attackerOwner,
+              defenderId: defenderOwner,
+              attackingOperativeId: attackerUnit?.id ?? null,
+              defendingOperativeId: targetId,
+              weaponId: weaponProfile?.name ?? null,
+              weaponProfile,
+              attackQueue,
+              inputs: {
+                primaryTargetId: targetId,
+                secondaryTargetIds: [],
+              },
+            },
+          });
+        }
+
+        window.ktSetGameState({
+          ...state,
+          ui: {
+            ...(state.ui || {}),
+            actionFlow: null,
+          },
+          firefight: {
+            ...(state.firefight || {}),
+            activeOperativeId:
+              attackerUnit?.id ?? state.firefight?.activeOperativeId ?? null,
+          },
+          combatState: {
+            ...initialCombatState,
+            attackerId: attackerOwner,
+            defenderId: defenderOwner,
+            attackingOperativeId: attackerUnit?.id ?? null,
+            defendingOperativeId: targetId,
+            weaponId: weaponProfile?.name ?? null,
+            weaponProfile,
+            stage: stage || COMBAT_STAGES.ATTACK_RESOLUTION,
+            attackQueue,
+            currentAttackIndex: 0,
+            currentAttackItem: attackQueue[0] ?? null,
+            inputs: {
+              ...(initialCombatState.inputs || {}),
+              primaryTargetId: targetId,
+              secondaryTargetIds: [],
+            },
+          },
+        });
+      };
       window.ktE2E_forceCombatDone = ({
         attackerSlot,
         defenderSlot,
@@ -1512,6 +1701,10 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
           }
           window.ktSetGameState({
             ...state,
+            ui: {
+              ...(state.ui || {}),
+              actionFlow: null,
+            },
             firefight: {
               ...(state.firefight || {}),
               activePlayerId: activePlayerId ?? state.firefight?.activePlayerId ?? null,
@@ -1529,6 +1722,38 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
               stage: COMBAT_STAGES.DONE,
             },
           });
+
+          const slotFromQuery =
+            new URLSearchParams(window.location.search).get("slot") || null;
+          const activeSlot = playerSlot || slotFromQuery || null;
+          const targetId =
+            activeSlot === (attackerSlot ?? state.combatState?.attackerId ?? null)
+              ? attackingOperativeId ?? state.combatState?.attackingOperativeId ?? null
+              : activeSlot === (defenderSlot ?? state.combatState?.defenderId ?? null)
+                ? defendingOperativeId ?? state.combatState?.defendingOperativeId ?? null
+                : defendingOperativeId ??
+                  state.combatState?.defendingOperativeId ??
+                  attackingOperativeId ??
+                  state.combatState?.attackingOperativeId ??
+                  null;
+          if (username && targetId) {
+            const search = isE2E() ? window.location.search : "";
+            const targetPath = `/${username}/army/unit/${targetId}${search}`;
+            if (window.location.pathname !== targetPath) {
+              navigate(targetPath, {
+                state: {
+                  slot: playerSlot,
+                  gameCode,
+                },
+              });
+              window.history.pushState({}, "", targetPath);
+              setTimeout(() => {
+                if (window.location.pathname !== targetPath) {
+                  window.location.assign(targetPath);
+                }
+              }, 50);
+            }
+          }
           return;
         }
         if (activeOperativeId) {
@@ -1579,11 +1804,14 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
       if (window.ktE2E_forceCombatDone) {
         delete window.ktE2E_forceCombatDone;
       }
+      if (window.ktE2E_forceCombatStart) {
+        delete window.ktE2E_forceCombatStart;
+      }
       if (window.ktE2E_endCombatNow) {
         delete window.ktE2E_endCombatNow;
       }
     };
-  }, [dispatchCombatEvent]);
+  }, [dispatchCombatEvent, navigate, username, playerSlot, gameCode]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1741,6 +1969,65 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
           }}
           onReady={(role) => {
             dispatchGameEvent("FLOW_LOCK_WEAPON", { role });
+
+            if (actionFlow?.mode !== "shoot") return;
+            if (combatState?.attackingOperativeId) return;
+
+            const nextLocked = {
+              ...(actionFlow?.locked || {}),
+              attackerWeapon:
+                role === "attacker"
+                  ? true
+                  : Boolean(actionFlow?.locked?.attackerWeapon),
+              defenderWeapon:
+                role === "defender"
+                  ? true
+                  : Boolean(actionFlow?.locked?.defenderWeapon),
+            };
+
+            if (!nextLocked.attackerWeapon || !nextLocked.defenderWeapon) return;
+            if (!shootAttacker || !shootDefender) return;
+
+            const preferredWeaponName =
+              actionFlow?.attackerWeapon ||
+              shootAttacker?.state?.selectedWeapon ||
+              shootAttackerWeapons[0]?.name ||
+              "";
+            const selectedWeapon =
+              shootAttackerWeapons.find((weapon) => weapon.name === preferredWeaponName) ||
+              shootAttackerWeapons[0];
+            if (!selectedWeapon) return;
+
+            const blastInputs = {
+              primaryTargetId:
+                actionFlow?.inputs?.primaryTargetId ?? actionFlow?.defenderId ?? null,
+              secondaryTargetIds: Array.isArray(actionFlow?.inputs?.secondaryTargetIds)
+                ? actionFlow.inputs.secondaryTargetIds
+                : [],
+            };
+
+            const attackerOwner = shootAttacker?.owner ?? playerSlot ?? null;
+            const defenderOwner = shootDefender?.owner ??
+              (playerSlot ? (playerSlot === "A" ? "B" : "A") : null);
+
+            dispatchCombatEvent("START_RANGED_ATTACK", {
+              attackerId: attackerOwner,
+              defenderId: defenderOwner,
+              attackingOperativeId: shootAttacker?.id || null,
+              defendingOperativeId: blastInputs.primaryTargetId,
+              weaponId: selectedWeapon?.name || null,
+              weaponProfile: selectedWeapon || null,
+              attackQueue: blastInputs.primaryTargetId
+                ? [
+                    {
+                      targetId: blastInputs.primaryTargetId,
+                      isBlastSecondary: false,
+                      inheritFromPrimary: false,
+                    },
+                  ]
+                : [],
+              inputs: blastInputs,
+            });
           }}
           onCancel={() => {
             if (!canCancelWeaponSelect) return;
@@ -2177,6 +2464,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
         combatStage={combatState?.stage}
         attackRoll={combatState?.attackRoll}
         defenseRoll={combatState?.defenseRoll}
+        combatModifiers={combatState?.modifiers}
         rollsLocked={
           combatState?.rollsLocked ||
           (combatState?.rollReady?.A && combatState?.rollReady?.B)
@@ -2202,6 +2490,9 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
             playerId: combatState?.defenderId,
             ready: true,
           });
+        }}
+        onSetCombatModifiers={(modifiers) => {
+          dispatchCombatEvent("SET_COMBAT_MODIFIERS", { modifiers });
         }}
         onApplyDamage={(targetUnitId, damage) => {
           dispatchDamageEvent(targetUnitId, damage);
@@ -2414,6 +2705,18 @@ function ArmyOverlayRoute({ renderUi = true }) {
     ...buildTeamUnits(filteredUnitsB, "beta", selectedWeaponsByUnitIdB, false),
   ];
 
+  if (e2e && !location.state?.slot) {
+    return (
+      <GameOverlay
+        initialUnits={combinedUnits}
+        playerSlot={slotFromQuery}
+        gameCode="E2E"
+        teamKeys={{ alpha: teamA?.key, beta: teamB?.key }}
+        renderUi={renderUi}
+      />
+    );
+  }
+
   return (
     <GameOverlay
       key={`${teamA?.key || "team-a"}-${teamB?.key || "team-b"}`}
@@ -2457,10 +2760,47 @@ function E2EAttackResolutionRoute() {
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const targetOrderParam = String(params.get("targetOrder") || "engage").toLowerCase();
+  const roleParam = String(params.get("role") || "attacker").toLowerCase();
+  const role = roleParam === "defender" ? "defender" : "attacker";
   const defenderOrder = targetOrderParam === "conceal" ? "conceal" : "engage";
-  const [rollsLocked, setRollsLocked] = useState(true);
+  const [rollsLocked, setRollsLocked] = useState(false);
+  const [open, setOpen] = useState(true);
+  const resolveChannelRef = useRef(null);
   const [attackRoll, setAttackRoll] = useState([]);
   const [defenseRoll, setDefenseRoll] = useState([]);
+  const [combatModifiers, setCombatModifiers] = useState({});
+  const modifiersChannelRef = useRef(null);
+
+  useEffect(() => {
+    const channel = new BroadcastChannel("kt-e2e-combat-modifiers");
+    modifiersChannelRef.current = channel;
+    channel.onmessage = (event) => {
+      if (event?.data?.source === role) return;
+      if (event?.data?.type !== "SET_COMBAT_MODIFIERS") return;
+      setCombatModifiers(event.data.modifiers || {});
+    };
+    return () => {
+      channel.close();
+      if (modifiersChannelRef.current === channel) {
+        modifiersChannelRef.current = null;
+      }
+    };
+  }, [role]);
+
+  useEffect(() => {
+    const channel = new BroadcastChannel("kt-e2e-attack-resolution");
+    resolveChannelRef.current = channel;
+    channel.onmessage = (event) => {
+      if (event?.data?.type !== "RESOLVE_COMPLETE") return;
+      setOpen(false);
+    };
+    return () => {
+      channel.close();
+      if (resolveChannelRef.current === channel) {
+        resolveChannelRef.current = null;
+      }
+    };
+  }, []);
 
   const attacker = useMemo(
     () => ({
@@ -2499,7 +2839,7 @@ function E2EAttackResolutionRoute() {
       stats: { move: 6, save: 4, apl: 3, woundsMax: 12 },
       state: {
         woundsCurrent: 12,
-        order: "engage",
+        order: defenderOrder,
         apCurrent: 3,
         selectedWeapon: "E2E Blaster",
         readyState: "READY",
@@ -2517,7 +2857,7 @@ function E2EAttackResolutionRoute() {
       rules: [],
       abilities: [],
     }),
-    [],
+    [defenderOrder],
   );
 
   const weapon = attacker.weapons[0];
@@ -2533,14 +2873,15 @@ function E2EAttackResolutionRoute() {
         {rollsLocked ? "Unlock Rolls" : "Lock Rolls"}
       </button>
       <AttackResolutionScreen
-        open={true}
-        role="attacker"
+        open={open}
+        role={role}
         attacker={attacker}
         defender={defender}
         weapon={weapon}
         combatStage="ATTACK_ROLLING"
         attackRoll={attackRoll}
         defenseRoll={defenseRoll}
+        combatModifiers={combatModifiers}
         rollsLocked={rollsLocked}
         attackLocked={rollsLocked}
         defenseLocked={rollsLocked}
@@ -2550,9 +2891,23 @@ function E2EAttackResolutionRoute() {
         onLockAttack={() => setRollsLocked(true)}
         onSetDefenseRoll={(roll) => setDefenseRoll(Array.isArray(roll) ? roll : [])}
         onLockDefense={() => setRollsLocked(true)}
+        onSetCombatModifiers={(modifiers) => {
+          setCombatModifiers(modifiers || {});
+          modifiersChannelRef.current?.postMessage({
+            type: "SET_COMBAT_MODIFIERS",
+            modifiers: modifiers || {},
+            source: role,
+          });
+        }}
         onApplyDamage={() => {}}
-        onResolveComplete={() => {}}
-        onCancel={() => {}}
+        onResolveComplete={() => {
+          setOpen(false);
+          resolveChannelRef.current?.postMessage({ type: "RESOLVE_COMPLETE" });
+        }}
+        onCancel={() => {
+          setOpen(false);
+          resolveChannelRef.current?.postMessage({ type: "RESOLVE_COMPLETE" });
+        }}
       />
     </div>
   );

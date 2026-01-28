@@ -867,7 +867,8 @@ function reduceGameState(state, action) {
 				nextLocked.attackerWeapon && nextLocked.defenderWeapon
 					? "rollDice"
 					: flow.step;
-			return {
+
+			const nextState = {
 				...state,
 				ui: {
 					...(state.ui || {}),
@@ -878,6 +879,75 @@ function reduceGameState(state, action) {
 					},
 				},
 			};
+
+			if (
+				flow.mode === "shoot" &&
+				nextLocked.attackerWeapon &&
+				nextLocked.defenderWeapon &&
+				!state.combatState?.attackingOperativeId
+			) {
+				const attacker = state.game.find((unit) => unit.id === flow.attackerId);
+				const defender = state.game.find((unit) => unit.id === flow.defenderId);
+				const attackerOwner =
+					attacker?.owner ?? state.firefight?.activePlayerId ?? null;
+				const defenderOwner =
+					defender?.owner ??
+					(attackerOwner === "A" ? "B" : attackerOwner === "B" ? "A" : null);
+				const attackerWeapons = Array.isArray(attacker?.weapons) ? attacker.weapons : [];
+				const preferredWeaponName =
+					flow.attackerWeapon ||
+					attacker?.state?.selectedWeapon ||
+					attackerWeapons[0]?.name ||
+					"";
+				const selectedWeapon =
+					attackerWeapons.find((weapon) => weapon.name === preferredWeaponName) ||
+					attackerWeapons[0] ||
+					null;
+				const primaryTargetId =
+					flow.inputs?.primaryTargetId ?? flow.defenderId ?? null;
+				const secondaryTargetIds = Array.isArray(flow.inputs?.secondaryTargetIds)
+					? flow.inputs.secondaryTargetIds
+					: [];
+				const attackQueue = primaryTargetId
+					? [
+							{
+								targetId: primaryTargetId,
+								isBlastSecondary: false,
+								inheritFromPrimary: false,
+							},
+						]
+					: [];
+
+				return {
+					...nextState,
+					ui: {
+						...(nextState.ui || {}),
+						actionFlow: flow.mode === "shoot" ? null : nextState.ui?.actionFlow,
+					},
+					combatState: {
+						...initialCombatState,
+						attackerId: attackerOwner,
+						defenderId: defenderOwner,
+						attackingOperativeId: attacker?.id ?? flow.attackerId ?? null,
+						defendingOperativeId: primaryTargetId ?? flow.defenderId ?? null,
+						weaponId: selectedWeapon?.name ?? null,
+						weaponProfile: selectedWeapon ?? null,
+						stage: COMBAT_STAGES.ATTACK_RESOLUTION,
+						attackQueue,
+						currentAttackIndex: 0,
+						currentAttackItem: attackQueue[0] ?? null,
+						inputs: {
+							accurateSpent: 0,
+							primaryTargetId,
+							secondaryTargetIds,
+							balancedClick: false,
+							balancedUsed: false,
+						},
+					},
+				};
+			}
+
+			return nextState;
 		}
 
 		case "FLOW_LOCK_DICE": {
