@@ -30,18 +30,18 @@
 }
 
 .wr-chip--player {
+  border-color: rgba(240, 90, 90, 0.5);
+  background: rgba(240, 90, 90, 0.14);
+}
+
+.wr-chip--auto {
   border-color: rgba(80, 200, 120, 0.45);
   background: rgba(80, 200, 120, 0.12);
 }
 
-.wr-chip--auto {
+.wr-chip--semi {
   border-color: rgba(240, 200, 80, 0.45);
   background: rgba(240, 200, 80, 0.12);
-}
-
-.wr-chip--semi {
-  border-color: rgba(240, 90, 90, 0.5);
-  background: rgba(240, 90, 90, 0.14);
 }
 
 .wr-chip:hover {

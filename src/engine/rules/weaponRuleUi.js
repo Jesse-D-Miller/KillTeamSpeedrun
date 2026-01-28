@@ -21,6 +21,7 @@ const ensureUi = (ctx) => {
   ctx.ui.prompts = Array.isArray(ctx.ui.prompts) ? ctx.ui.prompts : [];
   ctx.ui.notes = Array.isArray(ctx.ui.notes) ? ctx.ui.notes : [];
   ctx.ui.appliedRules = ctx.ui.appliedRules || {};
+  ctx.ui.disabledOptions = ctx.ui.disabledOptions || {};
   ctx.log = Array.isArray(ctx.log) ? ctx.log : [];
   ctx.modifiers = ctx.modifiers || {};
   ctx.effects = ctx.effects || { attacker: [], defender: [] };
@@ -355,6 +356,18 @@ export function clickWeaponRule(ctx, rule, payload = {}) {
     });
   }
 
+  if (rule.id === "saturate") {
+    ctx.ui.disabledOptions = ctx.ui.disabledOptions || {};
+    ctx.ui.disabledOptions.retainCover = true;
+    ctx.ui.appliedRules.saturate = true;
+    ctx.modifiers = ctx.modifiers || {};
+    ctx.modifiers.coverDisabledBySaturate = true;
+    ctx.log.push({
+      type: "RULE_SATURATE_APPLIED",
+      detail: { phase },
+    });
+  }
+
   // Minimal state changes for “once per attack” helpers
   if (!payload?.preview) {
     if (rule.id === "balanced") ctx.modifiers.balancedUsed = true;
@@ -394,7 +407,7 @@ export function getClickableWeaponRulesForPhase(ctx, phase) {
       const gate = isRuleClickable(ctx, rule);
       const label = formatWeaponRuleLabel(rule);
       const preview = getWeaponRuleBoiledDown(ctx, rule, phase);
-      const responsibility = getRuleResponsibility(rule?.id);
+      const responsibility = getRuleResponsibility(rule);
       const colorClass =
         responsibility === RESPONSIBILITY.SEMI
           ? "wr-chip--semi"
@@ -447,6 +460,7 @@ export function applyAutoRulesForPhase(ctx, phase) {
     prompts: Array.isArray(ctx.ui?.prompts) ? [...ctx.ui.prompts] : [],
     notes: Array.isArray(ctx.ui?.notes) ? [...ctx.ui.notes] : [],
     appliedRules: { ...(ctx.ui?.appliedRules || {}) },
+    disabledOptions: { ...(ctx.ui?.disabledOptions || {}) },
   };
 
   const next = {
@@ -458,6 +472,25 @@ export function applyAutoRulesForPhase(ctx, phase) {
   let changed = false;
   const rules = Array.isArray(next.weaponRules) ? next.weaponRules : [];
   const hasBrutal = rules.some((rule) => String(rule?.id || "").toLowerCase() === "brutal");
+  const hasSaturate = rules.some(
+    (rule) => String(rule?.id || "").toLowerCase() === "saturate",
+  );
+
+  if (phase === "PRE_ROLL" && hasSaturate) {
+    if (!nextUi.disabledOptions.retainCover) {
+      nextUi.disabledOptions.retainCover = true;
+      changed = true;
+    }
+    if (!nextUi.appliedRules.saturate) {
+      nextUi.appliedRules.saturate = true;
+      changed = true;
+    }
+    if (!next.modifiers) next.modifiers = {};
+    if (!next.modifiers.coverDisabledBySaturate) {
+      next.modifiers.coverDisabledBySaturate = true;
+      changed = true;
+    }
+  }
 
   if (phase === "POST_ROLL" && hasBrutal) {
     const hasNote = nextUi.notes.some(

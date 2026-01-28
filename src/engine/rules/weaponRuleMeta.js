@@ -12,8 +12,8 @@ export const PHASES = Object.freeze({
   POST_ROLL: "POST_ROLL",
 });
 
-export function getRuleResponsibility(ruleId) {
-  const id = String(ruleId || "").toLowerCase();
+export function getRuleResponsibility(ruleOrId) {
+  const id = String(ruleOrId?.id ?? ruleOrId ?? "").toLowerCase();
 
   switch (id) {
     case "stun":

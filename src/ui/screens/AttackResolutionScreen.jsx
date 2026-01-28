@@ -346,6 +346,12 @@ function AttackResolutionScreen({
       : weapon
         ? normalizeWeaponRules(weapon)
         : [];
+    const filteredRules = normalizedRules.filter(
+      (rule) => String(rule?.id || "").toLowerCase() !== "range",
+    );
+    const hasSaturate = normalizedRules.some(
+      (rule) => String(rule?.id || "").toLowerCase() === "saturate",
+    );
     const normalizedAttackDice = Array.isArray(attackRoll)
       ? attackRoll.map((value) => ({ value: Number(value), tags: [] }))
       : [];
@@ -356,7 +362,7 @@ function AttackResolutionScreen({
 
     return {
       phase,
-      weaponRules: normalizedRules,
+      weaponRules: filteredRules,
       attackDice: Array.isArray(e2eOverrides?.attackDice)
         ? e2eOverrides.attackDice
         : normalizedAttackDice,
@@ -369,6 +375,10 @@ function AttackResolutionScreen({
         ...(combatModifiers || {}),
         ...(e2eOverrides?.modifiers || {}),
         coverSelected: preRollFlags.cover,
+        coverDisabledBySaturate:
+          hasSaturate ||
+          Boolean(combatModifiers?.coverDisabledBySaturate) ||
+          Boolean(e2eOverrides?.modifiers?.coverDisabledBySaturate),
       },
       ui: { prompts: [], notes: [], appliedRules: {} },
       effects: { attacker: [], defender: [] },
@@ -403,6 +413,11 @@ function AttackResolutionScreen({
   };
 
   const combatCtx = useMemo(() => mergeCombatCtx(baseCtx, uiState), [baseCtx, uiState]);
+  const coverDisabledBySaturate = Boolean(
+    combatModifiers?.coverDisabledBySaturate ||
+      combatCtx?.ui?.disabledOptions?.retainCover,
+  );
+  const isCoverDisabled = coverDisabledByVantage || coverDisabledBySaturate;
 
   const setCombatCtx = (updater) => {
     setUiState((prevOverlay) => {
@@ -529,7 +544,7 @@ function AttackResolutionScreen({
 
   useEffect(() => {
     if (!open || role !== "defender") return;
-    if (!coverDisabledByVantage) return;
+    if (!isCoverDisabled) return;
     if (typeof combatCtx?.modifiers?.coverWasCheckedBeforeVantage !== "boolean") {
       setCombatCtx((prev) => ({
         ...prev,
@@ -541,12 +556,16 @@ function AttackResolutionScreen({
     }
     if (!preRollFlags.cover) return;
     setPreRollFlags((prev) => ({ ...prev, cover: false }));
-    addLog("Pre-Roll", "Cover cleared by Vantage.");
+    addLog(
+      "Pre-Roll",
+      coverDisabledBySaturate ? "Cover cleared by Saturate." : "Cover cleared by Vantage.",
+    );
   }, [
     open,
     role,
-    coverDisabledByVantage,
+    isCoverDisabled,
     preRollFlags.cover,
+    coverDisabledBySaturate,
     combatCtx?.modifiers?.coverWasCheckedBeforeVantage,
   ]);
 
@@ -566,6 +585,13 @@ function AttackResolutionScreen({
       },
     }));
   }, [open, role, coverDisabledByVantage, combatCtx?.modifiers?.coverWasCheckedBeforeVantage]);
+
+  useEffect(() => {
+    if (!open || role !== "defender") return;
+    if (!coverDisabledBySaturate) return;
+    if (!preRollFlags.cover) return;
+    setPreRollFlags((prev) => ({ ...prev, cover: false }));
+  }, [open, role, coverDisabledBySaturate, preRollFlags.cover]);
 
   if (!open || !attacker || !defender || !weapon || !combatCtx) return null;
 
@@ -753,15 +779,15 @@ function AttackResolutionScreen({
                           <button
                             type="button"
                             className={`wr-chip wr-chip--auto ${
-                              preRollFlags.cover && !coverDisabledByVantage
+                              preRollFlags.cover && !isCoverDisabled
                                 ? "is-applied"
                                 : ""
-                            } ${coverDisabledByVantage ? "is-disabled" : ""}`}
-                            disabled={coverDisabledByVantage}
-                            aria-disabled={coverDisabledByVantage}
+                            } ${isCoverDisabled ? "is-disabled" : ""}`}
+                            disabled={isCoverDisabled}
+                            aria-disabled={isCoverDisabled}
                             data-testid="condition-cover"
                             onClick={() => {
-                              if (coverDisabledByVantage) return;
+                              if (isCoverDisabled) return;
                               setPreRollFlags((prev) => ({
                                 ...prev,
                                 cover: !prev.cover,
@@ -820,7 +846,7 @@ function AttackResolutionScreen({
                         <div className="attack-resolution__vantage">
                           <button
                             type="button"
-                            className={`wr-chip wr-chip--auto ${
+                            className={`wr-chip wr-chip--semi ${
                               isVantageApplied ? "is-applied" : ""
                             }`}
                             aria-disabled="false"

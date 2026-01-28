@@ -144,6 +144,39 @@ test("weapon rules popover closes via close, outside, and escape", async ({ brow
   await context.close();
 });
 
+test("saturate disables defender cover save", async ({ browser }) => {
+  const { context, pageA, pageB } = await openAttackResolutionForBoth(browser, {
+    weaponRules: ["saturate"],
+  });
+
+  const saturateChip = pageA.locator(".wr-chip", { hasText: "Saturate" });
+  await expect(saturateChip).toBeVisible();
+  await saturateChip.click();
+
+  const coverButton = pageB.getByTestId("condition-cover");
+  await expectChipDisabled(coverButton);
+
+  await context.close();
+});
+
+test("saturate auto-disables defender cover save", async ({ browser }) => {
+  const { context, pageB } = await openAttackResolutionForBoth(browser, {
+    weaponRules: ["saturate"],
+  });
+
+  await pageB.waitForFunction(() => {
+    const btn = document.querySelector('[data-testid="condition-cover"]');
+    if (!btn) return false;
+    const ariaDisabled = btn.getAttribute("aria-disabled") === "true";
+    const isDisabled = btn.hasAttribute("disabled") || ariaDisabled || btn.classList.contains("is-disabled");
+    return isDisabled;
+  });
+
+  await expectChipDisabled(pageB.getByTestId("condition-cover"));
+
+  await context.close();
+});
+
 test("weapon rules popover repositions on scroll", async ({ browser }) => {
   const { context, pageA } = await openAttackResolutionForBoth(browser, { weaponRules: ["balanced"] });
 
