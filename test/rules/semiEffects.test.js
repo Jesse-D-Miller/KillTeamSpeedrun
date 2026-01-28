@@ -16,7 +16,11 @@ const makeCtx = (overrides = {}) => ({
 
 describe("semiEffects", () => {
   it("stun click adds stunned effect", () => {
-    const ctx = makeCtx();
+    const ctx = makeCtx({
+      attackDice: [
+        { value: 6, tags: ["retained", "crit"] },
+      ],
+    });
     clickWeaponRule(ctx, { id: "stun" }, {});
     const effect = ctx.effects.defender.find((e) => e.id === "stunned");
     expect(effect).to.exist;
@@ -38,7 +42,7 @@ describe("semiEffects", () => {
     clickWeaponRule(ctx, { id: "shock" }, {});
     const effect = ctx.effects.defender.find((e) => e.id === "shock");
     expect(effect).to.exist;
-    expect(effect.detail).to.deep.equal({ discardPriority: ["normalSuccess", "crit"] });
+    expect(effect.detail).to.deep.equal({ discard: "normal-success-then-crit" });
     expect(ctx.ui.notes.some((n) => n.ruleId === "shock")).to.equal(true);
   });
 

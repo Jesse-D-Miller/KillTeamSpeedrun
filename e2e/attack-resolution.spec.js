@@ -187,7 +187,7 @@ test("weapon rules popover uses deterministic rules list", async ({ browser }) =
 			combatCtxOverrides: { inputs: { attackLockedIn: false } },
 		});
 
-	await expect(pageA.getByTestId("weapon-rules-panel")).toBeVisible();
+	await expect(pageA.getByTestId("weapon-rules-panel").first()).toBeVisible();
 	await expect(pageA.locator(".wr-chip", { hasText: "Lethal 5+" })).toBeVisible();
 	await expect(pageA.locator(".wr-chip", { hasText: "Devastating 3" })).toBeVisible();
 	await expect(pageA.locator(".wr-chip", { hasText: "Balanced" })).toBeVisible();
@@ -277,8 +277,10 @@ test("disabled rule chips do not open popover", async ({ browser }) => {
 
 	const disabledChip = pageA.locator(".wr-chip", { hasText: "Devastating 3" });
 	await expect(disabledChip).toBeDisabled();
-	await disabledChip.click({ trial: true, force: true });
-	await expect(pageA.getByTestId("weapon-rules-popover")).toBeHidden();
+	await disabledChip.click({ force: true });
+	const popover = pageA.getByTestId("weapon-rules-popover");
+	await expect(popover).toBeVisible();
+	await expect(popover).toContainText("Lock in attack first");
 
 	await contextA.close();
 	await contextB.close();

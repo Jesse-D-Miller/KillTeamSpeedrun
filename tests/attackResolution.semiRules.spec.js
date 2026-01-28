@@ -60,7 +60,9 @@ test("piercing crits is disabled without a crit", async ({ page }) => {
   const chip = page.locator(".wr-chip", { hasText: "Piercing Crits 2" });
   await expect(chip).toHaveAttribute("aria-disabled", "true");
   await chip.click({ force: true });
-  await expect(page.getByTestId("weapon-rules-popover")).toBeHidden();
+  const popover = page.getByTestId("weapon-rules-popover");
+  await expect(popover).toBeVisible();
+  await expect(popover).toContainText("Need at least one crit");
 });
 
 test("shock click adds defender pill and note", async ({ page }) => {

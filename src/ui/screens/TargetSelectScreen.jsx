@@ -71,12 +71,6 @@ function TargetSelectScreen() {
     }
   };
 
-  const dispatchCombatEvent = (type, payload = {}) => {
-    if (typeof window !== "undefined" && typeof window.ktDispatchCombatEvent === "function") {
-      window.ktDispatchCombatEvent(type, payload);
-    }
-  };
-
   const handleClose = () => {
     if (mode === "shoot" || mode === "fight") {
       dispatchGameEvent("FLOW_CANCEL");
@@ -92,22 +86,10 @@ function TargetSelectScreen() {
       return;
     }
 
-    const defenderUnit = targets.find((unit) => unit.id === primaryTargetId) || null;
-    const attackerOwner = attacker?.owner ?? slot ?? null;
-    const defenderOwner = defenderUnit?.owner ?? (slot ? (slot === "A" ? "B" : "A") : null);
-
-    dispatchCombatEvent("START_RANGED_ATTACK", {
-      attackerId: attackerOwner,
-      defenderId: defenderOwner,
-      attackingOperativeId: attacker?.id ?? null,
-      defendingOperativeId: primaryTargetId,
-      weaponId: selectedWeapon?.name ?? null,
-      weaponProfile: selectedWeapon ?? null,
-      attackQueue: [],
-      inputs: {
-        primaryTargetId,
-        secondaryTargetIds,
-      },
+    dispatchGameEvent("FLOW_SET_TARGET", {
+      defenderId: primaryTargetId,
+      primaryTargetId,
+      secondaryTargetIds,
     });
 
     navigate(backTarget, { state: backState });

@@ -11,8 +11,8 @@
 // ctx.weaponRules = normalized rules array
 // ctx.modifiers used for "used once" gating (balancedUsed etc.)
 
-import { addEffect, hasEffect } from "./combatCtxEffects";
-import { getRulePhase, getRuleResponsibility, RESPONSIBILITY } from "./weaponRuleMeta";
+import { addEffect, hasEffect } from "./combatCtxEffects.js";
+import { getRulePhase, getRuleResponsibility, RESPONSIBILITY } from "./weaponRuleMeta.js";
 
 const PHASES = ["PRE_ROLL", "ROLL", "POST_ROLL"];
 
@@ -271,9 +271,9 @@ export function clickWeaponRule(ctx, rule, payload = {}) {
         id: "shock",
         sourceRuleId: "shock",
         target: "defender",
-        label: "Shock: discard 1 normal success (or crit if none)",
+        label: "Shock",
         pillColor: "red",
-        detail: { discardPriority: ["normalSuccess", "crit"] },
+        detail: { discard: "normal-success-then-crit" },
       });
     }
 
@@ -300,6 +300,18 @@ export function clickWeaponRule(ctx, rule, payload = {}) {
         pillColor: "red",
         detail: { aplMod: -1 },
         expires: { type: "end_next_activation" },
+      });
+    }
+
+    const hasNote = ctx.ui.notes.some(
+      (note) => note?.ruleId === "stun" && note?.target === "defender",
+    );
+    if (!hasNote) {
+      ctx.ui.notes.push({
+        target: "defender",
+        type: "RULE_NOTE",
+        ruleId: "stun",
+        text: "Stunned: -1 APL until end of next activation.",
       });
     }
 

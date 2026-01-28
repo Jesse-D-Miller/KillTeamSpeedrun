@@ -182,14 +182,11 @@ function AttackResolutionScreen({
   onCancel,
 }) {
   const [phase, setPhase] = useState(PHASES.PRE_ROLL);
-  const [combatCtx, setCombatCtx] = useState(() => ({
-    phase: PHASES.PRE_ROLL,
+  const [uiState, setUiState] = useState(() => ({
     ui: { prompts: [], notes: [], appliedRules: {} },
     effects: { attacker: [], defender: [] },
-    log: [],
     modifiers: {},
-    weaponRules: [],
-    attackDice: [],
+    log: [],
   }));
 
   // Final-entry (attacker only; ignores defender blocks)
@@ -245,8 +242,27 @@ function AttackResolutionScreen({
     setLogs((prev) => [entry, ...prev]); // newest first
   };
 
+  const handleCtxChange = (nextCtx) => {
+    if (!nextCtx) return;
+    setUiState((prev) => ({
+      ...prev,
+      ui: nextCtx.ui || prev.ui,
+      effects: nextCtx.effects || prev.effects,
+      modifiers: nextCtx.modifiers || prev.modifiers,
+      log: nextCtx.log || prev.log,
+    }));
+
+    const last = Array.isArray(nextCtx.log) ? nextCtx.log.at(-1) : null;
+    if (last?.type === "UI_WR_CLICK") {
+      addLog("Rules", `WR click: ${last.detail?.ruleId || "unknown"}`);
+    }
+  };
+
   useEffect(() => {
-    setCombatCtx((prev) => applyConditionNotes(prev, preRollFlags));
+    setUiState((prev) => {
+      const next = applyConditionNotes(prev, preRollFlags);
+      return { ...prev, ui: next.ui };
+    });
   }, [preRollFlags]);
 
   useEffect(() => {
@@ -254,6 +270,12 @@ function AttackResolutionScreen({
 
     setUsedRules({});
     setLogs([]);
+    setUiState({
+      ui: { prompts: [], notes: [], appliedRules: {} },
+      effects: { attacker: [], defender: [] },
+      modifiers: {},
+      log: [],
+    });
 
     setFinalAttackHits(0);
     setFinalAttackCrits(0);
@@ -266,8 +288,8 @@ function AttackResolutionScreen({
     setPhase(PHASES.PRE_ROLL);
   }, [open, role, combatStage, rollsLockedFromState]);
 
-  useEffect(() => {
-    if (!open) return;
+  const baseCtx = useMemo(() => {
+    if (!open) return null;
     const e2eOverrideRules =
       typeof window !== "undefined" && Array.isArray(window.__ktE2E_weaponRules)
         ? window.__ktE2E_weaponRules
@@ -287,25 +309,42 @@ function AttackResolutionScreen({
     const attackCritsFromRoll = Array.isArray(attackRoll)
       ? attackRoll.filter((value) => Number(value) >= 6).length
       : 0;
-    setCombatCtx((prev) => ({
-      ...prev,
+    const attackCrits = Math.max(attackCritsFromRoll, finalAttackCrits);
+
+    return {
       phase,
       weaponRules: normalizedRules,
       attackDice: Array.isArray(e2eOverrides?.attackDice)
         ? e2eOverrides.attackDice
         : normalizedAttackDice,
       inputs: {
-        ...(prev.inputs || {}),
         role,
-        attackCrits: attackCritsFromRoll,
+        attackCrits,
         ...(e2eOverrides?.inputs || {}),
       },
-      modifiers: { ...(prev.modifiers || {}), ...(e2eOverrides?.modifiers || {}) },
-      ui: prev.ui || { prompts: [], notes: [], appliedRules: {} },
-      effects: prev.effects || { attacker: [], defender: [] },
-      log: prev.log || [],
-    }));
-  }, [open, phase, weapon, attackRoll]);
+      modifiers: { ...(e2eOverrides?.modifiers || {}) },
+      ui: { prompts: [], notes: [], appliedRules: {} },
+      effects: { attacker: [], defender: [] },
+      log: [],
+    };
+  }, [open, phase, weapon, attackRoll, role, finalAttackCrits]);
+
+  const combatCtx = useMemo(() => {
+    if (!baseCtx) return null;
+    return {
+      ...baseCtx,
+      modifiers: { ...baseCtx.modifiers, ...uiState.modifiers },
+      ui: {
+        ...(baseCtx.ui || {}),
+        ...(uiState.ui || {}),
+        prompts: Array.isArray(uiState.ui?.prompts) ? uiState.ui.prompts : [],
+        notes: Array.isArray(uiState.ui?.notes) ? uiState.ui.notes : [],
+        appliedRules: { ...(uiState.ui?.appliedRules || {}) },
+      },
+      effects: uiState.effects || baseCtx.effects,
+      log: Array.isArray(uiState.log) ? uiState.log : baseCtx.log,
+    };
+  }, [baseCtx, uiState]);
 
   useEffect(() => {
     if (!open) return;
@@ -319,22 +358,6 @@ function AttackResolutionScreen({
       setPhase(PHASES.POST_ROLL);
     }
   }, [open, rollsLocked]);
-
-  // Weapon rules buckets
-  const rules = useMemo(() => {
-    if (!weapon) return [];
-    return normalizeWeaponRules(weapon).map((rule) => {
-      const timing = ["accurate"].includes(rule.id) ? "PRE_ROLL" : "POST_ROLL";
-      return { ...rule, timing };
-    });
-  }, [weapon]);
-
-  const preRollActions = rules.filter((r) => r.timing === "PRE_ROLL");
-  const postRollActions = rules.filter((r) => {
-    if (r.timing !== "POST_ROLL") return false;
-    const id = String(r.id || "").toLowerCase();
-    return id !== "range" && !id.startsWith("range");
-  });
 
   // Firefight ploys dataset selection
   const firefightPloys = useMemo(() => {
@@ -399,7 +422,7 @@ function AttackResolutionScreen({
     setPhase(PHASES.RESOLVED);
   };
 
-  if (!open || !attacker || !defender || !weapon) return null;
+  if (!open || !attacker || !defender || !weapon || !combatCtx) return null;
 
   const defenderSuccessLabel = isFight ? "HIT" : "SAVE";
   const defenderCritLabel = isFight ? "CRIT" : "CRIT SAVE";
@@ -446,7 +469,7 @@ function AttackResolutionScreen({
                       if (attacker?.id && dmg > 0) {
                         onApplyDamage?.(attacker.id, dmg);
                       }
-                      setCombatCtx((prev) => ({
+                      setUiState((prev) => ({
                         ...prev,
                         effects: {
                           attacker: (prev.effects?.attacker || []).filter(
@@ -717,7 +740,7 @@ function AttackResolutionScreen({
                       <WeaponRulesPanel
                         ctx={combatCtx}
                         phase={PHASES.PRE_ROLL}
-                        onCtxChange={setCombatCtx}
+                        onCtxChange={handleCtxChange}
                         testId={undefined}
                       />
                     </>
@@ -767,7 +790,7 @@ function AttackResolutionScreen({
                     <WeaponRulesPanel
                       ctx={combatCtx}
                       phase={PHASES.ROLL}
-                      onCtxChange={setCombatCtx}
+                      onCtxChange={handleCtxChange}
                       testId="weapon-rules-panel"
                     />
                   </div>
@@ -784,7 +807,7 @@ function AttackResolutionScreen({
                     <WeaponRulesPanel
                       ctx={combatCtx}
                       phase={PHASES.POST_ROLL}
-                      onCtxChange={setCombatCtx}
+                      onCtxChange={handleCtxChange}
                       testId={undefined}
                     />
                     <button

@@ -103,7 +103,7 @@ export default function WeaponRulesPanel({ ctx, phase, onCtxChange, testId }) {
   };
 
   return (
-    <div className="wr-panel" data-testid={testId}>
+    <div className="wr-panel" data-testid={testId || "weapon-rules-panel"}>
       <div className="wr-title">
         Weapon Rules — {phase.replace("_", " ").toLowerCase()}
       </div>
@@ -120,8 +120,16 @@ export default function WeaponRulesPanel({ ctx, phase, onCtxChange, testId }) {
             aria-disabled={!it.enabled}
             data-testid={`rule-chip-${it.id}-${phase.toLowerCase()}`}
             onClick={() => {
-              if (!it.enabled) return;
-              it.onClick({ preview: it.responsibility !== "SEMI" });
+              if (it.enabled) {
+                it.onClick({ preview: it.responsibility !== "SEMI" });
+              }
+
+              if (Array.isArray(ctx.log)) {
+                ctx.log.push({
+                  type: "UI_WR_CLICK",
+                  detail: { ruleId: it.id, phase },
+                });
+              }
 
               onCtxChange?.({
                 ...ctx,
