@@ -1286,6 +1286,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
       weaponRules: normalizeWeaponRules(selectedWeapon),
       inputs: blastInputs,
       modifiers: {},
+      ui: { prompts: [], notes: [], appliedRules: {} },
+      effects: { attacker: [], defender: [] },
       log: [],
     };
     runWeaponRuleHook(ctx, "ON_DECLARE_ATTACK");
@@ -1350,6 +1352,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
       targetId: queue[currentIndex]?.targetId,
       modifiers: { ...(combatState?.modifiers || {}) },
       inputs: { ...(combatState?.inputs || {}) },
+      ui: { prompts: [], notes: [], appliedRules: {} },
+      effects: { attacker: [], defender: [] },
       log: [],
     };
 
@@ -2449,6 +2453,107 @@ function TargetSelectRoute() {
   );
 }
 
+function E2EAttackResolutionRoute() {
+  const [rollsLocked, setRollsLocked] = useState(true);
+  const [attackRoll, setAttackRoll] = useState([]);
+  const [defenseRoll, setDefenseRoll] = useState([]);
+
+  const attacker = useMemo(
+    () => ({
+      id: "e2e-attacker",
+      name: "E2E Attacker",
+      owner: "A",
+      stats: { move: 6, save: 4, apl: 3, woundsMax: 12 },
+      state: {
+        woundsCurrent: 12,
+        order: "engage",
+        apCurrent: 3,
+        selectedWeapon: "E2E Blaster",
+        readyState: "READY",
+      },
+      weapons: [
+        {
+          name: "E2E Blaster",
+          mode: "ranged",
+          hit: 4,
+          atk: 4,
+          dmg: "3/4",
+          wr: [],
+        },
+      ],
+      rules: [],
+      abilities: [],
+    }),
+    [],
+  );
+
+  const defender = useMemo(
+    () => ({
+      id: "e2e-defender",
+      name: "E2E Defender",
+      owner: "B",
+      stats: { move: 6, save: 4, apl: 3, woundsMax: 12 },
+      state: {
+        woundsCurrent: 12,
+        order: "engage",
+        apCurrent: 3,
+        selectedWeapon: "E2E Blaster",
+        readyState: "READY",
+      },
+      weapons: [
+        {
+          name: "E2E Blaster",
+          mode: "ranged",
+          hit: 4,
+          atk: 4,
+          dmg: "3/4",
+          wr: [],
+        },
+      ],
+      rules: [],
+      abilities: [],
+    }),
+    [],
+  );
+
+  const weapon = attacker.weapons[0];
+
+  return (
+    <div style={{ padding: 16 }}>
+      <button
+        type="button"
+        className="btn btn--ghost"
+        data-testid="e2e-lock-rolls"
+        onClick={() => setRollsLocked((prev) => !prev)}
+      >
+        {rollsLocked ? "Unlock Rolls" : "Lock Rolls"}
+      </button>
+      <AttackResolutionScreen
+        open={true}
+        role="attacker"
+        attacker={attacker}
+        defender={defender}
+        weapon={weapon}
+        combatStage="ATTACK_ROLLING"
+        attackRoll={attackRoll}
+        defenseRoll={defenseRoll}
+        rollsLocked={rollsLocked}
+        attackLocked={rollsLocked}
+        defenseLocked={rollsLocked}
+        attackDiceCount={4}
+        defenseDiceCount={3}
+        onSetAttackRoll={(roll) => setAttackRoll(Array.isArray(roll) ? roll : [])}
+        onLockAttack={() => setRollsLocked(true)}
+        onSetDefenseRoll={(roll) => setDefenseRoll(Array.isArray(roll) ? roll : [])}
+        onLockDefense={() => setRollsLocked(true)}
+        onApplyDamage={() => {}}
+        onResolveComplete={() => {}}
+        onCancel={() => {}}
+      />
+    </div>
+  );
+}
+
 function App() {
   useEffect(() => {
     const existingId = localStorage.getItem("kt_playerId");
@@ -2470,6 +2575,7 @@ function App() {
       <Route path="/:username/army" element={<ArmyOverlayRoute />} />
       <Route path="/:username/army/unit/:unitId" element={<UnitActionRoute />} />
       <Route path="/:username/target-select" element={<TargetSelectRoute />} />
+      <Route path="/e2e/attack-resolution" element={<E2EAttackResolutionRoute />} />
       <Route path="*" element={<Navigate to="/multiplayer" replace />} />
     </Routes>
   );

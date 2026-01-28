@@ -25,8 +25,10 @@ export const makeCtx = (overrides = {}) => {
       suggestedInputs: {},
       disabledOptions: {},
       notes: [],
+      appliedRules: {},
       availableRules: {},
     },
+    effects: { attacker: [], defender: [] },
     log: [],
   };
 
@@ -45,8 +47,10 @@ export const makeCtx = (overrides = {}) => {
       notes: [...(overrides.ui?.notes || [])],
       suggestedInputs: { ...(overrides.ui?.suggestedInputs || {}) },
       disabledOptions: { ...(overrides.ui?.disabledOptions || {}) },
+      appliedRules: { ...(overrides.ui?.appliedRules || {}) },
       availableRules: { ...(overrides.ui?.availableRules || {}) },
     },
+    effects: overrides.effects || { attacker: [], defender: [] },
     modifiers: { ...(overrides.modifiers || {}) },
     inputs: { ...(overrides.inputs || {}) },
     log: [...(overrides.log || [])],

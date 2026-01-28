@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import "./WeaponRulesPanel.css";
-import { getClickableWeaponRulesForPhase } from "../../engine/rules/weaponRuleUi";
+import { applyAutoRulesForPhase, getClickableWeaponRulesForPhase } from "../../engine/rules/weaponRuleUi";
 
 function useOutsideClick(ref, onOutside) {
   useEffect(() => {
@@ -70,6 +70,14 @@ export default function WeaponRulesPanel({ ctx, phase, onCtxChange, testId }) {
     };
   }, [popover?.ruleId]);
 
+  useEffect(() => {
+    if (!onCtxChange) return;
+    const result = applyAutoRulesForPhase(ctx, phase);
+    if (result.changed) {
+      onCtxChange(result.ctx);
+    }
+  }, [ctx, phase, onCtxChange]);
+
   if (!items.length) return null;
 
   const openPopoverFor = (ruleId, title, text) => {
@@ -106,11 +114,14 @@ export default function WeaponRulesPanel({ ctx, phase, onCtxChange, testId }) {
             key={`${phase}-${it.id}-${it.label}`}
             data-wr-anchor={it.id}
             type="button"
-            className={`wr-chip ${it.enabled ? "" : "is-disabled"}`}
+            className={`wr-chip ${it.colorClass || ""} ${
+              it.applied ? "is-applied" : ""
+            } ${it.enabled ? "" : "is-disabled"}`}
             aria-disabled={!it.enabled}
+            data-testid={`rule-chip-${it.id}-${phase.toLowerCase()}`}
             onClick={() => {
               if (!it.enabled) return;
-              it.onClick({ preview: true });
+              it.onClick({ preview: it.responsibility !== "SEMI" });
 
               onCtxChange?.({
                 ...ctx,
@@ -126,6 +137,16 @@ export default function WeaponRulesPanel({ ctx, phase, onCtxChange, testId }) {
           >
             <div className="wr-chip-label">{it.label}</div>
             <div className="wr-chip-preview">{it.preview}</div>
+            <div className="wr-chip-badges">
+              {it.applied && it.responsibility === "AUTO" ? (
+                <span className="wr-chip-badge wr-chip-badge--applied">Applied</span>
+              ) : null}
+              {it.responsibility === "SEMI" ? (
+                <span className="wr-chip-badge wr-chip-badge--effect">
+                  Effect{it.pillPreview ? `: ${it.pillPreview}` : ""}
+                </span>
+              ) : null}
+            </div>
             {!it.enabled && it.disabledReason ? (
               <div className="wr-chip-reason">{it.disabledReason}</div>
             ) : null}

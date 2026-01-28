@@ -31,6 +31,8 @@ const createAttackContext = ({
   defenseDice: normalizeDice(defenseDice),
   hits: { normal: 0, crit: 0 },
   saves: { normal: 0, crit: 0 },
+  ui: { prompts: [], notes: [], appliedRules: {} },
+  effects: { attacker: [], defender: [] },
   damage: { normal: 0, crit: 0, total: 0 },
   modifiers: {
     reroll: { attack: 0, defense: 0 },
@@ -41,6 +43,7 @@ const createAttackContext = ({
   allocation: null,
   remaining: { hits: 0, crits: 0 },
   log: [],
+  inputs: {},
 });
 
 export function resolveAttack(input) {

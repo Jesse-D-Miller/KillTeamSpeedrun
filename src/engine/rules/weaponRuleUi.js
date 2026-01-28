@@ -11,14 +11,19 @@
 // ctx.weaponRules = normalized rules array
 // ctx.modifiers used for "used once" gating (balancedUsed etc.)
 
+import { addEffect, hasEffect } from "./combatCtxEffects";
+import { getRulePhase, getRuleResponsibility, RESPONSIBILITY } from "./weaponRuleMeta";
+
 const PHASES = ["PRE_ROLL", "ROLL", "POST_ROLL"];
 
 const ensureUi = (ctx) => {
   ctx.ui = ctx.ui || {};
   ctx.ui.prompts = Array.isArray(ctx.ui.prompts) ? ctx.ui.prompts : [];
   ctx.ui.notes = Array.isArray(ctx.ui.notes) ? ctx.ui.notes : [];
+  ctx.ui.appliedRules = ctx.ui.appliedRules || {};
   ctx.log = Array.isArray(ctx.log) ? ctx.log : [];
   ctx.modifiers = ctx.modifiers || {};
+  ctx.effects = ctx.effects || { attacker: [], defender: [] };
   return ctx;
 };
 
@@ -146,46 +151,26 @@ export function getWeaponRuleBoiledDown(ctx, rule, phase = ctx?.phase) {
   }
 }
 
+function getRulePillPreview(rule) {
+  const id = String(rule?.id || "").toLowerCase();
+  switch (id) {
+    case "stun":
+      return "Stunned";
+    case "hot":
+      return "Hot";
+    case "shock":
+      return "Shock";
+    case "piercing-crits":
+      return "Piercing Crits";
+    default:
+      return null;
+  }
+}
+
 /**
  * Gating: should it be shown in this phase, and is it clickable right now?
  * You can tighten/adjust this to match your exact flow.
  */
-function getRulePhase(rule) {
-  // Default phase assignments (you can tune these later)
-  switch (rule.id) {
-    case "accurate":
-    case "blast":
-    case "torrent":
-    case "range":
-    case "seek":
-    case "heavy":
-    case "limited":
-    case "piercing":
-    case "saturate":
-    case "silent":
-      return "PRE_ROLL";
-
-    case "balanced":
-    case "ceaseless":
-    case "relentless":
-    case "lethal":
-      return "ROLL";
-
-    case "devastating":
-    case "brutal":
-    case "piercing-crits":
-    case "punishing":
-    case "rending":
-    case "severe":
-    case "stun":
-    case "hot":
-    case "shock":
-      return "POST_ROLL";
-
-    default:
-      return "ROLL";
-  }
-}
 
 function isRuleClickable(ctx, rule) {
   const id = rule.id;
@@ -194,7 +179,10 @@ function isRuleClickable(ctx, rule) {
   if (id === "balanced" && ctx?.modifiers?.balancedUsed) return { ok: false, reason: "Already used." };
   if (id === "devastating" && !ctx?.inputs?.attackLockedIn) return { ok: false, reason: "Lock in attack first." };
 
-  if (id === "piercing-crits" && !hasRetainedCrit(ctx)) return { ok: false, reason: "No retained crits." };
+  if (id === "piercing-crits" && ctx?.inputs?.role && ctx.inputs.role !== "attacker")
+    return { ok: false, reason: "Attacker only." };
+  if (id === "piercing-crits" && Number(ctx?.inputs?.attackCrits ?? 0) <= 0)
+    return { ok: false, reason: "Need at least one crit." };
   if (id === "rending" && !(hasRetainedCrit(ctx) && hasRetainedHit(ctx)))
     return { ok: false, reason: "Need a retained crit + retained hit." };
   if (id === "punishing" && !(hasRetainedCrit(ctx) && hasMiss(ctx)))
@@ -220,7 +208,7 @@ function isRuleClickable(ctx, rule) {
 export function clickWeaponRule(ctx, rule, payload = {}) {
   ensureUi(ctx);
 
-  const phase = ctx.phase || getRulePhase(rule);
+  const phase = ctx.phase || getRulePhase(rule?.id);
   const gate = isRuleClickable(ctx, rule);
   if (!gate.ok) {
     ctx.ui.prompts.push({
@@ -248,6 +236,108 @@ export function clickWeaponRule(ctx, rule, payload = {}) {
     text,
     payload,
   });
+
+  if (rule.id === "piercing-crits") {
+    const x = Number(rule.value || 0);
+    if (x > 0 && !hasEffect(ctx, "defender", "piercing-crits")) {
+      addEffect(ctx, {
+        id: "piercing-crits",
+        sourceRuleId: "piercing-crits",
+        target: "defender",
+        label: `Piercing Crits -${x} dice`,
+        pillColor: "red",
+        detail: { reduceDefenseDiceBy: x },
+      });
+    }
+
+    const hasNote = ctx.ui.notes.some(
+      (note) => note?.ruleId === "piercing-crits" && note?.target === "defender",
+    );
+    if (!hasNote) {
+      ctx.ui.notes.push({
+        target: "defender",
+        type: "RULE_NOTE",
+        ruleId: "piercing-crits",
+        text: `Piercing Crits: roll ${x} fewer defence dice.`,
+      });
+    }
+
+    ctx.ui.appliedRules["piercing-crits"] = true;
+  }
+
+  if (rule.id === "shock") {
+    if (!hasEffect(ctx, "defender", "shock")) {
+      addEffect(ctx, {
+        id: "shock",
+        sourceRuleId: "shock",
+        target: "defender",
+        label: "Shock: discard 1 normal success (or crit if none)",
+        pillColor: "red",
+        detail: { discardPriority: ["normalSuccess", "crit"] },
+      });
+    }
+
+    const hasNote = ctx.ui.notes.some(
+      (note) => note?.ruleId === "shock" && note?.target === "defender",
+    );
+    if (!hasNote) {
+      ctx.ui.notes.push({
+        target: "defender",
+        type: "RULE_NOTE",
+        ruleId: "shock",
+        text: "Shock: In post-roll, discard 1 normal success; if none, discard 1 crit.",
+      });
+    }
+  }
+
+  if (rule.id === "stun") {
+    if (!hasEffect(ctx, "defender", "stunned")) {
+      addEffect(ctx, {
+        id: "stunned",
+        sourceRuleId: "stun",
+        target: "defender",
+        label: "Stunned (-1 APL)",
+        pillColor: "red",
+        detail: { aplMod: -1 },
+        expires: { type: "end_next_activation" },
+      });
+    }
+
+    ctx.ui.appliedRules.stun = true;
+
+    ctx.log.push({
+      type: "EFFECT_APPLIED",
+      detail: {
+        effectId: "stunned",
+        sourceRuleId: "stun",
+        target: "defender",
+      },
+    });
+  }
+
+  if (rule.id === "hot") {
+    if (!hasEffect(ctx, "attacker", "hot")) {
+      addEffect(ctx, {
+        id: "hot",
+        sourceRuleId: "hot",
+        target: "attacker",
+        label: "Hot (pending)",
+        pillColor: "red",
+        detail: { pending: true },
+      });
+    }
+
+    ctx.ui.appliedRules.hot = true;
+
+    ctx.log.push({
+      type: "EFFECT_APPLIED",
+      detail: {
+        effectId: "hot",
+        sourceRuleId: "hot",
+        target: "attacker",
+      },
+    });
+  }
 
   // Minimal state changes for “once per attack” helpers
   if (!payload?.preview) {
@@ -282,12 +372,23 @@ export function getClickableWeaponRulesForPhase(ctx, phase) {
   const rules = Array.isArray(ctx.weaponRules) ? ctx.weaponRules : [];
   const items = rules
     .map((rule) => {
-      const rulePhase = getRulePhase(rule);
+      const rulePhase = getRulePhase(rule?.id);
       if (rulePhase !== phase) return null;
 
       const gate = isRuleClickable(ctx, rule);
       const label = formatWeaponRuleLabel(rule);
       const preview = getWeaponRuleBoiledDown(ctx, rule, phase);
+      const responsibility = getRuleResponsibility(rule?.id);
+      const colorClass =
+        responsibility === RESPONSIBILITY.SEMI
+          ? "wr-chip--semi"
+          : responsibility === RESPONSIBILITY.AUTO
+            ? "wr-chip--auto"
+            : "wr-chip--player";
+      const applied = Boolean(ctx?.ui?.appliedRules?.[rule?.id]);
+      const pillPreview = responsibility === RESPONSIBILITY.SEMI
+        ? getRulePillPreview(rule)
+        : null;
 
       return {
         id: rule.id,
@@ -296,6 +397,10 @@ export function getClickableWeaponRulesForPhase(ctx, phase) {
         enabled: gate.ok,
         disabledReason: gate.ok ? null : gate.reason,
         preview,
+        responsibility,
+        colorClass,
+        applied,
+        pillPreview,
         // UI calls this
         onClick: (payload = {}) => clickWeaponRule(ctx, rule, payload),
       };
@@ -310,4 +415,47 @@ export function getAllClickableWeaponRules(ctx) {
     acc[phase] = getClickableWeaponRulesForPhase(ctx, phase);
     return acc;
   }, {});
+}
+
+export function applyAutoRulesForPhase(ctx, phase) {
+  if (!ctx) return { ctx, changed: false };
+
+  const nextUi = {
+    ...(ctx.ui || {}),
+    prompts: Array.isArray(ctx.ui?.prompts) ? [...ctx.ui.prompts] : [],
+    notes: Array.isArray(ctx.ui?.notes) ? [...ctx.ui.notes] : [],
+    appliedRules: { ...(ctx.ui?.appliedRules || {}) },
+  };
+
+  const next = {
+    ...ctx,
+    ui: nextUi,
+    effects: ctx.effects || { attacker: [], defender: [] },
+  };
+
+  let changed = false;
+  const rules = Array.isArray(next.weaponRules) ? next.weaponRules : [];
+  const hasBrutal = rules.some((rule) => String(rule?.id || "").toLowerCase() === "brutal");
+
+  if (phase === "POST_ROLL" && hasBrutal) {
+    const hasNote = nextUi.notes.some(
+      (note) => note?.ruleId === "brutal" && note?.target === "defender",
+    );
+    if (!hasNote) {
+      nextUi.notes.push({
+        target: "defender",
+        type: "RULE_NOTE",
+        ruleId: "brutal",
+        text: "Brutal: you can only block with crits.",
+      });
+      changed = true;
+    }
+
+    if (!nextUi.appliedRules.brutal) {
+      nextUi.appliedRules.brutal = true;
+      changed = true;
+    }
+  }
+
+  return { ctx: next, changed };
 }

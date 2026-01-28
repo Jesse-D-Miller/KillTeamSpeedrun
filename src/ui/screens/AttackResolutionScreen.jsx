@@ -5,6 +5,8 @@ import UnitCard from "../components/UnitCard";
 import WeaponRulesPanel from "../components/WeaponRulesPanel";
 import { normalizeWeaponRules } from "../../engine/rules/weaponRules";
 import { allocateDefense } from "../../engine/rules/resolveDice";
+import { applyConditionNotes } from "../../engine/rules/combatConditions";
+import { shouldOpenHotModal } from "../../engine/rules/hotResolution";
 
 // Load all faction firefight ploys (eager so it works in UI immediately)
 const firefightPloyModules = import.meta.glob(
@@ -182,7 +184,8 @@ function AttackResolutionScreen({
   const [phase, setPhase] = useState(PHASES.PRE_ROLL);
   const [combatCtx, setCombatCtx] = useState(() => ({
     phase: PHASES.PRE_ROLL,
-    ui: { prompts: [], notes: [] },
+    ui: { prompts: [], notes: [], appliedRules: {} },
+    effects: { attacker: [], defender: [] },
     log: [],
     modifiers: {},
     weaponRules: [],
@@ -204,6 +207,9 @@ function AttackResolutionScreen({
 
   const [logs, setLogs] = useState([]);
   const logIdRef = useRef(0);
+
+  const [hotModalOpen, setHotModalOpen] = useState(false);
+  const [hotDamageDraft, setHotDamageDraft] = useState("0");
 
   const isFight =
     weapon?.mode === "melee" ||
@@ -240,6 +246,10 @@ function AttackResolutionScreen({
   };
 
   useEffect(() => {
+    setCombatCtx((prev) => applyConditionNotes(prev, preRollFlags));
+  }, [preRollFlags]);
+
+  useEffect(() => {
     if (!open) return;
 
     setUsedRules({});
@@ -274,6 +284,9 @@ function AttackResolutionScreen({
     const normalizedAttackDice = Array.isArray(attackRoll)
       ? attackRoll.map((value) => ({ value: Number(value), tags: [] }))
       : [];
+    const attackCritsFromRoll = Array.isArray(attackRoll)
+      ? attackRoll.filter((value) => Number(value) >= 6).length
+      : 0;
     setCombatCtx((prev) => ({
       ...prev,
       phase,
@@ -281,9 +294,15 @@ function AttackResolutionScreen({
       attackDice: Array.isArray(e2eOverrides?.attackDice)
         ? e2eOverrides.attackDice
         : normalizedAttackDice,
-      inputs: { ...(prev.inputs || {}), ...(e2eOverrides?.inputs || {}) },
+      inputs: {
+        ...(prev.inputs || {}),
+        role,
+        attackCrits: attackCritsFromRoll,
+        ...(e2eOverrides?.inputs || {}),
+      },
       modifiers: { ...(prev.modifiers || {}), ...(e2eOverrides?.modifiers || {}) },
-      ui: prev.ui || { prompts: [], notes: [] },
+      ui: prev.ui || { prompts: [], notes: [], appliedRules: {} },
+      effects: prev.effects || { attacker: [], defender: [] },
       log: prev.log || [],
     }));
   }, [open, phase, weapon, attackRoll]);
@@ -367,6 +386,15 @@ function AttackResolutionScreen({
       onApplyDamage?.(defender.id, finalPreview.totalDamage);
     }
 
+    const hotPending = shouldOpenHotModal(combatCtx);
+
+    if (hotPending) {
+      setHotDamageDraft("0");
+      setHotModalOpen(true);
+      setPhase(PHASES.RESOLVED);
+      return;
+    }
+
     onResolveComplete?.();
     setPhase(PHASES.RESOLVED);
   };
@@ -393,6 +421,58 @@ function AttackResolutionScreen({
         </button>
 
         <div className="attack-resolution">
+          {hotModalOpen && (
+            <div className="attack-resolution__hot-modal" role="dialog" aria-label="Hot Damage">
+              <div className="attack-resolution__hot-panel">
+                <div className="attack-resolution__hot-title">Resolve Hot</div>
+                <div className="attack-resolution__hot-text">
+                  Enter the self-inflicted Hot damage to apply.
+                </div>
+                <input
+                  className="attack-resolution__hot-input"
+                  type="number"
+                  min="0"
+                  value={hotDamageDraft}
+                  onChange={(event) => setHotDamageDraft(event.target.value)}
+                  data-testid="hot-damage-input"
+                />
+                <div className="attack-resolution__hot-actions">
+                  <button
+                    type="button"
+                    className="kt-modal__btn"
+                    data-testid="hot-damage-confirm"
+                    onClick={() => {
+                      const dmg = clampInt(hotDamageDraft, 0, 99);
+                      if (attacker?.id && dmg > 0) {
+                        onApplyDamage?.(attacker.id, dmg);
+                      }
+                      setCombatCtx((prev) => ({
+                        ...prev,
+                        effects: {
+                          attacker: (prev.effects?.attacker || []).filter(
+                            (effect) => effect?.id !== "hot",
+                          ),
+                          defender: prev.effects?.defender || [],
+                        },
+                        log: [
+                          ...(prev.log || []),
+                          {
+                            type: "HOT_RESOLVED",
+                            detail: { damage: dmg, attackerId: attacker?.id || null },
+                          },
+                        ],
+                      }));
+                      addLog("Hot", `Hot resolved for ${dmg} damage.`);
+                      setHotModalOpen(false);
+                      onResolveComplete?.();
+                    }}
+                  >
+                    Apply Hot Damage
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           {/* LEFT: Battle Log */}
           <aside className="attack-resolution__log">
             <div className="attack-resolution__log-title">Battle Log</div>
@@ -415,32 +495,93 @@ function AttackResolutionScreen({
           <section className="attack-resolution__main">
             {/* Header cards */}
             <div className="attack-resolution__header">
-              <UnitCard
-                unit={attacker}
-                dispatch={() => {}}
-                canChooseOrder={false}
-                onChooseOrder={() => {}}
-                className="attack-resolution__unit-card"
-                weaponMode={weapon?.mode ?? null}
-                selectedWeaponNameOverride={weapon?.name ?? null}
-                autoSelectFirstWeapon={false}
-                collapsibleSections={true}
-                showWoundsText={false}
-                showInjuredInHeader={true}
-              />
-              <UnitCard
-                unit={defender}
-                dispatch={() => {}}
-                canChooseOrder={false}
-                onChooseOrder={() => {}}
-                className="attack-resolution__unit-card"
-                weaponMode={weapon?.mode ?? null}
-                selectedWeaponNameOverride={weapon?.name ?? null}
-                autoSelectFirstWeapon={false}
-                collapsibleSections={true}
-                showWoundsText={false}
-                showInjuredInHeader={true}
-              />
+              <div className="attack-resolution__unit-col">
+                <UnitCard
+                  unit={attacker}
+                  dispatch={() => {}}
+                  canChooseOrder={false}
+                  onChooseOrder={() => {}}
+                  className="attack-resolution__unit-card"
+                  weaponMode={weapon?.mode ?? null}
+                  selectedWeaponNameOverride={weapon?.name ?? null}
+                  autoSelectFirstWeapon={false}
+                  collapsibleSections={true}
+                  showWoundsText={false}
+                  showInjuredInHeader={true}
+                />
+                {combatCtx.effects?.attacker?.length ? (
+                  <div className="attack-resolution__effects-row">
+                    {combatCtx.effects.attacker.map((effect) => (
+                      <span
+                        key={`${effect.id}-${effect.label}`}
+                        className={`pill pill--${effect.pillColor || "red"}`}
+                        data-testid={`effect-pill-${effect.id}-attacker`}
+                      >
+                        {String(effect.label || effect.id || "").toUpperCase()}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <div className="attack-resolution__unit-col">
+                <UnitCard
+                  unit={defender}
+                  dispatch={() => {}}
+                  canChooseOrder={false}
+                  onChooseOrder={() => {}}
+                  className="attack-resolution__unit-card"
+                  weaponMode={weapon?.mode ?? null}
+                  selectedWeaponNameOverride={weapon?.name ?? null}
+                  autoSelectFirstWeapon={false}
+                  collapsibleSections={true}
+                  showWoundsText={false}
+                  showInjuredInHeader={true}
+                />
+                {combatCtx.effects?.defender?.length ? (
+                  <div className="attack-resolution__effects-row">
+                    {combatCtx.effects.defender.map((effect) => (
+                      <span
+                        key={`${effect.id}-${effect.label}`}
+                        className={`pill pill--${effect.pillColor || "red"}`}
+                        data-testid={`effect-pill-${effect.id}-defender`}
+                      >
+                        {String(effect.label || effect.id || "").toUpperCase()}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="attack-resolution__notes">
+              <div className="attack-resolution__notes-col" data-testid="notes-attacker">
+                <div className="attack-resolution__notes-title">Attacker Notes</div>
+                {(combatCtx.ui?.notes || [])
+                  .filter((note) => note?.target === "attacker")
+                  .map((note, index) => (
+                    <div
+                      key={`${note.ruleId}-${index}`}
+                      className="attack-resolution__note"
+                      data-testid={`rule-note-${note.ruleId}-attacker`}
+                    >
+                      {note.text}
+                    </div>
+                  ))}
+              </div>
+              <div className="attack-resolution__notes-col" data-testid="notes-defender">
+                <div className="attack-resolution__notes-title">Defender Notes</div>
+                {(combatCtx.ui?.notes || [])
+                  .filter((note) => note?.target === "defender")
+                  .map((note, index) => (
+                    <div
+                      key={`${note.ruleId}-${index}`}
+                      className="attack-resolution__note"
+                      data-testid={`rule-note-${note.ruleId}-defender`}
+                    >
+                      {note.text}
+                    </div>
+                  ))}
+              </div>
             </div>
 
             {/* Summary */}
@@ -528,12 +669,58 @@ function AttackResolutionScreen({
                       No pre-roll rules for defender yet.
                     </div>
                   ) : (
-                    <WeaponRulesPanel
-                      ctx={combatCtx}
-                      phase={PHASES.PRE_ROLL}
-                      onCtxChange={setCombatCtx}
-                      testId={undefined}
-                    />
+                    <>
+                      <div className="wr-panel attack-resolution__conditions">
+                        <div className="wr-title">Combat Conditions</div>
+                        <div className="wr-grid">
+                          {[
+                            {
+                              id: "cover",
+                              label: "Cover Save",
+                              checked: preRollFlags.cover,
+                              description: "Defender can retain 1 success from cover.",
+                            },
+                            {
+                              id: "obscured",
+                              label: "Obscured",
+                              checked: preRollFlags.obscured,
+                              description: "Obscured affects hit retention.",
+                            },
+                            {
+                              id: "vantage",
+                              label: "Vantage",
+                              checked: preRollFlags.vantage,
+                              description: "Vantage may deny cover retains.",
+                            },
+                          ].map((item) => (
+                            <div
+                              key={item.id}
+                              className={`wr-chip wr-chip--auto ${
+                                item.checked ? "is-applied" : "is-disabled"
+                              }`}
+                              aria-disabled={!item.checked}
+                              data-testid={`condition-chip-${item.id}`}
+                            >
+                              <div className="wr-chip-label">{item.label}</div>
+                              <div className="wr-chip-preview">{item.description}</div>
+                              <div className="wr-chip-badges">
+                                {item.checked ? (
+                                  <span className="wr-chip-badge wr-chip-badge--applied">
+                                    Applied
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      <WeaponRulesPanel
+                        ctx={combatCtx}
+                        phase={PHASES.PRE_ROLL}
+                        onCtxChange={setCombatCtx}
+                        testId={undefined}
+                      />
+                    </>
                   )}
                 </div>
 

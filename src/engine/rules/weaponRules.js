@@ -14,8 +14,12 @@ const ensureCtxScaffold = (ctx) => {
       suggestedInputs: {},
       disabledOptions: {},
       notes: [],
+      appliedRules: {},
     };
   }
+  if (!ctx.ui.appliedRules) ctx.ui.appliedRules = {};
+  if (!ctx.ui.notes) ctx.ui.notes = [];
+  if (!ctx.effects) ctx.effects = { attacker: [], defender: [] };
   if (!ctx.modifiers) ctx.modifiers = {};
   if (!ctx.log) ctx.log = [];
   if (!ctx.inputs) ctx.inputs = {};
