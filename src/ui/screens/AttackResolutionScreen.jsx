@@ -7,6 +7,7 @@ import { normalizeWeaponRules } from "../../engine/rules/weaponRules";
 import { allocateDefense } from "../../engine/rules/resolveDice";
 import { applyConditionNotes } from "../../engine/rules/combatConditions";
 import { shouldOpenHotModal } from "../../engine/rules/hotResolution";
+import { getLimitedValue, makeWeaponUsageKey } from "../../engine/rules/limitedWeapon";
 
 // Load all faction firefight ploys (eager so it works in UI immediately)
 const firefightPloyModules = import.meta.glob(
@@ -169,6 +170,7 @@ function AttackResolutionScreen({
   attackRoll,
   defenseRoll,
   combatModifiers,
+  weaponUsage,
   rollsLocked: rollsLockedFromState,
   attackLocked,
   defenseLocked,
@@ -238,6 +240,20 @@ function AttackResolutionScreen({
     : isDefenderRole
       ? attackerReady
       : false;
+
+  const limitedValue = getLimitedValue(weapon);
+  const limitedKey =
+    isAttackerRole && attacker?.id && weapon?.name
+      ? makeWeaponUsageKey(attacker.id, weapon.name)
+      : null;
+  const limitedUsed = Number(
+    limitedKey ? weaponUsage?.[limitedKey]?.used ?? 0 : 0,
+  );
+  const isLimited = Number.isFinite(limitedValue) && limitedValue > 0;
+  const isLimitedExhausted = isLimited && limitedUsed >= limitedValue;
+  const limitedRemaining = isLimited
+    ? Math.max(0, Number(limitedValue) - Number(limitedUsed))
+    : 0;
 
   const addLog = (group, message) => {
     logIdRef.current += 1;
@@ -900,6 +916,25 @@ function AttackResolutionScreen({
                       testId={undefined}
                     />
                   )}
+
+                  {isAttackerRole && isLimited ? (
+                    <div className="attack-resolution__inline-note">
+                      {isLimitedExhausted
+                        ? `Limited ${limitedValue} — this weapon has no uses left after this attack.`
+                        : `Limited ${limitedValue} — ${limitedRemaining} use${
+                            limitedRemaining === 1 ? "" : "s"
+                          } remaining after this attack.`}
+                    </div>
+                  ) : null}
+
+                  {isAttackerRole && isLimitedExhausted ? (
+                    <div
+                      className="attack-resolution__inline-note"
+                      data-testid="limited-exhausted"
+                    >
+                      Limited exhausted.
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="attack-resolution__dice-strip">

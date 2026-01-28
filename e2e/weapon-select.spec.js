@@ -34,23 +34,37 @@ async function resetE2EEvents(page) {
   });
 }
 
-async function getFirstWeaponName(page, role, mode) {
+async function getFirstWeaponName(page, role, mode, options = {}) {
   return await page.evaluate(
-    ({ role: roleValue, mode: modeValue }) => {
+    ({ role: roleValue, mode: modeValue, excludeLimited }) => {
       const state = window.ktGetGameState?.();
       const flow = state?.ui?.actionFlow;
       const unitId = roleValue === "attacker" ? flow?.attackerId : flow?.defenderId;
       const unit = state?.game?.find((entry) => entry.id === unitId);
       const weapons = Array.isArray(unit?.weapons) ? unit.weapons : [];
       const filtered = modeValue ? weapons.filter((w) => w.mode === modeValue) : weapons;
-      return filtered[0]?.name || weapons[0]?.name || null;
+      const isLimited = (weapon) => {
+        const raw = weapon?.wr ?? weapon?.rules ?? [];
+        const list = Array.isArray(raw) ? raw : [raw];
+        return list.some((entry) => {
+          if (!entry) return false;
+          if (typeof entry === "string") {
+            return entry.trim().toLowerCase().startsWith("limited");
+          }
+          return String(entry?.id || "").toLowerCase() === "limited";
+        });
+      };
+      const usable = excludeLimited
+        ? filtered.filter((weapon) => !isLimited(weapon))
+        : filtered;
+      return usable[0]?.name || filtered[0]?.name || weapons[0]?.name || null;
     },
-    { role, mode },
+    { role, mode, excludeLimited: options.excludeLimited !== false },
   );
 }
 
-async function selectWeaponRow(page, role, mode) {
-  const weaponName = await getFirstWeaponName(page, role, mode);
+async function selectWeaponRow(page, role, mode, options = {}) {
+  const weaponName = await getFirstWeaponName(page, role, mode, options);
   expect(weaponName, `No weapon found for role=${role} mode=${mode}`).toBeTruthy();
 
   // data-testid contains the weapon name (yes, even if it has spaces)
@@ -83,6 +97,25 @@ async function goToWeaponSelect(page, mode) {
     const defender = state?.game?.find((unit) => unit.teamId !== attacker?.teamId);
 
     if (!attacker || !defender) return;
+
+    const stripLimited = (weapon) => {
+      const raw = weapon?.wr ?? weapon?.rules ?? [];
+      const list = Array.isArray(raw) ? raw : [raw];
+      const filtered = list.filter((entry) => {
+        if (!entry) return false;
+        if (typeof entry === "string") {
+          return !entry.trim().toLowerCase().startsWith("limited");
+        }
+        return String(entry?.id || "").toLowerCase() !== "limited";
+      });
+      return { ...weapon, wr: filtered };
+    };
+
+    const nextGame = state.game.map((unit) => {
+      if (unit.id !== attackerId) return unit;
+      const weapons = Array.isArray(unit.weapons) ? unit.weapons.map(stripLimited) : [];
+      return { ...unit, weapons };
+    });
 
     const actionFlow = {
       mode: flowMode,
@@ -121,6 +154,8 @@ async function goToWeaponSelect(page, mode) {
     window.ktSetGameState?.({
       phase: "FIREFIGHT",
       topBar: { ...(state?.topBar || {}), phase: "FIREFIGHT" },
+      game: nextGame,
+      weaponUsage: {},
       ui: { actionFlow },
     });
   }, mode);
@@ -145,7 +180,7 @@ test("shoot weapon select requires ready and starts attack when both ready", asy
   const attackerStatusText = await attackerStatus.textContent();
   if (!/READY/i.test(attackerStatusText || "")) {
     await expect(attackerStatus).toContainText(/Select weapon/i);
-    await selectWeaponRow(page, "attacker", "ranged");
+    await selectWeaponRow(page, "attacker", "ranged", { excludeLimited: true });
   }
 
   await expect(attackerStatus).toContainText(/READY/i);
@@ -265,7 +300,7 @@ test("attacker selects ranged weapon and locks (shows waiting)", async ({ page }
   await goToWeaponSelect(page, "shoot");
 
   const attackerStatus = page.getByTestId("weapon-status-attacker");
-  await selectWeaponRow(page, "attacker", "ranged");
+  await selectWeaponRow(page, "attacker", "ranged", { excludeLimited: true });
 
   const readyBtn = page.getByTestId("weapon-ready-attacker");
   await expect(readyBtn).toBeEnabled();
@@ -286,7 +321,9 @@ test("fight weapon select flow still works", async ({ page }) => {
   await goToWeaponSelect(page, "fight");
 
   const attackerStatus = page.getByTestId("weapon-status-attacker");
-  const attackerWeaponName = await selectWeaponRow(page, "attacker", "melee");
+  const attackerWeaponName = await selectWeaponRow(page, "attacker", "melee", {
+    excludeLimited: true,
+  });
 
   const attackerWeaponMode = await page.evaluate((weaponName) => {
     const state = window.ktGetGameState?.();
@@ -329,6 +366,152 @@ test("fight weapon select flow still works", async ({ page }) => {
   });
 
   await expect(page.getByTestId("fight-modal-roll-dice")).toBeVisible({ timeout: 15000 });
+});
+
+test("limited weapon is disabled after use", async ({ page }) => {
+  await goToWeaponSelect(page, "shoot");
+
+  await page.evaluate(() => {
+    const state = window.ktGetGameState?.();
+    const attackerId = "alpha:kommando-bomb-squig";
+    const attacker = state?.game?.find((unit) => unit.id === attackerId);
+    const defender = state?.game?.find((unit) => unit.teamId !== attacker?.teamId);
+    if (!attacker || !defender) return;
+
+    const weapons = Array.isArray(attacker.weapons) ? [...attacker.weapons] : [];
+    if (weapons[0]) {
+      const wr = Array.isArray(weapons[0].wr) ? weapons[0].wr : [];
+      weapons[0] = { ...weapons[0], wr: [...wr, "limited 1"] };
+    }
+
+    const nextGame = state.game.map((unit) =>
+      unit.id === attackerId ? { ...attacker, weapons } : unit,
+    );
+
+    const actionFlow = {
+      mode: "shoot",
+      attackerId,
+      defenderId: defender.id,
+      step: "pickWeapons",
+      attackerWeapon: null,
+      defenderWeapon: null,
+      inputs: {
+        primaryTargetId: defender.id,
+        secondaryTargetIds: [],
+        accurateSpent: 0,
+        balancedClick: false,
+        balancedUsed: false,
+      },
+      log: [],
+      remainingDice: { attacker: [], defender: [] },
+      dice: {
+        attacker: { raw: [], crit: 0, norm: 0 },
+        defender: { raw: [], crit: 0, norm: 0 },
+      },
+      remaining: {
+        attacker: { crit: 0, norm: 0 },
+        defender: { crit: 0, norm: 0 },
+      },
+      resolve: { turn: "attacker" },
+      locked: {
+        attackerWeapon: false,
+        defenderWeapon: false,
+        attackerDice: false,
+        defenderDice: false,
+        diceRolled: false,
+      },
+    };
+
+    window.ktSetGameState?.({
+      ...state,
+      game: nextGame,
+      phase: "FIREFIGHT",
+      topBar: { ...(state?.topBar || {}), phase: "FIREFIGHT" },
+      ui: { actionFlow },
+    });
+  });
+
+  await expect(page.getByTestId("weapon-select-modal")).toBeVisible({ timeout: 15000 });
+
+  const weaponName = await getFirstWeaponName(page, "attacker", "ranged", {
+    excludeLimited: false,
+  });
+  expect(weaponName).toBeTruthy();
+
+  await page.getByTestId(`weapon-option-attacker-${weaponName}`).click();
+  await page.getByTestId("weapon-ready-attacker").click();
+
+  await page.evaluate(() => {
+    const state = window.ktGetGameState?.();
+    const flow = state?.ui?.actionFlow;
+    if (!flow) return;
+    const defender = state?.game?.find((unit) => unit.id === flow.defenderId);
+    const defenderWeapon =
+      defender?.weapons?.find((weapon) => weapon.mode === "ranged")?.name ||
+      defender?.weapons?.[0]?.name ||
+      null;
+    if (!defenderWeapon) return;
+    window.ktDispatchGameEvent?.("FLOW_SET_WEAPON", {
+      role: "defender",
+      weaponName: defenderWeapon,
+    });
+    window.ktDispatchGameEvent?.("FLOW_LOCK_WEAPON", { role: "defender" });
+  });
+
+  await page.evaluate(() => {
+    const state = window.ktGetGameState?.();
+    const attackerId = "alpha:kommando-bomb-squig";
+    const attacker = state?.game?.find((unit) => unit.id === attackerId);
+    const defender = state?.game?.find((unit) => unit.teamId !== attacker?.teamId);
+    if (!state || !attacker || !defender) return;
+
+    const actionFlow = {
+      mode: "shoot",
+      attackerId,
+      defenderId: defender.id,
+      step: "pickWeapons",
+      attackerWeapon: null,
+      defenderWeapon: null,
+      inputs: {
+        primaryTargetId: defender.id,
+        secondaryTargetIds: [],
+        accurateSpent: 0,
+        balancedClick: false,
+        balancedUsed: false,
+      },
+      log: [],
+      remainingDice: { attacker: [], defender: [] },
+      dice: {
+        attacker: { raw: [], crit: 0, norm: 0 },
+        defender: { raw: [], crit: 0, norm: 0 },
+      },
+      remaining: {
+        attacker: { crit: 0, norm: 0 },
+        defender: { crit: 0, norm: 0 },
+      },
+      resolve: { turn: "attacker" },
+      locked: {
+        attackerWeapon: false,
+        defenderWeapon: false,
+        attackerDice: false,
+        defenderDice: false,
+        diceRolled: false,
+      },
+    };
+
+    window.ktSetGameState?.({
+      ...state,
+      phase: "FIREFIGHT",
+      topBar: { ...(state?.topBar || {}), phase: "FIREFIGHT" },
+      ui: { actionFlow },
+    });
+  });
+
+  await expect(page.getByTestId("weapon-select-modal")).toBeVisible({ timeout: 15000 });
+
+  const limitedOption = page.getByTestId(`weapon-option-attacker-${weaponName}`);
+  await expect(limitedOption).toHaveAttribute("aria-disabled", "true");
+  await expect(page.getByTestId(`weapon-limited-badge-attacker-${weaponName}`)).toBeVisible();
 });
 
 test("shoot flow shows no valid weapons when attacker lacks ranged", async ({ page }) => {

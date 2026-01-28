@@ -5,6 +5,7 @@ import {
 	getReadyOperatives,
 } from "./gameLoopSelectors";
 import { buildLogEntriesForEvent } from "./logTemplates";
+import { canUseLimitedWeapon, getLimitedValue, makeWeaponUsageKey } from "../engine/rules/limitedWeapon";
 
 export const COMBAT_STAGES = {
 	ATTACK_RESOLUTION: "ATTACK_RESOLUTION",
@@ -852,6 +853,42 @@ function reduceGameState(state, action) {
 			const { role } = action.payload || {};
 			const flow = state.ui?.actionFlow;
 			if (!flow || (role !== "attacker" && role !== "defender")) return state;
+			let nextWeaponUsage = state.weaponUsage || {};
+			if (role === "attacker") {
+				const attacker = state.game.find((unit) => unit.id === flow.attackerId);
+				const attackerWeapons = Array.isArray(attacker?.weapons)
+					? attacker.weapons
+					: [];
+				const preferredWeaponName =
+					flow.attackerWeapon ||
+					attacker?.state?.selectedWeapon ||
+					attackerWeapons[0]?.name ||
+					null;
+				const selectedWeapon =
+					attackerWeapons.find((weapon) => weapon.name === preferredWeaponName) ||
+					attackerWeapons[0] ||
+					null;
+				if (selectedWeapon) {
+					const limit = getLimitedValue(selectedWeapon);
+					if (limit) {
+						const operativeId = attacker?.id ?? flow.attackerId ?? null;
+						const weaponName = selectedWeapon?.name ?? preferredWeaponName;
+						const canUse = canUseLimitedWeapon({
+							weaponProfile: selectedWeapon,
+							operativeId,
+							weaponName,
+							weaponUsage: state.weaponUsage,
+						});
+						if (!canUse) return state;
+						const key = makeWeaponUsageKey(operativeId, weaponName);
+						const used = Number(state.weaponUsage?.[key]?.used ?? 0);
+						nextWeaponUsage = {
+							...(state.weaponUsage || {}),
+							[key]: { used: used + 1, limit },
+						};
+					}
+				}
+			}
 			const nextLocked = {
 				...(flow.locked || {}),
 				attackerWeapon:
@@ -870,6 +907,7 @@ function reduceGameState(state, action) {
 
 			const nextState = {
 				...state,
+				weaponUsage: nextWeaponUsage,
 				ui: {
 					...(state.ui || {}),
 					actionFlow: {

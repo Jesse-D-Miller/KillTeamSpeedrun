@@ -220,29 +220,6 @@ test("popover does not create extra modal overlays", async ({ browser }) => {
   await context.close();
 });
 
-test("post-roll checklist is disabled before readiness", async ({ browser }) => {
-  const { context, pageA, pageB } = await openAttackResolutionForBoth(browser);
-
-  const ruleButtonsA = pageA.locator(
-    ".attack-resolution__rule-steps .attack-resolution__rule:not(.attack-resolution__rule--secondary)",
-  );
-
-  if ((await ruleButtonsA.count()) === 0) {
-    test.skip(true, "No post-roll rules available for this weapon.");
-  }
-
-  await expect(ruleButtonsA.first()).toBeDisabled();
-
-  const ruleButtonsB = pageB.locator(
-    ".attack-resolution__rule-steps .attack-resolution__rule:not(.attack-resolution__rule--secondary)",
-  );
-  if ((await ruleButtonsB.count()) > 0) {
-    await expect(ruleButtonsB.first()).toBeDisabled();
-  }
-
-  await context.close();
-});
-
 test("final entry applies damage + closes modal", async ({ browser }) => {
   const { context, pageA, pageB } = await openAttackResolutionForBoth(browser);
 

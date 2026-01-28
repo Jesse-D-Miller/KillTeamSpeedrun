@@ -1,5 +1,10 @@
 import "./WeaponSelectModal.css";
 import UnitCard from "./UnitCard";
+import {
+  canUseLimitedWeapon,
+  getLimitedValue,
+  makeWeaponUsageKey,
+} from "../../engine/rules/limitedWeapon";
 
 function WeaponSelectModal({
   open,
@@ -11,6 +16,7 @@ function WeaponSelectModal({
   attackerReady,
   defenderReady,
   localRole = null,
+  weaponUsage = {},
   onSetWeapon,
   onReady,
   onCancel,
@@ -25,9 +31,12 @@ function WeaponSelectModal({
     ? defenderUnit.weapons.filter((weapon) => weapon.mode === weaponMode)
     : [];
 
-  const getLocalButtonState = (selectedWeapon, isReady) => {
+  const getLocalButtonState = (selectedWeapon, isReady, selectedWeaponUsable) => {
     if (!selectedWeapon) {
       return { label: "Select weapon", disabled: true, showSpinner: false };
+    }
+    if (!selectedWeaponUsable) {
+      return { label: "Limited used", disabled: true, showSpinner: false };
     }
     if (!isReady) {
       return { label: "READY", disabled: false, showSpinner: false };
@@ -49,7 +58,28 @@ function WeaponSelectModal({
     const hasValidWeapons = weapons.length > 0;
     const bothReady = attackerReady && defenderReady;
 
-    const localButtonState = getLocalButtonState(selectedWeapon, isReady);
+    const selectedWeaponProfile = weapons.find((weapon) => weapon.name === selectedWeapon);
+    const selectedWeaponUsable =
+      role !== "attacker" || !selectedWeaponProfile
+        ? true
+        : canUseLimitedWeapon({
+            weaponProfile: selectedWeaponProfile,
+            operativeId: unit?.id,
+            weaponName: selectedWeaponProfile?.name ?? selectedWeapon,
+            weaponUsage,
+          });
+    const getWeaponLimitedUsage = (weapon) => {
+      const limit = getLimitedValue(weapon);
+      if (!limit) return null;
+      const key = makeWeaponUsageKey(unit?.id, weapon?.name);
+      const used = Number(weaponUsage?.[key]?.used ?? 0);
+      return { limit, used };
+    };
+    const localButtonState = getLocalButtonState(
+      selectedWeapon,
+      isReady,
+      selectedWeaponUsable,
+    );
     const localStatusLabel = localButtonState.label;
     const opponentStatusLabel = isReady ? "Opponent ready ✅" : "Opponent selecting…";
 
@@ -78,6 +108,32 @@ function WeaponSelectModal({
             autoSelectFirstWeapon={false}
             emptyWeaponsLabel="No valid weapons"
             weaponOptionRole={role}
+            isWeaponSelectable={(weapon) =>
+              role !== "attacker"
+                ? true
+                : canUseLimitedWeapon({
+                    weaponProfile: weapon,
+                    operativeId: unit?.id,
+                    weaponName: weapon?.name,
+                    weaponUsage,
+                  })
+            }
+            getWeaponDisabledReason={(weapon) => {
+              if (role !== "attacker") return null;
+              const usage = getWeaponLimitedUsage(weapon);
+              if (!usage) return null;
+              return usage.used >= usage.limit ? "Limited uses spent." : null;
+            }}
+            getWeaponBadge={(weapon) => {
+              if (role !== "attacker") return null;
+              const usage = getWeaponLimitedUsage(weapon);
+              if (!usage || usage.used < usage.limit) return null;
+              return {
+                label: "LIMITED USED",
+                detail: `Limited ${usage.limit} — used`,
+                testId: `weapon-limited-badge-${role}-${weapon?.name}`,
+              };
+            }}
           />
         </div>
         <div className="weapon-select__controls">

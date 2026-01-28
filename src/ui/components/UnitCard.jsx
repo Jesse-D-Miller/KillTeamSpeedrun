@@ -17,6 +17,9 @@ function UnitCard({
   onCardClick = null,
   onSelectWeapon = null,
   weaponSelectionEnabled = false,
+  isWeaponSelectable = null,
+  getWeaponDisabledReason = null,
+  getWeaponBadge = null,
   selectedWeaponNameOverride = null,
   autoSelectFirstWeapon = true,
   emptyWeaponsLabel = "No weapons",
@@ -264,8 +267,20 @@ function UnitCard({
                     <tbody>
                       {filteredWeapons.map((w) => {
                         const isSelected = w.name === selectedWeaponName;
+                        const isSelectable =
+                          typeof isWeaponSelectable === "function"
+                            ? Boolean(isWeaponSelectable(w))
+                            : true;
                         const canSelectWeapon =
-                          Boolean(onSelectWeapon) && weaponSelectionEnabled;
+                          Boolean(onSelectWeapon) && weaponSelectionEnabled && isSelectable;
+                        const disabledReason =
+                          !isSelectable && typeof getWeaponDisabledReason === "function"
+                            ? getWeaponDisabledReason(w)
+                            : null;
+                        const badge =
+                          typeof getWeaponBadge === "function"
+                            ? getWeaponBadge(w)
+                            : null;
                         const weaponTestId =
                           weaponOptionRole && weaponOptionTestIdPrefix
                             ? `${weaponOptionTestIdPrefix}-${weaponOptionRole}-${w.name}`
@@ -276,10 +291,14 @@ function UnitCard({
                             key={w.name}
                             className={`kt-row ${
                               canSelectWeapon ? "kt-row--selectable" : ""
-                            } ${isSelected ? "kt-row--selected" : ""}`}
+                            } ${isSelected ? "kt-row--selected" : ""} ${
+                              !isSelectable ? "kt-row--disabled" : ""
+                            }`}
                             data-testid={weaponTestId}
                             role={canSelectWeapon ? "button" : undefined}
                             tabIndex={canSelectWeapon ? 0 : undefined}
+                            aria-disabled={!isSelectable ? "true" : undefined}
+                            title={disabledReason || undefined}
                             onClick={() => {
                               if (!canSelectWeapon) return;
                               onSelectWeapon?.(w.name);
@@ -306,7 +325,26 @@ function UnitCard({
                               );
                             })()}
                             <td>{w.dmg}</td>
-                            <td className="left">{formatWeaponRules(w.wr)}</td>
+                            <td className="left">
+                              <div className="kt-weapon-wr">
+                                {formatWeaponRules(w.wr)}
+                              </div>
+                              {badge ? (
+                                <div className="kt-weapon-badge-wrap">
+                                  <span
+                                    className="kt-weapon-badge"
+                                    data-testid={badge.testId}
+                                  >
+                                    {badge.label}
+                                  </span>
+                                  {badge.detail ? (
+                                    <span className="kt-weapon-badge-detail">
+                                      {badge.detail}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </td>
                           </tr>
                         );
                       })}
@@ -335,8 +373,20 @@ function UnitCard({
                   <tbody>
                     {filteredWeapons.map((w) => {
                       const isSelected = w.name === selectedWeaponName;
+                      const isSelectable =
+                        typeof isWeaponSelectable === "function"
+                          ? Boolean(isWeaponSelectable(w))
+                          : true;
                       const canSelectWeapon =
-                        Boolean(onSelectWeapon) && weaponSelectionEnabled;
+                        Boolean(onSelectWeapon) && weaponSelectionEnabled && isSelectable;
+                      const disabledReason =
+                        !isSelectable && typeof getWeaponDisabledReason === "function"
+                          ? getWeaponDisabledReason(w)
+                          : null;
+                      const badge =
+                        typeof getWeaponBadge === "function"
+                          ? getWeaponBadge(w)
+                          : null;
                       const weaponTestId =
                         weaponOptionRole && weaponOptionTestIdPrefix
                           ? `${weaponOptionTestIdPrefix}-${weaponOptionRole}-${w.name}`
@@ -347,10 +397,14 @@ function UnitCard({
                           key={w.name}
                           className={`kt-row ${
                             canSelectWeapon ? "kt-row--selectable" : ""
-                          } ${isSelected ? "kt-row--selected" : ""}`}
+                          } ${isSelected ? "kt-row--selected" : ""} ${
+                            !isSelectable ? "kt-row--disabled" : ""
+                          }`}
                           data-testid={weaponTestId}
                           role={canSelectWeapon ? "button" : undefined}
                           tabIndex={canSelectWeapon ? 0 : undefined}
+                          aria-disabled={!isSelectable ? "true" : undefined}
+                          title={disabledReason || undefined}
                           onClick={() => {
                             if (!canSelectWeapon) return;
                             onSelectWeapon?.(w.name);
@@ -377,7 +431,26 @@ function UnitCard({
                             );
                           })()}
                           <td>{w.dmg}</td>
-                          <td className="left">{formatWeaponRules(w.wr)}</td>
+                          <td className="left">
+                            <div className="kt-weapon-wr">
+                              {formatWeaponRules(w.wr)}
+                            </div>
+                            {badge ? (
+                              <div className="kt-weapon-badge-wrap">
+                                <span
+                                  className="kt-weapon-badge"
+                                  data-testid={badge.testId}
+                                >
+                                  {badge.label}
+                                </span>
+                                {badge.detail ? (
+                                  <span className="kt-weapon-badge-detail">
+                                    {badge.detail}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ) : null}
+                          </td>
                         </tr>
                       );
                     })}

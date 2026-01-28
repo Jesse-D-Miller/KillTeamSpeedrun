@@ -208,6 +208,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
       entries: [],
       cursor: 0,
     },
+    weaponUsage: {},
     combatState: initialCombatState,
     ui: {
       actionFlow: null,
@@ -226,6 +227,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
         strategy: { ...(base.strategy || {}), ...(seed.strategy || {}) },
         firefight: { ...(base.firefight || {}), ...(seed.firefight || {}) },
         log: { ...(base.log || {}), ...(seed.log || {}) },
+        weaponUsage: { ...(base.weaponUsage || {}), ...(seed.weaponUsage || {}) },
         combatState: { ...(base.combatState || {}), ...(seed.combatState || {}) },
         ui: { ...(base.ui || {}), ...(seed.ui || {}) },
       };
@@ -1964,6 +1966,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
           attackerReady={attackerReady}
           defenderReady={defenderReady}
           localRole={weaponSelectLocalRole}
+          weaponUsage={state.weaponUsage || {}}
           onSetWeapon={(role, weaponName) => {
             dispatchGameEvent("FLOW_SET_WEAPON", { role, weaponName });
           }}
@@ -2465,6 +2468,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
         attackRoll={combatState?.attackRoll}
         defenseRoll={combatState?.defenseRoll}
         combatModifiers={combatState?.modifiers}
+        weaponUsage={state.weaponUsage || {}}
         rollsLocked={
           combatState?.rollsLocked ||
           (combatState?.rollReady?.A && combatState?.rollReady?.B)
@@ -2882,6 +2886,7 @@ function E2EAttackResolutionRoute() {
         attackRoll={attackRoll}
         defenseRoll={defenseRoll}
         combatModifiers={combatModifiers}
+        weaponUsage={{}}
         rollsLocked={rollsLocked}
         attackLocked={rollsLocked}
         defenseLocked={rollsLocked}

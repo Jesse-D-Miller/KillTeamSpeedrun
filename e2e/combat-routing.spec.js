@@ -30,10 +30,18 @@ async function resetE2EEvents(page) {
 }
 
 async function relayEvents(from, to) {
-  const { gameEvents, combatEvents } = await from.evaluate(() => ({
-    gameEvents: window.__ktE2E_gameEvents || [],
-    combatEvents: window.__ktE2E_combatEvents || [],
-  }));
+  let payload = null;
+  try {
+    payload = await from.evaluate(() => ({
+      gameEvents: window.__ktE2E_gameEvents || [],
+      combatEvents: window.__ktE2E_combatEvents || [],
+    }));
+  } catch (error) {
+    if (!/Execution context was destroyed|navigation/i.test(String(error))) {
+      throw error;
+    }
+    return;
+  }
 
   await to.evaluate(
     ({ gameEvents: nextGameEvents, combatEvents: nextCombatEvents }) => {
@@ -44,7 +52,7 @@ async function relayEvents(from, to) {
         window.ktDispatchCombatEvent?.(event.type, event.payload);
       });
     },
-    { gameEvents, combatEvents },
+    payload,
   );
 }
 
