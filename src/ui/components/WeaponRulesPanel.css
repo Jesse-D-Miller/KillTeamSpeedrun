@@ -1,0 +1,57 @@
+/* src/ui/components/WeaponRulesPanel.css */
+.wr-panel {
+  margin-top: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.wr-title {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.wr-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+
+.wr-chip {
+  text-align: left;
+  border-radius: 12px;
+  padding: 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+}
+
+.wr-chip:hover {
+  background: rgba(255,255,255,0.07);
+}
+
+.wr-chip.is-disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.wr-chip-label {
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.wr-chip-preview {
+  font-size: 12px;
+  opacity: 0.85;
+  line-height: 1.25;
+}
+
+.wr-chip-reason {
+  margin-top: 6px;
+  font-size: 11px;
+  opacity: 0.75;
+}

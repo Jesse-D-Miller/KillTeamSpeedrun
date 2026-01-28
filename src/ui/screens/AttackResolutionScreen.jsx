@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./AttackResolutionScreen.css";
 import UnitCard from "../components/UnitCard";
+import WeaponRulesPanel from "../components/WeaponRulesPanel";
 import { normalizeWeaponRules } from "../../engine/rules/weaponRules";
 import { allocateDefense } from "../../engine/rules/resolveDice";
 
@@ -179,6 +180,14 @@ function AttackResolutionScreen({
   onCancel,
 }) {
   const [phase, setPhase] = useState(PHASES.PRE_ROLL);
+  const [combatCtx, setCombatCtx] = useState(() => ({
+    phase: PHASES.PRE_ROLL,
+    ui: { prompts: [], notes: [] },
+    log: [],
+    modifiers: {},
+    weaponRules: [],
+    attackDice: [],
+  }));
 
   // Final-entry (attacker only; ignores defender blocks)
   const [finalAttackHits, setFinalAttackHits] = useState(0);
@@ -246,6 +255,23 @@ function AttackResolutionScreen({
     // Your multiplayer stage can still exist; we just aren't gatekeeping UI anymore.
     setPhase(PHASES.PRE_ROLL);
   }, [open, role, combatStage, rollsLockedFromState]);
+
+  useEffect(() => {
+    if (!open) return;
+    const normalizedRules = weapon ? normalizeWeaponRules(weapon) : [];
+    const normalizedAttackDice = Array.isArray(attackRoll)
+      ? attackRoll.map((value) => ({ value: Number(value), tags: [] }))
+      : [];
+    setCombatCtx((prev) => ({
+      ...prev,
+      phase,
+      weaponRules: normalizedRules,
+      attackDice: normalizedAttackDice,
+      ui: prev.ui || { prompts: [], notes: [] },
+      log: prev.log || [],
+      modifiers: prev.modifiers || {},
+    }));
+  }, [open, phase, weapon, attackRoll]);
 
   useEffect(() => {
     if (!open) return;
@@ -416,6 +442,12 @@ function AttackResolutionScreen({
                 <span>{defenderCritLabel} 6+</span>
               </div>
             </div>
+
+            <WeaponRulesPanel
+              ctx={combatCtx}
+              phase={phase}
+              onCtxChange={setCombatCtx}
+            />
 
             {/* Pre-roll */}
             <div className="attack-resolution__panel">
