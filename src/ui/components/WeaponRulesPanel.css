@@ -38,6 +38,7 @@
   cursor: not-allowed;
 }
 
+
 .wr-chip-label {
   font-weight: 700;
   font-size: 14px;
@@ -54,4 +55,97 @@
   margin-top: 6px;
   font-size: 11px;
   opacity: 0.75;
+}
+
+.wr-popover {
+  position: fixed;
+  z-index: 1200;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.16);
+  background: rgba(10, 10, 14, 0.96);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  color: inherit;
+}
+
+.wr-popover__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.wr-popover__title {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.wr-popover__close {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.wr-popover__body {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.wr-popover__hint {
+  margin-top: 8px;
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+/* click-tooltip popover */
+.wr-popover {
+  position: fixed; /* important: works inside modal */
+  z-index: 9999;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(20, 22, 28, 0.96);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+  padding: 10px;
+  backdrop-filter: blur(6px);
+}
+
+.wr-popover__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.wr-popover__title {
+  font-weight: 800;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.wr-popover__close {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.95);
+  cursor: pointer;
+}
+
+.wr-popover__body {
+  font-size: 12px;
+  line-height: 1.35;
+  opacity: 0.92;
+  white-space: pre-wrap;
+}
+
+.wr-popover__hint {
+  margin-top: 8px;
+  font-size: 11px;
+  opacity: 0.65;
 }

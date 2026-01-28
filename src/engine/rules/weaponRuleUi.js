@@ -250,11 +250,13 @@ export function clickWeaponRule(ctx, rule, payload = {}) {
   });
 
   // Minimal state changes for “once per attack” helpers
-  if (rule.id === "balanced") ctx.modifiers.balancedUsed = true;
-  if (rule.id === "devastating") ctx.modifiers.devastatingShown = true;
-  if (rule.id === "severe") ctx.modifiers.severeActive = true;
-  if (rule.id === "limited") {
-    ctx.modifiers.limitedUsedCount = Number(ctx.modifiers.limitedUsedCount ?? 0) + 1;
+  if (!payload?.preview) {
+    if (rule.id === "balanced") ctx.modifiers.balancedUsed = true;
+    if (rule.id === "devastating") ctx.modifiers.devastatingShown = true;
+    if (rule.id === "severe") ctx.modifiers.severeActive = true;
+    if (rule.id === "limited") {
+      ctx.modifiers.limitedUsedCount = Number(ctx.modifiers.limitedUsedCount ?? 0) + 1;
+    }
   }
 
   ctx.log.push({

@@ -258,7 +258,19 @@ function AttackResolutionScreen({
 
   useEffect(() => {
     if (!open) return;
-    const normalizedRules = weapon ? normalizeWeaponRules(weapon) : [];
+    const e2eOverrideRules =
+      typeof window !== "undefined" && Array.isArray(window.__ktE2E_weaponRules)
+        ? window.__ktE2E_weaponRules
+        : null;
+    const e2eOverrides =
+      typeof window !== "undefined" && window.__ktE2E_combatCtxOverrides
+        ? window.__ktE2E_combatCtxOverrides
+        : null;
+    const normalizedRules = e2eOverrideRules
+      ? normalizeWeaponRules({ wr: e2eOverrideRules })
+      : weapon
+        ? normalizeWeaponRules(weapon)
+        : [];
     const normalizedAttackDice = Array.isArray(attackRoll)
       ? attackRoll.map((value) => ({ value: Number(value), tags: [] }))
       : [];
@@ -266,10 +278,13 @@ function AttackResolutionScreen({
       ...prev,
       phase,
       weaponRules: normalizedRules,
-      attackDice: normalizedAttackDice,
+      attackDice: Array.isArray(e2eOverrides?.attackDice)
+        ? e2eOverrides.attackDice
+        : normalizedAttackDice,
+      inputs: { ...(prev.inputs || {}), ...(e2eOverrides?.inputs || {}) },
+      modifiers: { ...(prev.modifiers || {}), ...(e2eOverrides?.modifiers || {}) },
       ui: prev.ui || { prompts: [], notes: [] },
       log: prev.log || [],
-      modifiers: prev.modifiers || {},
     }));
   }, [open, phase, weapon, attackRoll]);
 
@@ -371,8 +386,8 @@ function AttackResolutionScreen({
           className="kt-modal__close"
           type="button"
           onClick={() => onCancel?.()}
-          aria-label="Close"
-          title="Close"
+          aria-label="Dismiss modal"
+          title="Dismiss modal"
         >
           ×
         </button>
@@ -443,12 +458,6 @@ function AttackResolutionScreen({
               </div>
             </div>
 
-            <WeaponRulesPanel
-              ctx={combatCtx}
-              phase={phase}
-              onCtxChange={setCombatCtx}
-            />
-
             {/* Pre-roll */}
             <div className="attack-resolution__panel">
               <div className="attack-resolution__section">
@@ -518,25 +527,13 @@ function AttackResolutionScreen({
                     <div className="attack-resolution__empty">
                       No pre-roll rules for defender yet.
                     </div>
-                  ) : preRollActions.length === 0 ? (
-                    <div className="attack-resolution__empty">
-                      No pre-roll rules.
-                    </div>
                   ) : (
-                    preRollActions.map((rule) => (
-                      <button
-                        key={`pre-${rule.id}`}
-                        className="attack-resolution__rule"
-                        type="button"
-                        onClick={() => {
-                          setUsedRules((prev) => ({ ...prev, [rule.id]: true }));
-                          addLog("Pre-Roll", `Confirmed ${rule.id}.`);
-                        }}
-                        disabled={usedRules[rule.id]}
-                      >
-                        {rule.id} {rule.value ?? ""}
-                      </button>
-                    ))
+                    <WeaponRulesPanel
+                      ctx={combatCtx}
+                      phase={PHASES.PRE_ROLL}
+                      onCtxChange={setCombatCtx}
+                      testId={undefined}
+                    />
                   )}
                 </div>
 
@@ -574,66 +571,45 @@ function AttackResolutionScreen({
 
                 </div>
 
-                {rollsLocked && (
-                  <div className="attack-resolution__empty">
-                    Rolls are locked. Use Post-Roll Rules below as a checklist to
-                    help allocate real dice correctly.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Post-roll rules (numbered; attacker-only; only usable after lock) */}
-            <div className="attack-resolution__panel">
-              <div className="attack-resolution__section">
-                <div className="attack-resolution__section-title">
-                  Post-Roll Rules
-                </div>
-
                 {role !== "attacker" ? (
                   <div className="attack-resolution__empty">
-                    (Attacker-only for now — defender post-roll rules not wired
-                    yet.)
-                  </div>
-                ) : postRollActions.length === 0 ? (
-                  <div className="attack-resolution__empty">
-                    No post-roll rules.
+                    (Attacker-only for now — defender rules not wired yet.)
                   </div>
                 ) : (
-                  <ol className="attack-resolution__rule-steps">
-                    {postRollActions.map((rule) => (
-                      <li key={`post-${rule.id}`} className="attack-resolution__rule-step">
-                        <button
-                          className="attack-resolution__rule"
-                          type="button"
-                          onClick={() => markPostRollRuleUsed(rule.id, rule.id.toUpperCase())}
-                          disabled={!rollsLocked || usedRules[rule.id]}
-                          title={!rollsLocked ? "Lock rolls first" : undefined}
-                        >
-                          {rule.id}
-                        </button>
-                        {rule.value != null && (
-                          <span className="attack-resolution__rule-note">
-                            {String(rule.value)}
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                    <li className="attack-resolution__rule-step">
-                      <button
-                        className="attack-resolution__rule attack-resolution__rule--secondary"
-                        type="button"
-                        onClick={() => addLog("Post-Roll", "CP re-roll used (placeholder).")}
-                        disabled={!rollsLocked}
-                        title={!rollsLocked ? "Lock rolls first" : undefined}
-                      >
-                        CP Re-roll
-                      </button>
-                      <span className="attack-resolution__rule-note">
-                        (After other rerolls, if needed)
-                      </span>
-                    </li>
-                  </ol>
+                  <div className="attack-resolution__postroll">
+                    <WeaponRulesPanel
+                      ctx={combatCtx}
+                      phase={PHASES.ROLL}
+                      onCtxChange={setCombatCtx}
+                      testId="weapon-rules-panel"
+                    />
+                  </div>
+                )}
+
+                {role !== "attacker" ? null : (
+                  <div className="attack-resolution__postroll">
+                    {!rollsLocked ? (
+                      <div className="attack-resolution__empty">
+                        Lock rolls first to use post-roll rules.
+                      </div>
+                    ) : null}
+
+                    <WeaponRulesPanel
+                      ctx={combatCtx}
+                      phase={PHASES.POST_ROLL}
+                      onCtxChange={setCombatCtx}
+                      testId={undefined}
+                    />
+                    <button
+                      className="attack-resolution__rule attack-resolution__rule--secondary"
+                      type="button"
+                      onClick={() => addLog("Post-Roll", "CP re-roll used (placeholder).")}
+                      disabled={!rollsLocked}
+                      title={!rollsLocked ? "Lock rolls first" : undefined}
+                    >
+                      CP Re-roll
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
