@@ -51,13 +51,13 @@ export function getRuleResponsibility(ruleOrId) {
 
 export function getRulePhase(ruleId) {
   const id = String(ruleId || "").toLowerCase();
+  if (id.startsWith("seek")) return PHASES.PRE_ROLL;
 
   switch (id) {
     case "accurate":
     case "blast":
     case "torrent":
     case "range":
-    case "seek":
     case "heavy":
     case "limited":
     case "piercing":

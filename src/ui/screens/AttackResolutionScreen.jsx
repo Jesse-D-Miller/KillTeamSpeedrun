@@ -418,6 +418,20 @@ function AttackResolutionScreen({
       combatCtx?.ui?.disabledOptions?.retainCover,
   );
   const isCoverDisabled = coverDisabledByVantage || coverDisabledBySaturate;
+  const attackerCritThreshold = (() => {
+    const fromModifier = Number(combatCtx?.modifiers?.lethalThreshold);
+    if (Number.isFinite(fromModifier) && fromModifier >= 2 && fromModifier <= 6) {
+      return fromModifier;
+    }
+    const lethalRule = (combatCtx?.weaponRules || []).find(
+      (rule) => String(rule?.id || "").toLowerCase() === "lethal",
+    );
+    const fromRule = Number(lethalRule?.value);
+    if (Number.isFinite(fromRule) && fromRule >= 2 && fromRule <= 6) {
+      return fromRule;
+    }
+    return 6;
+  })();
 
   const setCombatCtx = (updater) => {
     setUiState((prevOverlay) => {
@@ -755,7 +769,7 @@ function AttackResolutionScreen({
               <div className="attack-resolution__summary-col">
                 <span>ATK {maxAttackDice}</span>
                 <span>HIT {attackerSuccessThreshold}+</span>
-                <span>CRIT 6+</span>
+                <span>CRIT {attackerCritThreshold}+</span>
               </div>
               <div className="attack-resolution__summary-col">
                 <span>
@@ -778,7 +792,7 @@ function AttackResolutionScreen({
                         <>
                           <button
                             type="button"
-                            className={`wr-chip wr-chip--auto ${
+                            className={`wr-chip wr-chip--player ${
                               preRollFlags.cover && !isCoverDisabled
                                 ? "is-applied"
                                 : ""
@@ -813,7 +827,7 @@ function AttackResolutionScreen({
 
                           <button
                             type="button"
-                            className={`wr-chip wr-chip--auto ${
+                            className={`wr-chip wr-chip--player ${
                               preRollFlags.obscured ? "is-applied" : ""
                             }`}
                             aria-disabled="false"
@@ -966,7 +980,7 @@ function AttackResolutionScreen({
                 <div className="attack-resolution__dice-strip">
                   <div className="attack-resolution__dice-line">
                     <strong>Attacker:</strong>&nbsp;Roll {maxAttackDice} · success
-                    on {attackerSuccessThreshold}+ · crit on 6+
+                    on {attackerSuccessThreshold}+ · crit on {attackerCritThreshold}+
                   </div>
                   <div className="attack-resolution__dice-line">
                     <strong>Defender:</strong>&nbsp;Roll {maxDefenseDice} · success
@@ -988,7 +1002,7 @@ function AttackResolutionScreen({
                   </div>
                   <div className="attack-resolution__instruction-line">
                     <strong>Attacker:</strong> Roll {maxAttackDice} · success on
-                    {" "}{attackerSuccessThreshold}+ · crit on 6+
+                    {" "}{attackerSuccessThreshold}+ · crit on {attackerCritThreshold}+
                   </div>
                   <div className="attack-resolution__instruction-line">
                     <strong>Defender:</strong> Roll {maxDefenseDice} · success on

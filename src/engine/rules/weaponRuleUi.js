@@ -99,7 +99,10 @@ export function formatWeaponRuleLabel(rule) {
  * Keep it short. No essays. No dice manipulation in-app — this is IRL prompting.
  */
 export function getWeaponRuleBoiledDown(ctx, rule, phase = ctx?.phase) {
-  const id = rule?.id;
+  const id = String(rule?.id || "");
+  if (id.startsWith("seek")) {
+    return "Target units in light cover, with conceal orders. Cover saves still apply";
+  }
   const x = Number(rule?.value);
 
   switch (id) {
@@ -142,7 +145,10 @@ export function getWeaponRuleBoiledDown(ctx, rule, phase = ctx?.phase) {
     case "range":
       return `This weapon can only target within ${x}".`;
     case "seek":
-      return `Seek ignores cover/obscuring for targeting (as specified: ${rule.scope || "type"}).`;
+      if (String(rule.scope || "").toLowerCase().includes("light")) {
+        return "Target units in (note) cover, even if they have a conceal order. cover saves still apply";
+      }
+      return "Target units in (note) cover, even if they have a conceal order. cover saves still apply";
     case "blast":
       return `Blast hits nearby secondary targets: resolve attacks against primary then listed secondaries.`;
     case "torrent":

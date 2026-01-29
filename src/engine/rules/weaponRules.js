@@ -1174,10 +1174,12 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
       getUiHints: (ctx, rule, phase) => {
         if (phase !== "PRE_ROLL") return;
         ensureCtxScaffold(ctx);
+        const raw = String(rule?.value ?? rule?.note ?? "light").toLowerCase();
+        const seekType = raw.includes("heavy") ? "heavy" : "light";
         addPrompt(ctx, {
           ruleId: "seek",
           phase,
-          text: "Seek: ignore cover for targeting per rule.",
+          text: `Target units in ${seekType} cover, even if they have a conceal order. cover saves still apply`,
           enabled: true,
         });
       },
