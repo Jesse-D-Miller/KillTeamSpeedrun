@@ -8,6 +8,7 @@ import { allocateDefense } from "../../engine/rules/resolveDice";
 import { applyConditionNotes } from "../../engine/rules/combatConditions";
 import { shouldOpenHotModal } from "../../engine/rules/hotResolution";
 import { getLimitedValue, makeWeaponUsageKey } from "../../engine/rules/limitedWeapon";
+import { getSavedName } from "../../lib/playerIdentity";
 
 // Load all faction firefight ploys (eager so it works in UI immediately)
 const firefightPloyModules = import.meta.glob(
@@ -175,6 +176,7 @@ function AttackResolutionScreen({
   attackRoll,
   defenseRoll,
   combatModifiers,
+  battleLog,
   weaponUsage,
   teamKeys,
   rollsLocked: rollsLockedFromState,
@@ -190,6 +192,10 @@ function AttackResolutionScreen({
   onApplyDamage,
   onResolveComplete,
   onCancel,
+  onAppendBattleLog,
+  onSpendCp,
+  finalEntry,
+  onSetFinalEntry,
 }) {
   const [phase, setPhase] = useState(PHASES.PRE_ROLL);
   const [uiState, setUiState] = useState(() => ({
@@ -199,9 +205,11 @@ function AttackResolutionScreen({
     log: [],
   }));
 
-  // Final-entry (attacker only; ignores defender blocks)
+  // Final-entry (ignores defender blocks)
   const [finalAttackHits, setFinalAttackHits] = useState(0);
   const [finalAttackCrits, setFinalAttackCrits] = useState(0);
+  const [finalDefenseHits, setFinalDefenseHits] = useState(0);
+  const [finalDefenseCrits, setFinalDefenseCrits] = useState(0);
 
   const [usedRules, setUsedRules] = useState({});
   const [preRollFlags, setPreRollFlags] = useState({
@@ -211,7 +219,9 @@ function AttackResolutionScreen({
 
   const [rollsLocked, setRollsLocked] = useState(false);
 
-  const [logs, setLogs] = useState([]);
+  const [logs, setLogs] = useState(() =>
+    Array.isArray(battleLog) ? battleLog : [],
+  );
   const logIdRef = useRef(0);
 
   const [hotModalOpen, setHotModalOpen] = useState(false);
@@ -248,10 +258,13 @@ function AttackResolutionScreen({
       : false;
 
   const limitedValue = getLimitedValue(weapon);
-  const limitedKey =
-    isAttackerRole && attacker?.id && weapon?.name
-      ? makeWeaponUsageKey(attacker.id, weapon.name)
+  const cpOwner = isAttackerRole
+    ? attacker?.owner
+    : isDefenderRole
+      ? defender?.owner
       : null;
+  const limitedKey =
+    attacker?.id && weapon?.name ? makeWeaponUsageKey(attacker.id, weapon.name) : null;
   const limitedUsed = Number(
     limitedKey ? weaponUsage?.[limitedKey]?.used ?? 0 : 0,
   );
@@ -263,8 +276,19 @@ function AttackResolutionScreen({
 
   const addLog = (group, message) => {
     logIdRef.current += 1;
-    const entry = { id: logIdRef.current, group, message, ts: Date.now() };
+    const actorName = getSavedName().trim() || "Player";
+    const entry = {
+      id:
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `log-${Date.now()}-${logIdRef.current}`,
+      group,
+      message,
+      actorName,
+      ts: Date.now(),
+    };
     setLogs((prev) => [entry, ...prev]); // newest first
+    onAppendBattleLog?.(entry);
   };
 
   const handleCtxChange = (nextCtx) => {
@@ -303,7 +327,7 @@ function AttackResolutionScreen({
     if (!open) return;
 
     setUsedRules({});
-    setLogs([]);
+    setLogs(Array.isArray(battleLog) ? battleLog : []);
     setUiState({
       ui: { prompts: [], notes: [], appliedRules: {} },
       effects: { attacker: [], defender: [] },
@@ -313,6 +337,8 @@ function AttackResolutionScreen({
 
     setFinalAttackHits(0);
     setFinalAttackCrits(0);
+    setFinalDefenseHits(0);
+    setFinalDefenseCrits(0);
 
     setPreRollFlags({ cover: false, obscured: false });
     setRollsLocked(Boolean(rollsLockedFromState));
@@ -321,7 +347,27 @@ function AttackResolutionScreen({
     // Keep this simple: both players start on PRE_ROLL visually.
     // Your multiplayer stage can still exist; we just aren't gatekeeping UI anymore.
     setPhase(PHASES.PRE_ROLL);
-  }, [open, role, combatStage, rollsLockedFromState]);
+  }, [open, role, combatStage, rollsLockedFromState, battleLog]);
+
+  useEffect(() => {
+    if (!open || !finalEntry) return;
+    setFinalAttackHits(Number(finalEntry.attackHits ?? 0));
+    setFinalAttackCrits(Number(finalEntry.attackCrits ?? 0));
+    setFinalDefenseHits(Number(finalEntry.defenseHits ?? 0));
+    setFinalDefenseCrits(Number(finalEntry.defenseCrits ?? 0));
+  }, [
+    open,
+    finalEntry?.attackHits,
+    finalEntry?.attackCrits,
+    finalEntry?.defenseHits,
+    finalEntry?.defenseCrits,
+  ]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (!Array.isArray(battleLog)) return;
+    setLogs(battleLog);
+  }, [battleLog, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -537,7 +583,7 @@ function AttackResolutionScreen({
   };
 
   // Final entry ignores defender blocks
-  const finalPreview = useMemo(() => {
+  const finalAttackPreview = useMemo(() => {
     return computeDamagePreview({
       weapon,
       attackHits: finalAttackHits,
@@ -547,14 +593,38 @@ function AttackResolutionScreen({
     });
   }, [weapon, finalAttackHits, finalAttackCrits]);
 
-  const resolveFromFinalWindow = () => {
-    addLog(
-      "Damage",
-      `Final: hits ${finalAttackHits}, crits ${finalAttackCrits}. Total damage ${finalPreview.totalDamage}.`,
-    );
+  const finalDefensePreview = useMemo(() => {
+    return computeDamagePreview({
+      weapon,
+      attackHits: finalDefenseHits,
+      attackCrits: finalDefenseCrits,
+      defenseHits: 0,
+      defenseCrits: 0,
+    });
+  }, [weapon, finalDefenseHits, finalDefenseCrits]);
 
-    if (defender?.id && finalPreview.totalDamage > 0) {
-      onApplyDamage?.(defender.id, finalPreview.totalDamage);
+  const resolveFromFinalWindow = () => {
+    if (isFight) {
+      addLog(
+        "Damage",
+        `Final (fight): attacker hits ${finalAttackHits}, crits ${finalAttackCrits} (${finalAttackPreview.totalDamage}); defender hits ${finalDefenseHits}, crits ${finalDefenseCrits} (${finalDefensePreview.totalDamage}).`,
+      );
+
+      if (defender?.id && finalAttackPreview.totalDamage > 0) {
+        onApplyDamage?.(defender.id, finalAttackPreview.totalDamage);
+      }
+      if (attacker?.id && finalDefensePreview.totalDamage > 0) {
+        onApplyDamage?.(attacker.id, finalDefensePreview.totalDamage);
+      }
+    } else {
+      addLog(
+        "Damage",
+        `Final: hits ${finalAttackHits}, crits ${finalAttackCrits}. Total damage ${finalAttackPreview.totalDamage}.`,
+      );
+
+      if (defender?.id && finalAttackPreview.totalDamage > 0) {
+        onApplyDamage?.(defender.id, finalAttackPreview.totalDamage);
+      }
     }
 
     const hotPending = shouldOpenHotModal(combatCtx);
@@ -723,7 +793,10 @@ function AttackResolutionScreen({
                   <span className="attack-resolution__log-group">
                     {entry.group}
                   </span>
-                  <span>{entry.message}</span>
+                  <span>
+                    {entry.actorName ? `${entry.actorName}: ` : ""}
+                    {entry.message}
+                  </span>
                 </div>
               ))}
             </div>
@@ -731,464 +804,589 @@ function AttackResolutionScreen({
 
           {/* RIGHT: Main */}
           <section className="attack-resolution__main">
-            {/* Header cards */}
-            <div className="attack-resolution__header">
-              <div className="attack-resolution__unit-col">
-                <UnitCard
-                  unit={attacker}
-                  dispatch={() => {}}
-                  canChooseOrder={false}
-                  onChooseOrder={() => {}}
-                  className="attack-resolution__unit-card"
-                  weaponMode={weapon?.mode ?? null}
-                  selectedWeaponNameOverride={weapon?.name ?? null}
-                  autoSelectFirstWeapon={false}
-                  collapsibleSections={true}
-                  showWoundsText={false}
-                  showInjuredInHeader={true}
-                />
-                {combatCtx.effects?.attacker?.length ? (
-                  <div className="attack-resolution__effects-row">
-                    {combatCtx.effects.attacker.map((effect) => (
-                      <span
-                        key={`${effect.id}-${effect.label}`}
-                        className={`pill pill--${effect.pillColor || "red"}`}
-                        data-testid={`effect-pill-${effect.id}-attacker`}
-                      >
-                        {String(effect.label || effect.id || "").toUpperCase()}
-                      </span>
-                    ))}
+            <div className="attack-resolution__main-grid">
+              <div className="attack-resolution__column attack-resolution__column--attacker">
+                <div className="attack-resolution__panel">
+                  <div className="attack-resolution__section">
+                    <div className="attack-resolution__section-title">Attacker</div>
+                    <UnitCard
+                      unit={attacker}
+                      dispatch={() => {}}
+                      canChooseOrder={false}
+                      onChooseOrder={() => {}}
+                      className="attack-resolution__unit-card"
+                      weaponMode={weapon?.mode ?? null}
+                      selectedWeaponNameOverride={weapon?.name ?? null}
+                      autoSelectFirstWeapon={false}
+                      collapsibleSections={true}
+                      showWoundsText={false}
+                      showInjuredInHeader={true}
+                    />
+                    {combatCtx.effects?.attacker?.length ? (
+                      <div className="attack-resolution__effects-row">
+                        {combatCtx.effects.attacker.map((effect) => (
+                          <span
+                            key={`${effect.id}-${effect.label}`}
+                            className={`pill pill--${effect.pillColor || "red"}`}
+                            data-testid={`effect-pill-${effect.id}-attacker`}
+                          >
+                            {String(effect.label || effect.id || "").toUpperCase()}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
-              <div className="attack-resolution__unit-col">
-                <UnitCard
-                  unit={defender}
-                  dispatch={() => {}}
-                  canChooseOrder={false}
-                  onChooseOrder={() => {}}
-                  className="attack-resolution__unit-card"
-                  weaponMode={weapon?.mode ?? null}
-                  selectedWeaponNameOverride={weapon?.name ?? null}
-                  autoSelectFirstWeapon={false}
-                  collapsibleSections={true}
-                  showWoundsText={false}
-                  showInjuredInHeader={true}
-                />
-                {combatCtx.effects?.defender?.length ? (
-                  <div className="attack-resolution__effects-row">
-                    {combatCtx.effects.defender.map((effect) => (
-                      <span
-                        key={`${effect.id}-${effect.label}`}
-                        className={`pill pill--${effect.pillColor || "red"}`}
-                        data-testid={`effect-pill-${effect.id}-defender`}
-                      >
-                        {String(effect.label || effect.id || "").toUpperCase()}
-                      </span>
-                    ))}
+                </div>
+
+                <div className="attack-resolution__panel">
+                  <div className="attack-resolution__section">
+                    <div className="attack-resolution__section-title">Attacker Summary</div>
+                    <div className="attack-resolution__summary-row attack-resolution__summary-row--single">
+                      <div className="attack-resolution__summary-col">
+                        <span>ATK {maxAttackDice}</span>
+                        <span>HIT {attackerSuccessThreshold}+</span>
+                        <span>CRIT {attackerCritThreshold}+</span>
+                      </div>
+                    </div>
                   </div>
-                ) : null}
-                {null}
-              </div>
-            </div>
+                </div>
 
+                <div className="attack-resolution__panel">
+                  <div className="attack-resolution__section">
+                    <div className="attack-resolution__section-title">Attacker Pre-Roll</div>
 
-
-            {/* Summary */}
-            <div className="attack-resolution__summary-row">
-              <div className="attack-resolution__summary-col">
-                <span>ATK {maxAttackDice}</span>
-                <span>HIT {attackerSuccessThreshold}+</span>
-                <span>CRIT {attackerCritThreshold}+</span>
-              </div>
-              <div className="attack-resolution__summary-col">
-                <span>
-                  {defenderSuccessLabel} {defenderSuccessThreshold}+
-                </span>
-                <span>{defenderCritLabel} 6+</span>
-              </div>
-            </div>
-
-            {/* Pre-roll */}
-            <div className="attack-resolution__panel">
-              <div className="attack-resolution__section">
-                <div className="attack-resolution__section-title">Pre-Roll</div>
-
-                <div className="attack-resolution__rules">
-                  <div className="wr-panel attack-resolution__conditions">
-                    <div className="wr-title">Combat Conditions</div>
-                    <div className="wr-grid">
-                      {role === "defender" ? (
-                        <>
-                          <button
-                            type="button"
-                            className={`wr-chip wr-chip--player ${
-                              preRollFlags.cover && !isCoverDisabled
-                                ? "is-applied"
-                                : ""
-                            } ${isCoverDisabled ? "is-disabled" : ""}`}
-                            disabled={isCoverDisabled}
-                            aria-disabled={isCoverDisabled}
-                            data-testid="condition-cover"
-                            onClick={() => {
-                              if (isCoverDisabled) return;
-                              setPreRollFlags((prev) => ({
-                                ...prev,
-                                cover: !prev.cover,
-                              }));
-                              addLog(
-                                "Pre-Roll",
-                                `Cover ${!preRollFlags.cover ? "enabled" : "cleared"}.`,
-                              );
-                            }}
+                    {!isFight ? (
+                      <div
+                        className={`attack-resolution__vantage ${
+                          isAttackerRole ? "" : "attack-resolution__readonly"
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          className={`wr-chip wr-chip--semi ${
+                            isVantageApplied ? "is-applied" : ""
+                          }`}
+                          aria-disabled={!isAttackerRole}
+                          data-testid="condition-vantage"
+                          disabled={!isAttackerRole}
+                          onClick={() => {
+                            if (!isAttackerRole) return;
+                            if (isVantageApplied) {
+                              clearVantage();
+                              addLog("Pre-Roll", "Vantage cleared.");
+                              return;
+                            }
+                            setVantageChooserOpen(true);
+                          }}
+                        >
+                          <div className="wr-chip-label">Vantage</div>
+                          <div className="wr-chip-preview">
+                            Vantage may deny cover retains.
+                          </div>
+                          <div className="wr-chip-badges">
+                            {isVantageApplied ? (
+                              <span className="wr-chip-badge wr-chip-badge--applied">
+                                Applied
+                              </span>
+                            ) : null}
+                          </div>
+                        </button>
+                        {vantageChooserOpen ? (
+                          <div
+                            className="attack-resolution__vantage-chooser"
+                            data-testid="vantage-chooser"
                           >
-                            <div className="wr-chip-label">Cover Save</div>
-                            <div className="wr-chip-preview">
-                              Defender can retain 1 success from cover.
-                            </div>
-                            <div className="wr-chip-badges">
-                              {preRollFlags.cover && !coverDisabledByVantage ? (
-                                <span className="wr-chip-badge wr-chip-badge--applied">
-                                  Applied
-                                </span>
-                              ) : null}
-                            </div>
-                          </button>
-
-                          <button
-                            type="button"
-                            className={`wr-chip wr-chip--player ${
-                              preRollFlags.obscured ? "is-applied" : ""
-                            }`}
-                            aria-disabled="false"
-                            data-testid="condition-obscured"
-                            onClick={() => {
-                              setPreRollFlags((prev) => ({
-                                ...prev,
-                                obscured: !prev.obscured,
-                              }));
-                              addLog(
-                                "Pre-Roll",
-                                `Obscured ${!preRollFlags.obscured ? "enabled" : "cleared"}.`,
-                              );
-                            }}
-                          >
-                            <div className="wr-chip-label">Obscured</div>
-                            <div className="wr-chip-preview">
-                              Obscured affects hit retention.
-                            </div>
-                            <div className="wr-chip-badges">
-                              {preRollFlags.obscured ? (
-                                <span className="wr-chip-badge wr-chip-badge--applied">
-                                  Applied
-                                </span>
-                              ) : null}
-                            </div>
-                          </button>
-                        </>
-                      ) : (
-                        <div className="attack-resolution__vantage">
-                          <button
-                            type="button"
-                            className={`wr-chip wr-chip--semi ${
-                              isVantageApplied ? "is-applied" : ""
-                            }`}
-                            aria-disabled="false"
-                            data-testid="condition-vantage"
-                            onClick={() => {
-                              if (isVantageApplied) {
-                                clearVantage();
-                                addLog("Pre-Roll", "Vantage cleared.");
-                                return;
-                              }
-                              setVantageChooserOpen(true);
-                            }}
-                          >
-                            <div className="wr-chip-label">Vantage</div>
-                            <div className="wr-chip-preview">
-                              Vantage may deny cover retains.
-                            </div>
-                            <div className="wr-chip-badges">
-                              {isVantageApplied ? (
-                                <span className="wr-chip-badge wr-chip-badge--applied">
-                                  Applied
-                                </span>
-                              ) : null}
-                            </div>
-                          </button>
-                          {vantageChooserOpen ? (
-                            <div
-                              className="attack-resolution__vantage-chooser"
-                              data-testid="vantage-chooser"
+                            <button
+                              type="button"
+                              className="kt-modal__btn"
+                              data-testid="vantage-choose-4"
+                              onClick={() => {
+                                if (!isAttackerRole) return;
+                                setCombatCtx((prev) => ({
+                                  ...prev,
+                                  modifiers: {
+                                    ...(prev.modifiers || {}),
+                                    vantageState: { mode: "4in", accurateValue: 2 },
+                                    coverDisabledByVantage: true,
+                                  },
+                                }));
+                                setVantageChooserOpen(false);
+                                addLog("Pre-Roll", "Vantage 4\" selected (Accurate 2).");
+                              }}
                             >
-                              <button
-                                type="button"
-                                className="kt-modal__btn"
-                                data-testid="vantage-choose-4"
-                                onClick={() => {
-                                  setCombatCtx((prev) => ({
-                                    ...prev,
-                                    modifiers: {
-                                      ...(prev.modifiers || {}),
-                                      vantageState: { mode: "4in", accurateValue: 2 },
-                                      coverDisabledByVantage: true,
-                                    },
-                                  }));
-                                  setVantageChooserOpen(false);
-                                  addLog("Pre-Roll", "Vantage 4\" selected (Accurate 2).");
-                                }}
-                              >
-                                4" Vantage
-                              </button>
-                              <button
-                                type="button"
-                                className="kt-modal__btn"
-                                data-testid="vantage-choose-2"
-                                onClick={() => {
-                                  setCombatCtx((prev) => ({
-                                    ...prev,
-                                    modifiers: {
-                                      ...(prev.modifiers || {}),
-                                      vantageState: { mode: "2in", accurateValue: 1 },
-                                      coverDisabledByVantage: true,
-                                    },
-                                  }));
-                                  setVantageChooserOpen(false);
-                                  addLog("Pre-Roll", "Vantage 2\" selected (Accurate 1).");
-                                }}
-                              >
-                                2" Vantage
-                              </button>
-                            </div>
-                          ) : null}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="attack-resolution__e2e-state">
-                    <div data-testid="vantage-state">
-                      {combatCtx.modifiers?.vantageState?.mode || "none"}
-                    </div>
-                    <div data-testid="cover-state">
-                      {preRollFlags.cover && !coverDisabledByVantage ? "on" : "off"}
-                    </div>
-                  </div>
-
-                  {role !== "attacker" ? (
-                    <div className="attack-resolution__empty">
-                      No pre-roll rules for defender yet.
-                    </div>
-                  ) : (
-                    <WeaponRulesPanel
-                      ctx={combatCtx}
-                      phase={PHASES.PRE_ROLL}
-                      onCtxChange={handleCtxChange}
-                      testId={undefined}
-                    />
-                  )}
-
-                  {isAttackerRole && isLimited ? (
-                    <div className="attack-resolution__inline-note">
-                      {isLimitedExhausted
-                        ? `Limited ${limitedValue} — this weapon has no uses left after this attack.`
-                        : `Limited ${limitedValue} — ${limitedRemaining} use${
-                            limitedRemaining === 1 ? "" : "s"
-                          } remaining after this attack.`}
-                    </div>
-                  ) : null}
-
-                  {isAttackerRole && isLimitedExhausted ? (
-                    <div
-                      className="attack-resolution__inline-note"
-                      data-testid="limited-exhausted"
-                    >
-                      Limited exhausted.
-                    </div>
-                  ) : null}
-                </div>
-
-                <div className="attack-resolution__dice-strip">
-                  <div className="attack-resolution__dice-line">
-                    <strong>Attacker:</strong>&nbsp;Roll {maxAttackDice} · success
-                    on {attackerSuccessThreshold}+ · crit on {attackerCritThreshold}+
-                  </div>
-                  <div className="attack-resolution__dice-line">
-                    <strong>Defender:</strong>&nbsp;Roll {maxDefenseDice} · success
-                    on {defenderSuccessThreshold}+ · crit on 6+
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
-            {/* Roll section (centered; attacker row then defender row) */}
-            <div className="attack-resolution__panel">
-              <div className="attack-resolution__section">
-                <div className="attack-resolution__section-title">Roll</div>
-
-                <div className="attack-resolution__instruction" data-testid="roll-instructions">
-                  <div className="attack-resolution__instruction-title">
-                    Roll your dice now
-                  </div>
-                  <div className="attack-resolution__instruction-line">
-                    <strong>Attacker:</strong> Roll {maxAttackDice} · success on
-                    {" "}{attackerSuccessThreshold}+ · crit on {attackerCritThreshold}+
-                  </div>
-                  <div className="attack-resolution__instruction-line">
-                    <strong>Defender:</strong> Roll {maxDefenseDice} · success on
-                    {" "}{defenderSuccessThreshold}+ · crit on 6+
-                  </div>
-
-                </div>
-
-                {role !== "attacker" ? (
-                  <div className="attack-resolution__empty">
-                    (Attacker-only for now — defender rules not wired yet.)
-                  </div>
-                ) : (
-                  <div className="attack-resolution__postroll">
-                    <WeaponRulesPanel
-                      ctx={combatCtx}
-                      phase={PHASES.ROLL}
-                      onCtxChange={handleCtxChange}
-                      testId="weapon-rules-panel"
-                    />
-                  </div>
-                )}
-
-                {role !== "attacker" ? null : (
-                  <div className="attack-resolution__postroll">
-                    {!rollsLocked ? (
+                              4" Vantage
+                            </button>
+                            <button
+                              type="button"
+                              className="kt-modal__btn"
+                              data-testid="vantage-choose-2"
+                              onClick={() => {
+                                if (!isAttackerRole) return;
+                                setCombatCtx((prev) => ({
+                                  ...prev,
+                                  modifiers: {
+                                    ...(prev.modifiers || {}),
+                                    vantageState: { mode: "2in", accurateValue: 1 },
+                                    coverDisabledByVantage: true,
+                                  },
+                                }));
+                                setVantageChooserOpen(false);
+                                addLog("Pre-Roll", "Vantage 2\" selected (Accurate 1).");
+                              }}
+                            >
+                              2" Vantage
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : (
                       <div className="attack-resolution__empty">
-                        Lock rolls first to use post-roll rules.
+                        No attacker pre-roll rules for fight actions.
+                      </div>
+                    )}
+
+                    <div className={isAttackerRole ? "" : "attack-resolution__readonly"}>
+                      <WeaponRulesPanel
+                        ctx={combatCtx}
+                        phase={PHASES.PRE_ROLL}
+                        onCtxChange={handleCtxChange}
+                        testId={undefined}
+                      />
+                    </div>
+
+                    {isLimited ? (
+                      <div className="attack-resolution__inline-note">
+                        {isLimitedExhausted
+                          ? `Limited ${limitedValue} — this weapon has no uses left after this attack.`
+                          : `Limited ${limitedValue} — ${limitedRemaining} use${
+                              limitedRemaining === 1 ? "" : "s"
+                            } remaining after this attack.`}
                       </div>
                     ) : null}
 
-                    <WeaponRulesPanel
-                      ctx={combatCtx}
-                      phase={PHASES.POST_ROLL}
-                      onCtxChange={handleCtxChange}
-                      testId={undefined}
-                    />
-                    <button
-                      className="attack-resolution__rule attack-resolution__rule--secondary"
-                      type="button"
-                      onClick={() => addLog("Post-Roll", "CP re-roll used (placeholder).")}
-                      disabled={!rollsLocked}
-                      title={!rollsLocked ? "Lock rolls first" : undefined}
-                    >
-                      CP Re-roll
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Final entry (attacker only; ignores defender blocks) */}
-            <div className="attack-resolution__panel">
-              <div className="attack-resolution__section">
-                <div className="attack-resolution__section-title">Final Entry</div>
-
-                <div className="attack-resolution__roll-grid">
-                  <div className="attack-resolution__roll-row attack-resolution__roll-row--final">
-                    <CountInput
-                      label="Final Hits"
-                      value={finalAttackHits}
-                      max={maxAttackDice}
-                      onChange={(next) => setFinalAttackHits(next)}
-                      disabled={!isAttackerRole}
-                      testId="final-hits"
-                    />
-                    <CountInput
-                      label="Final Crits"
-                      value={finalAttackCrits}
-                      max={maxAttackDice}
-                      onChange={(next) => setFinalAttackCrits(next)}
-                      disabled={!isAttackerRole}
-                      testId="final-crits"
-                    />
+                    {isLimitedExhausted ? (
+                      <div
+                        className="attack-resolution__inline-note"
+                        data-testid="limited-exhausted"
+                      >
+                        Limited exhausted.
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
-                <div className="attack-resolution__damage-preview">
-                  <div className="attack-resolution__damage-line">
-                    <span>Remaining:</span>
-                    <strong>
-                      {finalPreview.remainingHits} hits ·{" "}
-                      {finalPreview.remainingCrits} crits
-                    </strong>
-                  </div>
-                  <div className="attack-resolution__damage-line">
-                    <span>Weapon:</span>
-                    <strong>
-                      {finalPreview.normalDamage}/{finalPreview.critDamage}
-                    </strong>
-                  </div>
-                  <div className="attack-resolution__damage-total">
-                    Total Damage: <strong>{finalPreview.totalDamage}</strong>
-                  </div>
-                  <div className="attack-resolution__damage-sub">
-                    (Final entry ignores defender blocks — fast mode.)
-                  </div>
-                </div>
-
-                <button
-                  className="kt-modal__btn kt-modal__btn--primary"
-                  type="button"
-                  onClick={() => {
-                    addLog("Final", "Resolved via final entry window.");
-                    resolveFromFinalWindow();
-                  }}
-                  disabled={!isAttackerRole}
-                >
-                  Apply Damage
-                </button>
-              </div>
-            </div>
-
-            {/* Firefight Ploys (row style) */}
-            <div className="attack-resolution__ploys">
-              <div className="attack-resolution__section-title">
-                {firefightPloys.label}
-              </div>
-
-              {firefightPloys.ploys.length === 0 ? (
-                <div className="attack-resolution__empty">No ploys available.</div>
-              ) : (
-                <div className="attack-resolution__ploy-list">
-                  {firefightPloys.ploys.map((ploy) => (
-                    <button
-                      key={ploy.id}
-                      type="button"
-                      className="attack-resolution__ploy"
-                      onClick={() => {
-                        const cost = ploy?.cost?.cp ? `${ploy.cost.cp}CP` : "—";
-                        addLog("Ploy", `Used ${ploy.name} (${cost}).`);
-                      }}
-                      aria-label={ploy.name || ploy.id}
+                <div className="attack-resolution__panel">
+                  <div className="attack-resolution__section">
+                    <div className="attack-resolution__section-title">Attacker Roll</div>
+                    <div
+                      className="attack-resolution__instruction"
+                      data-testid="roll-instructions"
                     >
-                      <img
-                        className="attack-resolution__ploy-image"
-                        src={(() => {
-                          const image = ploy?.image;
-                          if (!image || typeof image !== "string") return "/killteamSpeedrunLogo.png";
-                          if (image.startsWith("http://") || image.startsWith("https://")) return image;
-                          if (image.startsWith("/")) return image;
-                          if (image.startsWith("public/")) return `/${image.slice("public/".length)}`;
-                          return `/${image}`;
-                        })()}
-                        alt={ploy.name || ploy.id}
-                        loading="lazy"
+                      <div className="attack-resolution__instruction-title">
+                        Roll attacker dice
+                      </div>
+                      <div className="attack-resolution__instruction-line">
+                        Roll {maxAttackDice} · success on {attackerSuccessThreshold}+ ·
+                        crit on {attackerCritThreshold}+
+                      </div>
+                    </div>
+
+                    <div className={isAttackerRole ? "" : "attack-resolution__readonly"}>
+                      <WeaponRulesPanel
+                        ctx={combatCtx}
+                        phase={PHASES.ROLL}
+                        onCtxChange={handleCtxChange}
+                        testId="weapon-rules-panel"
                       />
-                      {ploy?.cost?.cp != null && (
-                        <span className="attack-resolution__ploy-cost-badge">
-                          {ploy.cost.cp}CP
-                        </span>
-                      )}
-                    </button>
-                  ))}
+                    </div>
+
+                    <div className={isAttackerRole ? "" : "attack-resolution__readonly"}>
+                      {!rollsLocked ? (
+                        <div className="attack-resolution__empty">
+                          Lock rolls first to use post-roll rules.
+                        </div>
+                      ) : null}
+
+                      <WeaponRulesPanel
+                        ctx={combatCtx}
+                        phase={PHASES.POST_ROLL}
+                        onCtxChange={handleCtxChange}
+                        testId={undefined}
+                      />
+                      <button
+                        className="attack-resolution__rule attack-resolution__rule--secondary"
+                        type="button"
+                        onClick={() => {
+                          if (!isAttackerRole) return;
+                          addLog("Post-Roll", "CP re-roll used.");
+                          if (cpOwner) {
+                            onSpendCp?.(cpOwner, 1);
+                          }
+                        }}
+                        disabled={!rollsLocked || !isAttackerRole}
+                        title={!rollsLocked ? "Lock rolls first" : undefined}
+                      >
+                        CP Re-roll
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              )}
+
+                <div className="attack-resolution__panel">
+                  <div className="attack-resolution__section">
+                    <div className="attack-resolution__section-title">Attacker Final Entry</div>
+                    <div className="attack-resolution__roll-grid attack-resolution__roll-grid--column">
+                      <div className="attack-resolution__roll-row attack-resolution__roll-row--final attack-resolution__roll-row--single">
+                        <CountInput
+                          label={isFight ? "Attacker Hits" : "Final Hits"}
+                          value={finalAttackHits}
+                          max={maxAttackDice}
+                          onChange={(next) => {
+                            setFinalAttackHits(next);
+                            onSetFinalEntry?.({ attackHits: next });
+                          }}
+                          disabled={!isFight && !isAttackerRole}
+                          testId="final-hits"
+                        />
+                        <CountInput
+                          label={isFight ? "Attacker Crits" : "Final Crits"}
+                          value={finalAttackCrits}
+                          max={maxAttackDice}
+                          onChange={(next) => {
+                            setFinalAttackCrits(next);
+                            onSetFinalEntry?.({ attackCrits: next });
+                          }}
+                          disabled={!isFight && !isAttackerRole}
+                          testId="final-crits"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="attack-resolution__column attack-resolution__column--defender">
+                <div className="attack-resolution__panel">
+                  <div className="attack-resolution__section">
+                    <div className="attack-resolution__section-title">Defender</div>
+                    <UnitCard
+                      unit={defender}
+                      dispatch={() => {}}
+                      canChooseOrder={false}
+                      onChooseOrder={() => {}}
+                      className="attack-resolution__unit-card"
+                      weaponMode={weapon?.mode ?? null}
+                      selectedWeaponNameOverride={weapon?.name ?? null}
+                      autoSelectFirstWeapon={false}
+                      collapsibleSections={true}
+                      showWoundsText={false}
+                      showInjuredInHeader={true}
+                    />
+                    {combatCtx.effects?.defender?.length ? (
+                      <div className="attack-resolution__effects-row">
+                        {combatCtx.effects.defender.map((effect) => (
+                          <span
+                            key={`${effect.id}-${effect.label}`}
+                            className={`pill pill--${effect.pillColor || "red"}`}
+                            data-testid={`effect-pill-${effect.id}-defender`}
+                          >
+                            {String(effect.label || effect.id || "").toUpperCase()}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="attack-resolution__panel">
+                  <div className="attack-resolution__section">
+                    <div className="attack-resolution__section-title">Defender Summary</div>
+                    <div className="attack-resolution__summary-row attack-resolution__summary-row--single">
+                      <div className="attack-resolution__summary-col">
+                        <span>
+                          {defenderSuccessLabel} {defenderSuccessThreshold}+
+                        </span>
+                        <span>{defenderCritLabel} 6+</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="attack-resolution__panel">
+                  <div className="attack-resolution__section">
+                    <div className="attack-resolution__section-title">Defender Pre-Roll</div>
+
+                    {!isFight ? (
+                      <>
+                        <div
+                          className={`wr-panel attack-resolution__conditions ${
+                            isDefenderRole ? "" : "attack-resolution__readonly"
+                          }`}
+                        >
+                          <div className="wr-title">Combat Conditions</div>
+                          <div className="wr-grid">
+                            <button
+                              type="button"
+                              className={`wr-chip wr-chip--player ${
+                                preRollFlags.cover && !isCoverDisabled
+                                  ? "is-applied"
+                                  : ""
+                              } ${isCoverDisabled ? "is-disabled" : ""}`}
+                              disabled={isCoverDisabled || !isDefenderRole}
+                              aria-disabled={isCoverDisabled || !isDefenderRole}
+                              data-testid="condition-cover"
+                              onClick={() => {
+                                if (!isDefenderRole || isCoverDisabled) return;
+                                setPreRollFlags((prev) => ({
+                                  ...prev,
+                                  cover: !prev.cover,
+                                }));
+                                addLog(
+                                  "Pre-Roll",
+                                  `Cover ${!preRollFlags.cover ? "enabled" : "cleared"}.`,
+                                );
+                              }}
+                            >
+                              <div className="wr-chip-label">Cover Save</div>
+                              <div className="wr-chip-preview">
+                                Defender can retain 1 success from cover.
+                              </div>
+                              <div className="wr-chip-badges">
+                                {preRollFlags.cover && !coverDisabledByVantage ? (
+                                  <span className="wr-chip-badge wr-chip-badge--applied">
+                                    Applied
+                                  </span>
+                                ) : null}
+                              </div>
+                            </button>
+
+                            <button
+                              type="button"
+                              className={`wr-chip wr-chip--player ${
+                                preRollFlags.obscured ? "is-applied" : ""
+                              }`}
+                              aria-disabled={!isDefenderRole}
+                              data-testid="condition-obscured"
+                              disabled={!isDefenderRole}
+                              onClick={() => {
+                                if (!isDefenderRole) return;
+                                setPreRollFlags((prev) => ({
+                                  ...prev,
+                                  obscured: !prev.obscured,
+                                }));
+                                addLog(
+                                  "Pre-Roll",
+                                  `Obscured ${!preRollFlags.obscured ? "enabled" : "cleared"}.`,
+                                );
+                              }}
+                            >
+                              <div className="wr-chip-label">Obscured</div>
+                              <div className="wr-chip-preview">
+                                Obscured affects hit retention.
+                              </div>
+                              <div className="wr-chip-badges">
+                                {preRollFlags.obscured ? (
+                                  <span className="wr-chip-badge wr-chip-badge--applied">
+                                    Applied
+                                  </span>
+                                ) : null}
+                              </div>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="attack-resolution__e2e-state">
+                          <div data-testid="vantage-state">
+                            {combatCtx.modifiers?.vantageState?.mode || "none"}
+                          </div>
+                          <div data-testid="cover-state">
+                            {preRollFlags.cover && !coverDisabledByVantage ? "on" : "off"}
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="attack-resolution__empty">
+                        No defender pre-roll rules for fight actions.
+                      </div>
+                    )}
+
+                    <div className="attack-resolution__empty">
+                      Defender weapon rules not wired yet.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="attack-resolution__panel">
+                  <div className="attack-resolution__section">
+                    <div className="attack-resolution__section-title">Defender Roll</div>
+                    <div className="attack-resolution__instruction">
+                      <div className="attack-resolution__instruction-title">
+                        Roll defender dice
+                      </div>
+                      <div className="attack-resolution__instruction-line">
+                        Roll {maxDefenseDice} · success on {defenderSuccessThreshold}+ ·
+                        crit on 6+
+                      </div>
+                    </div>
+                    <div className="attack-resolution__empty">
+                      Defender roll rules not wired yet.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="attack-resolution__panel">
+                  <div className="attack-resolution__section">
+                    <div className="attack-resolution__section-title">Defender Final Entry</div>
+                    {isFight ? (
+                      <div className="attack-resolution__roll-grid attack-resolution__roll-grid--column">
+                        <div className="attack-resolution__roll-row attack-resolution__roll-row--final attack-resolution__roll-row--single">
+                          <CountInput
+                            label="Defender Hits"
+                            value={finalDefenseHits}
+                            max={maxDefenseDice}
+                            onChange={(next) => {
+                              setFinalDefenseHits(next);
+                              onSetFinalEntry?.({ defenseHits: next });
+                            }}
+                            disabled={false}
+                            testId="final-defense-hits"
+                          />
+                          <CountInput
+                            label="Defender Crits"
+                            value={finalDefenseCrits}
+                            max={maxDefenseDice}
+                            onChange={(next) => {
+                              setFinalDefenseCrits(next);
+                              onSetFinalEntry?.({ defenseCrits: next });
+                            }}
+                            disabled={false}
+                            testId="final-defense-crits"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="attack-resolution__empty">
+                        Defender final entry only applies to fight actions.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="attack-resolution__full-row">
+                <div className="attack-resolution__panel">
+                  <div className="attack-resolution__section">
+                    <div className="attack-resolution__section-title">Damage Preview</div>
+                    <div className="attack-resolution__damage-preview">
+                      {isFight ? (
+                        <>
+                          <div className="attack-resolution__damage-line">
+                            <span>Attacker:</span>
+                            <strong>
+                              {finalAttackPreview.remainingHits} hits ·{" "}
+                              {finalAttackPreview.remainingCrits} crits ·{" "}
+                              {finalAttackPreview.normalDamage}/{finalAttackPreview.critDamage} ·{" "}
+                              {finalAttackPreview.totalDamage} dmg
+                            </strong>
+                          </div>
+                          <div className="attack-resolution__damage-line">
+                            <span>Defender:</span>
+                            <strong>
+                              {finalDefensePreview.remainingHits} hits ·{" "}
+                              {finalDefensePreview.remainingCrits} crits ·{" "}
+                              {finalDefensePreview.normalDamage}/{finalDefensePreview.critDamage} ·{" "}
+                              {finalDefensePreview.totalDamage} dmg
+                            </strong>
+                          </div>
+                          <div className="attack-resolution__damage-sub">
+                            (Final entry ignores defender blocks — fast mode.)
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="attack-resolution__damage-line">
+                            <span>Remaining:</span>
+                            <strong>
+                              {finalAttackPreview.remainingHits} hits ·{" "}
+                              {finalAttackPreview.remainingCrits} crits
+                            </strong>
+                          </div>
+                          <div className="attack-resolution__damage-line">
+                            <span>Weapon:</span>
+                            <strong>
+                              {finalAttackPreview.normalDamage}/{finalAttackPreview.critDamage}
+                            </strong>
+                          </div>
+                          <div className="attack-resolution__damage-total">
+                            Total Damage: <strong>{finalAttackPreview.totalDamage}</strong>
+                          </div>
+                          <div className="attack-resolution__damage-sub">
+                            (Final entry ignores defender blocks — fast mode.)
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    <button
+                      className="kt-modal__btn kt-modal__btn--primary"
+                      type="button"
+                      onClick={() => {
+                        addLog("Final", "Resolved via final entry window.");
+                        resolveFromFinalWindow();
+                      }}
+                      disabled={!isFight && !isAttackerRole}
+                    >
+                      Apply Damage
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="attack-resolution__full-row">
+                <div className="attack-resolution__ploys">
+                  <div className="attack-resolution__section-title">
+                    {firefightPloys.label}
+                  </div>
+
+                  {firefightPloys.ploys.length === 0 ? (
+                    <div className="attack-resolution__empty">No ploys available.</div>
+                  ) : (
+                    <div className="attack-resolution__ploy-list">
+                      {firefightPloys.ploys.map((ploy) => (
+                        <button
+                          key={ploy.id}
+                          type="button"
+                          className="attack-resolution__ploy"
+                          onClick={() => {
+                            const cost = ploy?.cost?.cp ? `${ploy.cost.cp}CP` : "—";
+                            addLog("Ploy", `Used ${ploy.name} (${cost}).`);
+                          }}
+                          aria-label={ploy.name || ploy.id}
+                        >
+                          <img
+                            className="attack-resolution__ploy-image"
+                            src={(() => {
+                              const image = ploy?.image;
+                              if (!image || typeof image !== "string") return "/killteamSpeedrunLogo.png";
+                              if (image.startsWith("http://") || image.startsWith("https://")) return image;
+                              if (image.startsWith("/")) return image;
+                              if (image.startsWith("public/")) return `/${image.slice("public/".length)}`;
+                              return `/${image}`;
+                            })()}
+                            alt={ploy.name || ploy.id}
+                            loading="lazy"
+                          />
+                          {ploy?.cost?.cp != null && (
+                            <span className="attack-resolution__ploy-cost-badge">
+                              {ploy.cost.cp}CP
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </section>
         </div>

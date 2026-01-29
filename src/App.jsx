@@ -2101,6 +2101,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
           attackRoll={actionFlow?.dice?.attacker?.raw || []}
           defenseRoll={actionFlow?.dice?.defender?.raw || []}
           combatModifiers={actionFlow?.inputs || {}}
+          battleLog={actionFlow?.log || []}
+          finalEntry={actionFlow?.finalEntry || null}
           weaponUsage={state.weaponUsage || {}}
           teamKeys={teamKeys}
           rollsLocked={
@@ -2127,6 +2129,15 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
           onCancel={() => {
             if (!canCancelFightFlow) return;
             dispatchGameEvent("FLOW_CANCEL");
+          }}
+          onAppendBattleLog={(entry) => {
+            dispatchGameEvent("FLOW_APPEND_LOG", { entry });
+          }}
+          onSetFinalEntry={(finalEntry) => {
+            dispatchGameEvent("FLOW_SET_FINAL_ENTRY", { finalEntry });
+          }}
+          onSpendCp={(playerId, cost) => {
+            dispatchGameEvent("SPEND_CP", { playerId, cost });
           }}
         />
       )}
@@ -2451,6 +2462,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
         attackRoll={combatState?.attackRoll}
         defenseRoll={combatState?.defenseRoll}
         combatModifiers={combatState?.modifiers}
+        battleLog={combatState?.log || []}
+        finalEntry={combatState?.finalEntry || null}
         weaponUsage={state.weaponUsage || {}}
         teamKeys={teamKeys}
         rollsLocked={
@@ -2500,6 +2513,15 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
         }}
         onCancel={() => {
           dispatchCombatEvent("CANCEL_COMBAT");
+        }}
+        onAppendBattleLog={(entry) => {
+          dispatchCombatEvent("COMBAT_LOG_APPEND", { entry });
+        }}
+        onSetFinalEntry={(finalEntry) => {
+          dispatchCombatEvent("COMBAT_SET_FINAL_ENTRY", { finalEntry });
+        }}
+        onSpendCp={(playerId, cost) => {
+          dispatchGameEvent("SPEND_CP", { playerId, cost });
         }}
       />
 
@@ -2907,6 +2929,7 @@ function E2EAttackResolutionRoute() {
           setOpen(false);
           resolveChannelRef.current?.postMessage({ type: "RESOLVE_COMPLETE" });
         }}
+        onSpendCp={() => {}}
       />
     </div>
   );

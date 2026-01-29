@@ -25,6 +25,13 @@ export const initialCombatState = {
 	defendingOperativeId: null,
 	weaponId: null,
 	weaponProfile: null,
+	log: [],
+	finalEntry: {
+		attackHits: 0,
+		attackCrits: 0,
+		defenseHits: 0,
+		defenseCrits: 0,
+	},
 	stage: COMBAT_STAGES.ATTACK_RESOLUTION,
 	attackRoll: [],
 	attackLocked: false,
@@ -56,6 +63,12 @@ const createActionFlow = ({ mode, attackerId }) => ({
 	attackerId,
 	defenderId: null,
 	step: "pickTarget",
+	finalEntry: {
+		attackHits: 0,
+		attackCrits: 0,
+		defenseHits: 0,
+		defenseCrits: 0,
+	},
 	attackerWeapon: null,
 	defenderWeapon: null,
 	inputs: {
@@ -401,6 +414,33 @@ function reduceGameState(state, action) {
 				};
 			}
 
+			case "COMBAT_LOG_APPEND": {
+				const { entry } = action.payload || {};
+				if (!entry || !state.combatState) return state;
+				return {
+					...state,
+					combatState: {
+						...state.combatState,
+						log: [entry, ...(state.combatState.log || [])],
+					},
+				};
+			}
+
+			case "COMBAT_SET_FINAL_ENTRY": {
+				const { finalEntry } = action.payload || {};
+				if (!finalEntry || !state.combatState) return state;
+				return {
+					...state,
+					combatState: {
+						...state.combatState,
+						finalEntry: {
+							...(state.combatState.finalEntry || {}),
+							...finalEntry,
+						},
+					},
+				};
+			}
+
 			case "ADVANCE_ATTACK_QUEUE": {
 				const queue = state.combatState?.attackQueue || [];
 				const nextIndex = Number(state.combatState?.currentAttackIndex ?? 0) + 1;
@@ -417,6 +457,7 @@ function reduceGameState(state, action) {
 						rollsLocked: false,
 						blocksResolved: false,
 						blocks: null,
+						log: [],
 						currentAttackIndex: nextIndex,
 						currentAttackItem: queue[nextIndex] ?? null,
 						defendingOperativeId: queue[nextIndex]?.targetId ?? state.combatState?.defendingOperativeId,
@@ -801,6 +842,42 @@ function reduceGameState(state, action) {
 				ui: {
 					...(state.ui || {}),
 					actionFlow: null,
+				},
+			};
+		}
+
+		case "FLOW_APPEND_LOG": {
+			const { entry } = action.payload || {};
+			const flow = state.ui?.actionFlow;
+			if (!flow || !entry) return state;
+			const nextLog = [entry, ...(flow.log || [])];
+			return {
+				...state,
+				ui: {
+					...(state.ui || {}),
+					actionFlow: {
+						...flow,
+						log: nextLog,
+					},
+				},
+			};
+		}
+
+		case "FLOW_SET_FINAL_ENTRY": {
+			const { finalEntry } = action.payload || {};
+			const flow = state.ui?.actionFlow;
+			if (!flow || !finalEntry) return state;
+			return {
+				...state,
+				ui: {
+					...(state.ui || {}),
+					actionFlow: {
+						...flow,
+						finalEntry: {
+							...(flow.finalEntry || {}),
+							...finalEntry,
+						},
+					},
 				},
 			};
 		}
@@ -1935,6 +2012,22 @@ function reduceGameState(state, action) {
 		}
 
 		case "USE_FIREFIGHT_PLOY": {
+			const { playerId, cost = 0 } = action.payload || {};
+			if (playerId !== "A" && playerId !== "B") return state;
+			const numericCost = Number(cost) || 0;
+			if (numericCost < 0) return state;
+			const currentCp = state.cp?.[playerId] ?? 0;
+			if (currentCp - numericCost < 0) return state;
+			return {
+				...state,
+				cp: {
+					...(state.cp || { A: 0, B: 0 }),
+					[playerId]: currentCp - numericCost,
+				},
+			};
+		}
+
+		case "SPEND_CP": {
 			const { playerId, cost = 0 } = action.payload || {};
 			if (playerId !== "A" && playerId !== "B") return state;
 			const numericCost = Number(cost) || 0;

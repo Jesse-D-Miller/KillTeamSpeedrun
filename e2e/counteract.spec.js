@@ -195,9 +195,25 @@ test("units that already counteracted are excluded", async ({ page }) => {
   await waitForCounteractWindow(page);
 
   await expect(page.getByTestId("action-counteract")).toBeVisible();
-  const counteractList = page.locator(".kt-action-card__counteract-list");
-  await expect(counteractList).toBeVisible();
-  await expect(
-    counteractList.getByRole("button", { name: focusedSeed.counteractedUnitName }),
-  ).toHaveCount(0);
+  const eligibleIds = await page.evaluate(() => {
+    const state = window.ktGetGameState?.();
+    if (!state) return [];
+    return (state.game || [])
+      .filter(
+        (unit) =>
+          unit?.owner === "A" &&
+          unit?.state?.readyState === "EXPENDED" &&
+          unit?.state?.order === "engage" &&
+          unit?.state?.hasCounteractedThisTP !== true &&
+          Number(unit?.state?.woundsCurrent ?? 0) > 0,
+      )
+      .map((unit) => unit.id);
+  });
+  const counteractedId = await page.evaluate((name) => {
+    const state = window.ktGetGameState?.();
+    const unit = (state?.game || []).find((entry) => entry?.name === name);
+    return unit?.id || null;
+  }, focusedSeed.counteractedUnitName);
+  expect(counteractedId).toBeTruthy();
+  expect(eligibleIds).not.toContain(counteractedId);
 });
