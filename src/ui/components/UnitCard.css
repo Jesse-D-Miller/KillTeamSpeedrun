@@ -120,6 +120,13 @@
   opacity: 0.8;
 }
 
+.kt-card--counteract {
+  border-color: rgba(120, 255, 140, 0.7);
+  box-shadow: 0 0 0 2px rgba(120, 255, 140, 0.25), 0 10px 26px rgba(0, 0, 0, 0.52);
+  filter: none;
+  opacity: 1;
+}
+
 /* Left title/portrait block */
 .kt-card__title {
   min-width: 0;

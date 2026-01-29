@@ -159,7 +159,7 @@ function UnitCardFocused() {
       : isCounteractActive
         ? "Counteract: take 1 free action"
         : inCounteractWindow
-          ? "No READY operatives. Counteract available."
+          ? ""
           : isFirefightPhase &&
               isMyTurn &&
               !hasReadyOperatives &&
@@ -359,7 +359,7 @@ function UnitCardFocused() {
                   </button>
                 </div>
               )}
-              {shouldShowActions && (
+              {(shouldShowActions || inCounteractWindow) && (
                 <Actions
                   attacker={selectedUnit}
                   actionMarks={selectedUnit?.state?.actionMarks}

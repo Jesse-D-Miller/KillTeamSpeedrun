@@ -648,17 +648,16 @@ function AttackResolutionScreen({
       data-attack-mode={isFight ? "fight" : "shoot"}
     >
       <div className="kt-modal__backdrop" onClick={() => onCancel?.()} />
+      <button
+        className="kt-modal__close attack-resolution__close"
+        type="button"
+        onClick={() => onCancel?.()}
+        aria-label="Dismiss modal"
+        title="Dismiss modal"
+      >
+        ×
+      </button>
       <div className="kt-modal__panel attack-resolution__modal-panel">
-        <button
-          className="kt-modal__close"
-          type="button"
-          onClick={() => onCancel?.()}
-          aria-label="Dismiss modal"
-          title="Dismiss modal"
-        >
-          ×
-        </button>
-
         <div className="attack-resolution">
           {hotModalOpen && (
             <div className="attack-resolution__hot-modal" role="dialog" aria-label="Hot Damage">

@@ -474,6 +474,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
     state.firefight?.activeOperativeId === selectedUnit?.id;
   const inCounteractWindow = isInCounteractWindow(state, loopPlayerId);
   const showCounteract = inCounteractWindow;
+  const counteractEligibleIds = counteractOperatives.map((unit) => unit.id);
   const statusMessage =
     awaitingOrder
       ? "Choose order"
@@ -1976,6 +1977,11 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
                   canChooseOrder={canChooseOrder}
                   activeOperativeId={state.firefight?.activeOperativeId ?? null}
                   onCardClick={handleOpenUnitCard}
+                  className={
+                    inCounteractWindow && counteractEligibleIds.includes(unit.id)
+                      ? "kt-card--counteract"
+                      : ""
+                  }
                   onChooseOrder={
                     isFirefight
                       ? (order) => {

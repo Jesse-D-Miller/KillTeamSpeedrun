@@ -109,6 +109,65 @@ function UnitSelector() {
 		A: readReadyState("A"),
 		B: readReadyState("B"),
 	}));
+	const setupSteps = useMemo(
+		() => [
+			{
+				title: "Select Mission",
+				body:
+					"Choose the mission, map layout, deployment zones, and mission rules.",
+			},
+			{
+				title: "Determine Attacker & Defender (if applicable)",
+				body: "Some missions assign roles; otherwise skip.",
+			},
+			{
+				title: "Place Terrain",
+				body:
+					"Set up all terrain as defined by the mission/map. No freelancing. Terrain is locked once placed.",
+			},
+			{
+				title: "Select Kill Teams",
+				body:
+					"Each player selects their kill team roster according to the mission.",
+			},
+			{
+				title: "Choose Equipment",
+				body: "Players spend Equipment Points and assign equipment to operatives.",
+			},
+			{
+				title: "Select Tac Ops",
+				body: "Each player secretly selects their Tac Ops (per mission rules).",
+			},
+			{
+				title: "Determine Initiative for Setup",
+				body: "Roll off to determine who acts first during deployment.",
+			},
+			{
+				title: "Deploy Operatives",
+				body:
+					"Starting with the initiative player: Players alternate deploying operatives. Operatives are placed in valid deployment zones. All operatives start with Conceal unless a rule says otherwise.",
+			},
+			{
+				title: "Resolve Pre-game Abilities",
+				body:
+					"Apply any rules that trigger: “During setup”, “After deployment”, “Before the first Turning Point”.",
+			},
+			{
+				title: "Setup Complete",
+				body: "Proceed to the Strategy Phase of Turning Point 1.",
+			},
+		],
+		[],
+	);
+	const [setupStepIndex, setSetupStepIndex] = useState(0);
+	const handleSetupStepNav = (direction) => {
+		setSetupStepIndex((prev) => {
+			const total = setupSteps.length;
+			if (total === 0) return 0;
+			const nextRaw = direction === "prev" ? prev - 1 : prev + 1;
+			return (nextRaw + total) % total;
+		});
+	};
 
 	const triggerEquipmentLimitFlash = () => {
 		setFlashEquipmentLimit(true);
@@ -282,6 +341,7 @@ function UnitSelector() {
 		team: "alpha",
 		unitId: null,
 	});
+	const [hasEquipmentTouched, setHasEquipmentTouched] = useState(false);
 	const [selectedEquipmentIds, setSelectedEquipmentIds] = useState(() => {
 		if (!gameCode || !slot) return [];
 		const stored = readStoredJson(storageKeyForEquipment(slot));
@@ -343,7 +403,7 @@ function UnitSelector() {
 				acc[unit.id] = weaponNames;
 				return acc;
 			}, {});
-			const equipmentIds = equipmentList.map((item) => item.id);
+			const equipmentIds = equipmentList.slice(0, 4).map((item) => item.id);
 			return { unitIds, weaponSelections, equipmentIds };
 		}
 		if (key === "hernkynyaegirs") {
@@ -370,7 +430,7 @@ function UnitSelector() {
 				acc[unit.id] = weaponNames;
 				return acc;
 			}, {});
-			const equipmentIds = equipmentList.map((item) => item.id);
+			const equipmentIds = equipmentList.slice(0, 4).map((item) => item.id);
 			return { unitIds, weaponSelections, equipmentIds };
 		}
 		return null;
@@ -524,6 +584,7 @@ function UnitSelector() {
 	const toggleEquipmentSelection = (equipmentId) => {
 		if (!equipmentId) return;
 		if (isRosterLocked) return;
+		setHasEquipmentTouched(true);
 		setSelectedEquipmentIds((prev) => {
 			if (prev.includes(equipmentId)) {
 				return prev.filter((id) => id !== equipmentId);
@@ -534,6 +595,7 @@ function UnitSelector() {
 	};
 
 	const isEquipmentAtLimit = selectedEquipmentIds.length >= 4;
+	const hasRequiredEquipment = selectedEquipmentIds.length === 4;
 
 	const activeUnits = isSingleSelect
 		? armyUnitsA
@@ -582,13 +644,17 @@ function UnitSelector() {
 				setWeaponSelectionsB(defaultRoster.weaponSelections);
 			}
 		}
-		if (selectedEquipmentIds.length === 0 && defaultRoster.equipmentIds.length > 0) {
-			setSelectedEquipmentIds(defaultRoster.equipmentIds);
+		if (!hasEquipmentTouched && selectedEquipmentIds.length === 0) {
+			const equipmentIds = defaultRoster.equipmentIds || [];
+			if (equipmentIds.length > 0) {
+				setSelectedEquipmentIds(equipmentIds);
+			}
 		}
 	}, [
 		activeTeam,
 		canUseDefault,
 		defaultRoster,
+		hasEquipmentTouched,
 		isRosterLocked,
 		isSingleSelect,
 		selectedEquipmentIds.length,
@@ -599,6 +665,35 @@ function UnitSelector() {
 	return (
 		<div className="unit-selector" data-testid="screen-root">
 			<div className="unit-selector__panel">
+				<div className="unit-selector__setup-banner" role="region" aria-label="Setup steps">
+					<button
+						className="unit-selector__setup-nav"
+						type="button"
+						aria-label="Previous setup step"
+						onClick={() => handleSetupStepNav("prev")}
+					>
+						<span aria-hidden="true">‹</span>
+					</button>
+					<div className="unit-selector__setup-content">
+						<div className="unit-selector__setup-count">
+							Step {setupStepIndex + 1} of {setupSteps.length}
+						</div>
+						<div className="unit-selector__setup-title">
+							{setupSteps[setupStepIndex]?.title}
+						</div>
+						<div className="unit-selector__setup-body">
+							{setupSteps[setupStepIndex]?.body}
+						</div>
+					</div>
+					<button
+						className="unit-selector__setup-nav"
+						type="button"
+						aria-label="Next setup step"
+						onClick={() => handleSetupStepNav("next")}
+					>
+						<span aria-hidden="true">›</span>
+					</button>
+				</div>
 				<h1 className="unit-selector__title">Select Units</h1>
 				<p className="unit-selector__subtitle">
 					Player: <span className="unit-selector__name">{username}</span>
@@ -725,28 +820,44 @@ function UnitSelector() {
 											)}
 											{hasMultipleImages && (
 												<>
-													<button
+													<div
 														className="unit-selector__equipment-nav unit-selector__equipment-nav--left"
-														type="button"
+														role="button"
+														tabIndex={0}
 														aria-label="Previous equipment image"
 														onClick={(event) => {
 															event.stopPropagation();
 															handleEquipmentImageNav(item.id, "prev", images.length);
 														}}
+														onKeyDown={(event) => {
+															if (event.key === "Enter" || event.key === " ") {
+																event.preventDefault();
+																event.stopPropagation();
+																handleEquipmentImageNav(item.id, "prev", images.length);
+															}
+														}}
 													>
 														<span aria-hidden="true">‹</span>
-													</button>
-													<button
+													</div>
+													<div
 														className="unit-selector__equipment-nav unit-selector__equipment-nav--right"
-														type="button"
+														role="button"
+														tabIndex={0}
 														aria-label="Next equipment image"
 														onClick={(event) => {
 															event.stopPropagation();
 															handleEquipmentImageNav(item.id, "next", images.length);
 														}}
+														onKeyDown={(event) => {
+															if (event.key === "Enter" || event.key === " ") {
+																event.preventDefault();
+																event.stopPropagation();
+																handleEquipmentImageNav(item.id, "next", images.length);
+															}
+														}}
 													>
 														<span aria-hidden="true">›</span>
-													</button>
+													</div>
 												</>
 											)}
 											<img
@@ -835,28 +946,44 @@ function UnitSelector() {
 											)}
 											{hasMultipleImages && (
 												<>
-													<button
+													<div
 														className="unit-selector__equipment-nav unit-selector__equipment-nav--left"
-														type="button"
+														role="button"
+														tabIndex={0}
 														aria-label="Previous equipment image"
 														onClick={(event) => {
 															event.stopPropagation();
 															handleEquipmentImageNav(item.id, "prev", images.length);
 														}}
+														onKeyDown={(event) => {
+															if (event.key === "Enter" || event.key === " ") {
+																event.preventDefault();
+																event.stopPropagation();
+																handleEquipmentImageNav(item.id, "prev", images.length);
+															}
+														}}
 													>
 														<span aria-hidden="true">‹</span>
-													</button>
-													<button
+													</div>
+													<div
 														className="unit-selector__equipment-nav unit-selector__equipment-nav--right"
-														type="button"
+														role="button"
+														tabIndex={0}
 														aria-label="Next equipment image"
 														onClick={(event) => {
 															event.stopPropagation();
 															handleEquipmentImageNav(item.id, "next", images.length);
 														}}
+														onKeyDown={(event) => {
+															if (event.key === "Enter" || event.key === " ") {
+																event.preventDefault();
+																event.stopPropagation();
+																handleEquipmentImageNav(item.id, "next", images.length);
+															}
+														}}
 													>
 														<span aria-hidden="true">›</span>
-													</button>
+													</div>
 												</>
 											)}
 											<img
@@ -995,7 +1122,7 @@ function UnitSelector() {
 					<button
 						className="unit-selector__next"
 						type="button"
-						disabled={(!canSelectUnits && !canUseDefault) || isReadyClicked}
+						disabled={(!canSelectUnits && !canUseDefault) || isReadyClicked || !hasRequiredEquipment}
 						onClick={() => {
 							let resolvedUnitIdsA = selectedUnitIdsA;
 							let resolvedWeaponsA = weaponSelectionsA;
@@ -1025,10 +1152,6 @@ function UnitSelector() {
 										setSelectedUnitIdsB(resolvedUnitIdsB);
 										setWeaponSelectionsB(resolvedWeaponsB);
 									}
-								}
-								if (resolvedEquipmentIds.length === 0) {
-									resolvedEquipmentIds = defaultRoster.equipmentIds;
-									setSelectedEquipmentIds(resolvedEquipmentIds);
 								}
 							}
 

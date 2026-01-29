@@ -90,20 +90,6 @@ function Actions({
                 Pass
               </button>
             </div>
-            {Array.isArray(counteractOptions) && counteractOptions.length > 0 && (
-              <div className="kt-action-card__counteract-list">
-                {counteractOptions.map((unit) => (
-                  <button
-                    key={unit.id}
-                    type="button"
-                    className="kt-action-card__counteract-option"
-                    onClick={() => onSelectCounteractOperative?.(unit.id)}
-                  >
-                    {unit.name}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         )}
         {showActionButtons && (
