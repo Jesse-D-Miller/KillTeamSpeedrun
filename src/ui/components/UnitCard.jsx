@@ -102,6 +102,7 @@ function UnitCard({
 
   const unitImage = resolveUnitImage(image);
   const readyState = unit.state?.readyState;
+  const isExpended = readyState === "EXPENDED";
   const isActive =
     unit.id === activeOperativeId ||
     unit.state?.isActive === true ||
@@ -130,7 +131,9 @@ function UnitCard({
     <article
       className={`kt-card ${isUnitInjured ? "kt-card--injured" : ""} ${
         onCardClick ? "kt-card--clickable" : ""
-      } ${isDead ? "kt-card--dead" : ""} ${className}`}
+      } ${isDead ? "kt-card--dead" : ""} ${
+        isExpended ? "kt-card--expended" : ""
+      } ${className}`}
       onClick={handleCardClick}
       data-testid={`unit-card-${unit.id}`}
     >

@@ -17,14 +17,21 @@ function Actions({
   counteractOptions,
   onSelectCounteractOperative,
   allowedActions,
+  actionAvailability = null,
   statusMessage,
   isCounteractActive = false,
   counteractActionsTaken = 0,
 }) {
-  const getActionClass = (actionKey, baseClass) =>
-    actionMarks?.[actionKey]
+  const isActionAvailable = (actionKey) =>
+    !actionAvailability || actionAvailability[actionKey] !== false;
+
+  const getActionClass = (actionKey, baseClass) => {
+    const marked = Boolean(actionMarks?.[actionKey]);
+    const unavailable = !isActionAvailable(actionKey);
+    return marked || unavailable
       ? `${baseClass} kt-action-btn--dark`
       : baseClass;
+  };
 
   const isAllowed = (actionKey) =>
     !Array.isArray(allowedActions) || allowedActions.includes(actionKey);
@@ -109,7 +116,7 @@ function Actions({
             )}
             type="button"
             onClick={() => onAction?.("reposition")}
-            disabled={!attacker || !canUseActions}
+            disabled={!attacker || !canUseActions || !isActionAvailable("reposition")}
             data-testid="action-reposition"
           >
             Reposition
@@ -120,7 +127,7 @@ function Actions({
             className={getActionClass("dash", "kt-action-btn kt-action-btn--dash")}
             type="button"
             onClick={() => onAction?.("dash")}
-            disabled={!attacker || !canUseActions}
+            disabled={!attacker || !canUseActions || !isActionAvailable("dash")}
             data-testid="action-dash"
           >
             Dash
@@ -134,7 +141,7 @@ function Actions({
             )}
             type="button"
             onClick={() => onAction?.("shoot")}
-            disabled={!attacker || !canUseActions}
+            disabled={!attacker || !canUseActions || !isActionAvailable("shoot")}
             data-testid="action-shoot"
           >
             Shoot
@@ -148,7 +155,7 @@ function Actions({
             )}
             type="button"
             onClick={() => onAction?.("charge")}
-            disabled={!attacker || !canUseActions}
+            disabled={!attacker || !canUseActions || !isActionAvailable("charge")}
             data-testid="action-charge"
           >
             Charge
@@ -162,7 +169,7 @@ function Actions({
             )}
             type="button"
             onClick={() => onAction?.("fight")}
-            disabled={!attacker || !canUseActions}
+            disabled={!attacker || !canUseActions || !isActionAvailable("fight")}
             data-testid="action-fight"
           >
             Fight
@@ -176,7 +183,7 @@ function Actions({
             )}
             type="button"
             onClick={() => onAction?.("fallBack")}
-            disabled={!attacker || !canUseActions}
+            disabled={!attacker || !canUseActions || !isActionAvailable("fallBack")}
             data-testid="action-fall-back"
           >
             Fall Back
@@ -190,7 +197,7 @@ function Actions({
             )}
             type="button"
             onClick={() => onAction?.("pickUpMarker")}
-            disabled={!attacker || !canUseActions}
+            disabled={!attacker || !canUseActions || !isActionAvailable("pickUpMarker")}
             data-testid="action-pick-up-marker"
           >
             Pick up Marker
@@ -204,7 +211,7 @@ function Actions({
             )}
             type="button"
             onClick={() => onAction?.("placeMarker")}
-            disabled={!attacker || !canUseActions}
+            disabled={!attacker || !canUseActions || !isActionAvailable("placeMarker")}
             data-testid="action-place-marker"
           >
             Place Marker

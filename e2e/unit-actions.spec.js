@@ -117,3 +117,87 @@ test("end activation dispatches END_ACTIVATION then navigates back to /army", as
 
   await expect(page).toHaveURL(/\/jesse\/army/);
 });
+
+test("attack actions require valid weapons (silent when concealed)", async ({ page }) => {
+  await goToFocusedActiveUnit(page);
+
+  await page.evaluate(() => {
+    const state = window.ktGetGameState?.();
+    const activeId = state?.firefight?.activeOperativeId;
+    if (!state || !activeId) return;
+
+    const nextGame = state.game.map((unit) => {
+      if (unit.id !== activeId) return unit;
+      return {
+        ...unit,
+        weapons: [
+          { name: "Noisy Gun", mode: "ranged", hit: 4, atk: 4, dmg: "3/4", wr: [] },
+          { name: "Noisy Blade", mode: "melee", hit: 4, atk: 4, dmg: "3/4", wr: [] },
+        ],
+        state: {
+          ...(unit.state || {}),
+          order: "conceal",
+        },
+      };
+    });
+
+    window.ktSetGameState?.({
+      ...state,
+      game: nextGame,
+      firefight: {
+        ...(state.firefight || {}),
+        awaitingActions: true,
+        activeOperativeId: activeId,
+      },
+    });
+  });
+
+  const shootBtn = page.getByTestId("action-shoot");
+  const fightBtn = page.getByTestId("action-fight");
+  const chargeBtn = page.getByTestId("action-charge");
+
+  await expect(shootBtn).toBeDisabled();
+  await expect(fightBtn).toBeDisabled();
+  await expect(chargeBtn).toBeDisabled();
+
+  await expect(shootBtn).toHaveClass(/kt-action-btn--dark/);
+  await expect(fightBtn).toHaveClass(/kt-action-btn--dark/);
+  await expect(chargeBtn).toHaveClass(/kt-action-btn--dark/);
+
+  await page.evaluate(() => {
+    const state = window.ktGetGameState?.();
+    const activeId = state?.firefight?.activeOperativeId;
+    if (!state || !activeId) return;
+
+    const nextGame = state.game.map((unit) => {
+      if (unit.id !== activeId) return unit;
+      return {
+        ...unit,
+        weapons: [
+          {
+            name: "Silent Gun",
+            mode: "ranged",
+            hit: 4,
+            atk: 4,
+            dmg: "3/4",
+            wr: ["silent"],
+          },
+          { name: "Noisy Blade", mode: "melee", hit: 4, atk: 4, dmg: "3/4", wr: [] },
+        ],
+        state: {
+          ...(unit.state || {}),
+          order: "conceal",
+        },
+      };
+    });
+
+    window.ktSetGameState?.({
+      ...state,
+      game: nextGame,
+    });
+  });
+
+  await expect(shootBtn).toBeEnabled();
+  await expect(fightBtn).toBeDisabled();
+  await expect(chargeBtn).toBeDisabled();
+});

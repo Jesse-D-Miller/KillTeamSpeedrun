@@ -592,3 +592,78 @@ test("shoot flow shows no valid weapons when attacker lacks ranged", async ({ pa
   await expect(page.getByText("No valid weapons")).toBeVisible({ timeout: 15000 });
   await expect(page.getByTestId("weapon-ready-attacker")).toBeDisabled();
 });
+
+test("conceal attacker only shows silent weapons in weapon select", async ({ page }) => {
+  await goToWeaponSelect(page, "shoot");
+
+  await page.evaluate(() => {
+    const state = window.ktGetGameState?.();
+    const attackerId = "alpha:kommando-bomb-squig";
+    const attacker = state?.game?.find((unit) => unit.id === attackerId);
+    const defender = state?.game?.find((unit) => unit.teamId !== attacker?.teamId);
+    if (!attacker || !defender) return;
+
+    const weapons = [
+      { name: "Silent Rifle", mode: "ranged", hit: 4, atk: 4, dmg: "3/4", wr: ["silent"] },
+      { name: "Loud Rifle", mode: "ranged", hit: 4, atk: 4, dmg: "3/4", wr: [] },
+    ];
+
+    const nextGame = state.game.map((unit) => {
+      if (unit.id !== attackerId) return unit;
+      return {
+        ...unit,
+        weapons,
+        state: {
+          ...(unit.state || {}),
+          order: "conceal",
+        },
+      };
+    });
+
+    const actionFlow = {
+      mode: "shoot",
+      attackerId,
+      defenderId: defender.id,
+      step: "pickWeapons",
+      attackerWeapon: null,
+      defenderWeapon: null,
+      inputs: {
+        primaryTargetId: defender.id,
+        secondaryTargetIds: [],
+        accurateSpent: 0,
+        balancedClick: false,
+        balancedUsed: false,
+      },
+      log: [],
+      remainingDice: { attacker: [], defender: [] },
+      dice: {
+        attacker: { raw: [], crit: 0, norm: 0 },
+        defender: { raw: [], crit: 0, norm: 0 },
+      },
+      remaining: {
+        attacker: { crit: 0, norm: 0 },
+        defender: { crit: 0, norm: 0 },
+      },
+      resolve: { turn: "attacker" },
+      locked: {
+        attackerWeapon: false,
+        defenderWeapon: false,
+        attackerDice: false,
+        defenderDice: false,
+        diceRolled: false,
+      },
+    };
+
+    window.ktSetGameState?.({
+      ...state,
+      game: nextGame,
+      phase: "FIREFIGHT",
+      topBar: { ...(state?.topBar || {}), phase: "FIREFIGHT" },
+      ui: { actionFlow },
+    });
+  });
+
+  await expect(page.getByTestId("weapon-select-modal")).toBeVisible({ timeout: 15000 });
+  await expect(page.getByTestId("weapon-option-attacker-Silent Rifle")).toBeVisible();
+  await expect(page.getByTestId("weapon-option-attacker-Loud Rifle")).toHaveCount(0);
+});

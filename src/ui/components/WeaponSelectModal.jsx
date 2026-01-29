@@ -24,8 +24,24 @@ function WeaponSelectModal({
   if (!open) return null;
 
   const weaponMode = mode === "fight" ? "melee" : "ranged";
+  const hasSilentRule = (weapon) => {
+    const raw = weapon?.wr ?? weapon?.rules ?? [];
+    const list = Array.isArray(raw) ? raw : [raw];
+    return list.some((entry) => {
+      if (!entry) return false;
+      if (typeof entry === "string") {
+        return entry.trim().toLowerCase().startsWith("silent");
+      }
+      return String(entry?.id || "").toLowerCase() === "silent";
+    });
+  };
+  const attackerOrder = String(attackerUnit?.state?.order || "").toLowerCase();
   const attackerWeapons = Array.isArray(attackerUnit?.weapons)
-    ? attackerUnit.weapons.filter((weapon) => weapon.mode === weaponMode)
+    ? attackerUnit.weapons
+        .filter((weapon) => weapon.mode === weaponMode)
+        .filter((weapon) =>
+          attackerOrder === "conceal" ? hasSilentRule(weapon) : true,
+        )
     : [];
   const defenderWeapons = Array.isArray(defenderUnit?.weapons)
     ? defenderUnit.weapons.filter((weapon) => weapon.mode === weaponMode)

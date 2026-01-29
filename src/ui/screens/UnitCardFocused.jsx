@@ -202,6 +202,57 @@ function UnitCardFocused() {
     });
   };
 
+  const actionAvailability = useMemo(() => {
+    if (!selectedUnit) return null;
+    const weapons = Array.isArray(selectedUnit.weapons)
+      ? selectedUnit.weapons
+      : [];
+    const order = String(selectedUnit?.state?.order || "").toLowerCase();
+    const requiresSilent = order === "conceal";
+    const aplCurrentRaw =
+      selectedUnit?.state?.activation?.aplCurrent ??
+      selectedUnit?.state?.apCurrent ??
+      selectedUnit?.state?.aplCurrent ??
+      selectedUnit?.stats?.apl ??
+      0;
+    const aplCurrent = Number(aplCurrentRaw) || 0;
+
+    const hasRule = (weapon, ruleId) => {
+      const raw = weapon?.wr ?? weapon?.rules ?? [];
+      const list = Array.isArray(raw) ? raw : [raw];
+      return list.some((entry) => {
+        if (!entry) return false;
+        if (typeof entry === "string") {
+          return entry.trim().toLowerCase().startsWith(ruleId);
+        }
+        return String(entry?.id || "").toLowerCase() === ruleId;
+      });
+    };
+
+    const hasWeaponOfMode = (mode) => {
+      const filtered = weapons.filter(
+        (weapon) => String(weapon?.mode || "").toLowerCase() === mode,
+      );
+      if (!requiresSilent) return filtered.length > 0;
+      return filtered.some((weapon) => hasRule(weapon, "silent"));
+    };
+
+    const rangedAvailable = hasWeaponOfMode("ranged");
+    const meleeAvailable = hasWeaponOfMode("melee");
+
+    const availability = Object.keys(ACTION_CONFIG).reduce((acc, key) => {
+      const cost = Number(ACTION_CONFIG[key]?.cost ?? 0);
+      acc[key] = aplCurrent >= cost;
+      return acc;
+    }, {});
+
+    availability.shoot = availability.shoot && rangedAvailable;
+    availability.fight = availability.fight && meleeAvailable;
+    availability.charge = availability.charge && meleeAvailable;
+
+    return availability;
+  }, [selectedUnit]);
+
   if (!selectedUnit) {
     return (
       <div className="unit-card-focused" data-testid="unit-focused">
@@ -344,6 +395,7 @@ function UnitCardFocused() {
                   counteractOptions={counteractOperatives}
                   onSelectCounteractOperative={handleCounteract}
                   allowedActions={counteractAllowedActions}
+                  actionAvailability={actionAvailability}
                   statusMessage={statusMessage}
                   isCounteractActive={isCounteractActive}
                   counteractActionsTaken={counteractActionsTaken}

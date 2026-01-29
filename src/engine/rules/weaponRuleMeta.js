@@ -23,7 +23,6 @@ export function getRuleResponsibility(ruleOrId) {
       return RESPONSIBILITY.SEMI;
 
     case "brutal":
-    case "lethal":
     case "range":
     case "seek":
     case "silent":
@@ -33,12 +32,14 @@ export function getRuleResponsibility(ruleOrId) {
     case "blast":
     case "torrent":
     case "devastating":
+    case "limited":
       return RESPONSIBILITY.AUTO;
 
     case "balanced":
     case "ceaseless":
     case "relentless":
     case "accurate":
+    case "lethal":
     case "punishing":
     case "rending":
     case "severe":

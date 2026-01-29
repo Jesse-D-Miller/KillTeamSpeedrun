@@ -115,6 +115,11 @@
   filter: grayscale(1) brightness(0.7);
 }
 
+.kt-card--expended {
+  filter: brightness(0.75);
+  opacity: 0.8;
+}
+
 /* Left title/portrait block */
 .kt-card__title {
   min-width: 0;
