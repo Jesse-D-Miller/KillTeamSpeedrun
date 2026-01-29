@@ -310,6 +310,10 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
       const strategySeed = {
         phase: "STRATEGY",
         turningPoint: tp,
+        initiativePlayerId: null,
+        initiative: {
+          winnerPlayerId: null,
+        },
         topBar: {
           initiativePlayerId: null,
           turningPoint: tp,

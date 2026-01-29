@@ -7,8 +7,21 @@ test("strategy ends -> phase flips to FIREFIGHT -> then navigates to /army", asy
     window.ktE2E_resetToStrategySeed?.({ turningPoint: 1 });
   });
 
+  await page.waitForFunction(() => {
+    const state = window.ktGetGameState?.();
+    return Boolean(state?.phase || state?.topBar?.phase);
+  });
+
   // Set initiative so ploys become relevant
   await page.getByTestId("initiative-A").click();
+  await page.waitForFunction(() => {
+    const state = window.ktGetGameState?.();
+    return Boolean(
+      state?.topBar?.initiativePlayerId ||
+        state?.initiativePlayerId ||
+        state?.initiative?.winnerPlayerId,
+    );
+  });
   await expect(page.getByTestId("strategy-ploys")).toBeVisible();
 
   // Simulate both players locking in ploys

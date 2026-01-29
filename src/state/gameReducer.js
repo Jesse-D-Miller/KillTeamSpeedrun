@@ -205,14 +205,17 @@ function applyDamageToState(state, id, amount, action) {
 function endTurningPoint(state, nextGame = state.game, action = null) {
 	const nextTp = Number(state.turningPoint ?? 0) + 1;
 	const resetState = resetTpFlags({ ...state, game: nextGame });
+	const currentTp = Number(state.turningPoint ?? 0);
 	return {
 		...state,
 		...resetState,
 		game: nextGame,
 		phase: nextTp > 4 ? "GAME_OVER" : "TURNING_POINT_END",
-		turningPoint: nextTp > 4 ? 4 : Number(state.turningPoint ?? 0),
+		turningPoint: nextTp > 4 ? 4 : currentTp,
 		topBar: {
 			...(state.topBar || {}),
+			phase: nextTp > 4 ? "GAME_OVER" : "TURNING_POINT_END",
+			turningPoint: nextTp > 4 ? 4 : currentTp,
 			initiativePlayerId: null,
 		},
 		ui: {
@@ -1381,13 +1384,6 @@ function reduceGameState(state, action) {
 			};
 		}
 
-		case "TURNING_POINT_START": {
-			return {
-				...state,
-				...resetTpFlags(state),
-			};
-		}
-
 		case "LOCK_TEAMS": {
 			return {
 				...state,
@@ -1507,7 +1503,6 @@ function reduceGameState(state, action) {
 		}
 
 		case "READY_ALL_OPERATIVES": {
-			if (!state.strategy?.cpGrantedThisTP) return state;
 			if (state.strategy?.operativesReadiedThisTP) return state;
 			return {
 				...state,
@@ -1516,7 +1511,11 @@ function reduceGameState(state, action) {
 					state: {
 						...unit.state,
 						readyState:
-							Number(unit.state?.woundsCurrent ?? 0) > 0 ? "READY" : unit.state?.readyState,
+							Number(
+								unit.state?.woundsCurrent ?? unit.stats?.woundsMax ?? 1,
+							) > 0
+								? "READY"
+								: unit.state?.readyState,
 						},
 				})),
 				firefight: {
@@ -1873,6 +1872,12 @@ function reduceGameState(state, action) {
 				return {
 					...state,
 					phase: "GAME_OVER",
+					topBar: {
+						...(state.topBar || {}),
+						phase: "GAME_OVER",
+						turningPoint: 4,
+						initiativePlayerId: null,
+					},
 					endedAt: state.endedAt ?? new Date().toISOString(),
 					winner: state.winner ?? null,
 				};
@@ -1882,6 +1887,8 @@ function reduceGameState(state, action) {
 				turningPoint: tp + 1,
 				topBar: {
 					...(state.topBar || {}),
+					phase: "STRATEGY",
+					turningPoint: tp + 1,
 					initiativePlayerId: null,
 				},
 				phase: "STRATEGY",

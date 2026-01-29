@@ -19,6 +19,17 @@
   gap: 12px;
 }
 
+.unit-card-focused__log-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.unit-card-focused__log-row .kt-notice {
+  flex: 1;
+  min-width: 0;
+}
+
 .unit-card-focused__actions {
   display: flex;
   justify-content: flex-end;

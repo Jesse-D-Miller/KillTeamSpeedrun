@@ -61,11 +61,13 @@ function StrategyPhase() {
   }, []);
 
   // --- canonical reads / fallbacks ---
+  const topBarInitiative = gameState?.topBar?.initiativePlayerId;
   const initiativePlayerId =
-    gameState?.topBar?.initiativePlayerId ??
-    gameState?.initiativePlayerId ??
-    gameState?.initiative?.winnerPlayerId ??
-    null;
+    topBarInitiative !== undefined
+      ? topBarInitiative
+      : gameState?.initiativePlayerId ??
+        gameState?.initiative?.winnerPlayerId ??
+        null;
 
   const turningPoint =
     Number(gameState?.topBar?.turningPoint ?? gameState?.turningPoint ?? 1) || 1;
@@ -108,7 +110,7 @@ function StrategyPhase() {
   // --- army key (nav state) ---
   const armyKey = useMemo(() => {
     if (navState.armyKey) return navState.armyKey;
-    if (!location.state && armyKeyFromQuery) return armyKeyFromQuery;
+    if (armyKeyFromQuery) return armyKeyFromQuery;
     if (slot === "A") return navState.armyKeyA || navState.armyKeyB || null;
     if (slot === "B") return navState.armyKeyB || navState.armyKeyA || null;
     return navState.armyKeyA || navState.armyKeyB || null;
@@ -153,11 +155,15 @@ function StrategyPhase() {
     return true;
   }, []);
 
+  const operativesReadiedThisTP = Boolean(gameState?.strategy?.operativesReadiedThisTP);
+  const [readyDispatched, setReadyDispatched] = useState(false);
+
   const areAllOperativesReadied = useMemo(() => {
+    if (operativesReadiedThisTP || readyDispatched) return true;
     const list = collectOperatives(gameState);
-    if (!list.length) return true; // IMPORTANT: do not deadlock stepper
+    if (!list.length) return false;
     return list.every((op) => isOperativeReady(op));
-  }, [collectOperatives, gameState, isOperativeReady]);
+  }, [collectOperatives, gameState, isOperativeReady, operativesReadiedThisTP, readyDispatched]);
 
   // --- Stepper model ---
   const STEPS = useMemo(
@@ -174,6 +180,7 @@ function StrategyPhase() {
   const [bannerStatus, setBannerStatus] = useState("idle"); // "idle" | "running" | "complete"
   const [flashGreen, setFlashGreen] = useState(false);
   const [pendingFirefightNav, setPendingFirefightNav] = useState(false);
+  const [readyDispatchTick, setReadyDispatchTick] = useState(0);
 
   // “freeze” auto snapping when user clicks arrows
   const manualNavRef = useRef({ until: 0 });
@@ -206,21 +213,72 @@ function StrategyPhase() {
   const flashTimerRef = useRef(null);
   const navigateTimerRef = useRef(null);
 
+  const triggerReadyComplete = useCallback(() => {
+    if (currentStep?.id !== "READY") return;
+    if (completionRef.current.tp === turningPoint && completionRef.current.stepId === "READY") {
+      return;
+    }
+
+    completionRef.current = { tp: turningPoint, stepId: "READY" };
+    setBannerStatus("complete");
+    setFlashGreen(true);
+
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    if (autoAdvanceRef.current) clearTimeout(autoAdvanceRef.current);
+
+    flashTimerRef.current = setTimeout(() => setFlashGreen(false), 600);
+    autoAdvanceRef.current = setTimeout(() => {
+      setBannerStepIndex((prev) => Math.min(prev + 1, STEPS.length - 1));
+    }, 1000);
+  }, [currentStep?.id, turningPoint, STEPS.length]);
+
   // reset per TP
   useEffect(() => {
     if (ranRef.current.tp !== turningPoint) {
       ranRef.current = { tp: turningPoint, READY: false, CP: false };
       completionRef.current = { tp: turningPoint, stepId: null };
+      setReadyDispatched(false);
+      setBannerStepIndex(0);
+      setBannerStatus("idle");
+      setFlashGreen(false);
     }
   }, [turningPoint]);
+
+  // E2E hook: mark step complete when green flash triggers
+  useEffect(() => {
+    if (!flashGreen) return;
+    if (typeof window === "undefined") return;
+    if (!Array.isArray(window.__ktE2E_gameEvents)) return;
+    window.__ktE2E_stepperComplete = true;
+  }, [flashGreen]);
+
+  // fire READY on initial render of strategy phase
+  useEffect(() => {
+    if (phaseNow !== "STRATEGY") return;
+    if (ranRef.current.READY) return;
+    if (typeof window === "undefined" || typeof window.ktDispatchGameEvent !== "function") {
+      const retryTimer = setTimeout(
+        () => setReadyDispatchTick((prev) => prev + 1),
+        50,
+      );
+      return () => clearTimeout(retryTimer);
+    }
+    dispatchGameEvent("READY_ALL_OPERATIVES");
+    ranRef.current.READY = true;
+    setReadyDispatched(true);
+    triggerReadyComplete();
+  }, [phaseNow, dispatchGameEvent, readyDispatchTick, triggerReadyComplete]);
 
   // keep step index in sync (unless user is browsing steps)
   useEffect(() => {
     if (isAutoFrozen()) return;
     if (bannerStepIndex < derivedStepIndex) {
+      if (currentStep?.id === "READY" && completionRef.current.stepId !== "READY") {
+        return;
+      }
       setBannerStepIndex(derivedStepIndex);
     }
-  }, [bannerStepIndex, derivedStepIndex, isAutoFrozen]);
+  }, [bannerStepIndex, derivedStepIndex, isAutoFrozen, currentStep?.id]);
 
   // main step runner + auto-advance
   useEffect(() => {
@@ -250,10 +308,16 @@ function StrategyPhase() {
     // If not complete, possibly run step action (READY / CP), then idle/running
     if (!stepIsComplete) {
       if (stepId === "READY" && !ranRef.current.READY) {
+        if (typeof window === "undefined" || typeof window.ktDispatchGameEvent !== "function") {
+          setBannerStatus("idle");
+          return undefined;
+        }
         // If your app uses a different event name, swap it here.
         dispatchGameEvent("READY_ALL_OPERATIVES");
         ranRef.current.READY = true;
+        setReadyDispatched(true);
         setBannerStatus("running");
+        triggerReadyComplete();
       } else if (stepId === "CP" && !ranRef.current.CP && initiativePlayerId) {
         // If your app uses different CP events, swap here.
         const awards =

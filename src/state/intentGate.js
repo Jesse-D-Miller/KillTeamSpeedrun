@@ -324,9 +324,6 @@ export const validateGameIntent = (state, event) => {
       if (state?.phase !== "STRATEGY") {
         pushIssue(issues, "READY_ALL_OPERATIVES only allowed in STRATEGY.");
       }
-      if (!state?.strategy?.cpGrantedThisTP) {
-        pushIssue(issues, "CP must be granted before readying operatives.");
-      }
       if (state?.strategy?.operativesReadiedThisTP) {
         pushIssue(issues, "Operatives already readied this turning point.");
       }

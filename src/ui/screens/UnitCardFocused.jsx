@@ -288,19 +288,21 @@ function UnitCardFocused() {
             phase={effectivePhase}
             initiativePlayerId={effectiveInitiativePlayerId}
           />
-          <LogNotice summary={latestLogSummary} />
-          <div className="unit-card-focused__actions">
-            <button
-              className="unit-card-focused__back"
-              type="button"
-              onClick={() =>
-                navigate(backTarget, {
-                  state: backState,
-                })
-              }
-            >
-              Back to army
-            </button>
+          <div className="unit-card-focused__log-row">
+            <LogNotice summary={latestLogSummary} />
+            <div className="unit-card-focused__actions">
+              <button
+                className="unit-card-focused__back"
+                type="button"
+                onClick={() =>
+                  navigate(backTarget, {
+                    state: backState,
+                  })
+                }
+              >
+                Back to army
+              </button>
+            </div>
           </div>
         </div>
         <div className="unit-card-focused__main">
