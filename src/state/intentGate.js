@@ -512,7 +512,7 @@ export const validateGameIntent = (state, event) => {
 
     case "TURNING_POINT_END": {
       const { turningPoint: tp } = event.payload || {};
-      if (state?.phase !== "FIREFIGHT") {
+      if (state?.phase !== "FIREFIGHT" && state?.phase !== "TURNING_POINT_END") {
         pushIssue(issues, "TURNING_POINT_END only allowed after FIREFIGHT.");
       }
       if (!Number.isFinite(tp)) {

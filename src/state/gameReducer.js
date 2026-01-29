@@ -209,8 +209,8 @@ function endTurningPoint(state, nextGame = state.game, action = null) {
 		...state,
 		...resetState,
 		game: nextGame,
-		phase: nextTp > 4 ? "GAME_OVER" : "STRATEGY",
-		turningPoint: nextTp > 4 ? 4 : nextTp,
+		phase: nextTp > 4 ? "GAME_OVER" : "TURNING_POINT_END",
+		turningPoint: nextTp > 4 ? 4 : Number(state.turningPoint ?? 0),
 		topBar: {
 			...(state.topBar || {}),
 			initiativePlayerId: null,

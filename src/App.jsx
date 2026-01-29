@@ -9,6 +9,7 @@ import UnitSelector from "./ui/screens/UnitSelector";
 import MultiplayerLobby from "./ui/screens/MultiplayerLobby";
 import UnitCardFocused from "./ui/screens/UnitCardFocused";
 import StrategyPhase from "./ui/screens/StrategyPhase";
+import TurningPointEnd from "./ui/screens/TurningPointEnd";
 import TargetSelectScreen from "./ui/screens/TargetSelectScreen";
 import seedGameState from "./e2e/seedGameState.json";
 import {
@@ -508,6 +509,30 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
       },
     });
   };
+
+  useEffect(() => {
+    if (!username) return;
+    if (phase !== "TURNING_POINT_END") return;
+    if (location.pathname.endsWith("/turning-point-end")) return;
+    const baseState = { ...(location.state || {}) };
+    delete baseState.topBar;
+    delete baseState.latestLogSummary;
+    navigate(`/${username}/turning-point-end`, {
+      state: {
+        ...baseState,
+        slot: playerSlot,
+        gameCode,
+      },
+    });
+  }, [
+    phase,
+    username,
+    location.pathname,
+    location.state,
+    navigate,
+    playerSlot,
+    gameCode,
+  ]);
 
   useEffect(() => {
     if (!username) return;
@@ -2753,6 +2778,15 @@ function StrategyPhaseRoute() {
   );
 }
 
+function TurningPointEndRoute() {
+  return (
+    <>
+      <ArmyOverlayRoute renderUi={false} />
+      <TurningPointEnd />
+    </>
+  );
+}
+
 function UnitActionRoute() {
   return (
     <>
@@ -2948,6 +2982,7 @@ function App() {
       <Route path="/:username/army-selector" element={<ArmySelector />} />
       <Route path="/:username/unit-selector" element={<UnitSelector />} />
       <Route path="/:username/strategy-phase" element={<StrategyPhaseRoute />} />
+      <Route path="/:username/turning-point-end" element={<TurningPointEndRoute />} />
       <Route path="/:username/army" element={<ArmyOverlayRoute />} />
       <Route path="/:username/army/unit/:unitId" element={<UnitActionRoute />} />
       <Route path="/:username/target-select" element={<TargetSelectRoute />} />
