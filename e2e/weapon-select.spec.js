@@ -320,9 +320,9 @@ test("fight weapon select gates ready and advances to roll dice", async ({ page 
     window.ktDispatchGameEvent?.("FLOW_LOCK_WEAPON", { role: "defender" });
   }, defenderWeapon);
 
-  // Your UI says you "no longer roll dice" in-game, but this test asserts your existing element.
-  // If you rename it later, update this test id accordingly.
-  await expect(page.getByTestId("fight-modal-roll-dice")).toBeVisible({ timeout: 15000 });
+  const fightModal = page.getByTestId("attack-resolution-modal");
+  await expect(fightModal).toBeVisible({ timeout: 15000 });
+  await expect(fightModal).toHaveAttribute("data-attack-mode", "fight");
 });
 
 test("attacker selects ranged weapon and locks (shows waiting)", async ({ page }) => {
@@ -394,7 +394,9 @@ test("fight weapon select flow still works", async ({ page }) => {
     window.ktDispatchGameEvent?.("FLOW_LOCK_WEAPON", { role: "defender" });
   });
 
-  await expect(page.getByTestId("fight-modal-roll-dice")).toBeVisible({ timeout: 15000 });
+  const fightModal = page.getByTestId("attack-resolution-modal");
+  await expect(fightModal).toBeVisible({ timeout: 15000 });
+  await expect(fightModal).toHaveAttribute("data-attack-mode", "fight");
 });
 
 test("limited weapon is disabled after use", async ({ page }) => {

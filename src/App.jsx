@@ -2079,112 +2079,50 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
       )}
 
       {actionFlow?.mode === "fight" && actionFlow?.step === "rollDice" && (
-        <div className="kt-modal" data-testid="fight-modal-roll-dice">
-          <div
-            className="kt-modal__backdrop"
-            onClick={() => {
-              if (!canCancelFightFlow) return;
-              dispatchGameEvent("FLOW_CANCEL");
-            }}
-          />
-          <div className="kt-modal__panel">
-            <div className="kt-modal__layout">
-              <aside className="kt-modal__sidebar">
-                <div className="kt-modal__sidebar-group">
-                  <div className="kt-modal__sidebar-title">Fight: Roll Dice</div>
-                  <div className="kt-modal__sidebar-empty">
-                    Both sides roll and reveal dice.
-                  </div>
-                  {fightDiceRole && (
-                    <button
-                      className="kt-modal__btn kt-modal__btn--primary"
-                      type="button"
-                      data-testid="fight-roll-dice"
-                      onClick={() => {
-                        dispatchGameEvent("FLOW_LOCK_DICE", {
-                          role: fightDiceRole,
-                        });
-                      }}
-                      disabled={!canClickFightDice}
-                    >
-                      {isFightDiceWaiting && (
-                        <span className="unit-selector__spinner" aria-hidden="true" />
-                      )}
-                      ROLL DICE
-                    </button>
-                  )}
-                  <button
-                    className="kt-modal__btn"
-                    type="button"
-                    onClick={() => {
-                      if (!canCancelFightFlow) return;
-                      dispatchGameEvent("FLOW_CANCEL");
-                    }}
-                    disabled={!canCancelFightFlow}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </aside>
-              <div className="kt-modal__content">
-                <div className="kt-modal__header">
-                  <div className="kt-modal__title">Fight: Roll Dice</div>
-                  <div className="kt-modal__subtitle">
-                    {fightAttacker?.name || "Attacker"} vs {fightDefender?.name || "Defender"}
-                  </div>
-                </div>
-                <div className="kt-modal__grid">
-                  {renderFightCard(fightAttacker, "Attacker")}
-                  {renderFightCard(fightDefender, "Defender")}
-                </div>
-                <div className="defense-roll__section">
-                  <div className="defense-roll__label">Attacker Dice</div>
-                  <div className="defense-roll__dice">
-                    {(isFightRolling ? fightRollPreview.attacker : actionFlow?.dice?.attacker?.raw || []).length > 0
-                      ? (isFightRolling ? fightRollPreview.attacker : actionFlow.dice.attacker.raw).map((value, index) => (
-                          <span key={`atk-${index}`} className="defense-roll__die">
-                            {value}
-                          </span>
-                        ))
-                      : "-"}
-                  </div>
-                  {(actionFlow?.dice?.attacker?.raw || []).length > 0 && (
-                    <div className="defense-roll__dice defense-roll__dice--summary">
-                      <span className="defense-roll__die defense-roll__die--summary">
-                        C {actionFlow?.dice?.attacker?.crit ?? 0}
-                      </span>
-                      <span className="defense-roll__die defense-roll__die--summary">
-                        H {actionFlow?.dice?.attacker?.norm ?? 0}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <div className="defense-roll__section">
-                  <div className="defense-roll__label">Defender Dice</div>
-                  <div className="defense-roll__dice">
-                    {(isFightRolling ? fightRollPreview.defender : actionFlow?.dice?.defender?.raw || []).length > 0
-                      ? (isFightRolling ? fightRollPreview.defender : actionFlow.dice.defender.raw).map((value, index) => (
-                          <span key={`def-${index}`} className="defense-roll__die">
-                            {value}
-                          </span>
-                        ))
-                      : "-"}
-                  </div>
-                  {(actionFlow?.dice?.defender?.raw || []).length > 0 && (
-                    <div className="defense-roll__dice defense-roll__dice--summary">
-                      <span className="defense-roll__die defense-roll__die--summary">
-                        C {actionFlow?.dice?.defender?.crit ?? 0}
-                      </span>
-                      <span className="defense-roll__die defense-roll__die--summary">
-                        H {actionFlow?.dice?.defender?.norm ?? 0}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AttackResolutionScreen
+          open
+          role={fightDiceRole}
+          attacker={fightAttacker}
+          defender={fightDefender}
+          weapon={
+            fightAttackerWeapon ||
+            fightAttackerWeapons[0] ||
+            fightDefenderWeapon ||
+            fightDefenderWeapons[0] ||
+            null
+          }
+          combatStage="FIGHT_ROLLING"
+          attackRoll={actionFlow?.dice?.attacker?.raw || []}
+          defenseRoll={actionFlow?.dice?.defender?.raw || []}
+          combatModifiers={actionFlow?.inputs || {}}
+          weaponUsage={state.weaponUsage || {}}
+          teamKeys={teamKeys}
+          rollsLocked={
+            Boolean(actionFlow?.locked?.attackerDice) &&
+            Boolean(actionFlow?.locked?.defenderDice)
+          }
+          attackLocked={Boolean(actionFlow?.locked?.attackerDice)}
+          defenseLocked={Boolean(actionFlow?.locked?.defenderDice)}
+          attackDiceCount={Number(fightAttackerWeapon?.atk ?? 0)}
+          defenseDiceCount={Number(fightDefenderWeapon?.atk ?? 0)}
+          onSetAttackRoll={() => {}}
+          onLockAttack={() => {
+            if (!fightDiceRole || fightDiceRole !== "attacker") return;
+            dispatchGameEvent("FLOW_LOCK_DICE", { role: "attacker" });
+          }}
+          onSetDefenseRoll={() => {}}
+          onLockDefense={() => {
+            if (!fightDiceRole || fightDiceRole !== "defender") return;
+            dispatchGameEvent("FLOW_LOCK_DICE", { role: "defender" });
+          }}
+          onSetCombatModifiers={() => {}}
+          onApplyDamage={() => {}}
+          onResolveComplete={() => {}}
+          onCancel={() => {
+            if (!canCancelFightFlow) return;
+            dispatchGameEvent("FLOW_CANCEL");
+          }}
+        />
       )}
 
       {actionFlow?.mode === "fight" &&

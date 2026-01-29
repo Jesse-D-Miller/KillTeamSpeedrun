@@ -10,6 +10,7 @@
     {
       "id": "yaegirs-ffp-sturdy",
       "name": "Sturdy",
+      "image": "yaegirs-ffp-sturdy.png",
       "type": "firefightPloy",
       "cost": { "cp": 1 },
       "trigger": {
@@ -24,6 +25,7 @@
     {
       "id": "yaegirs-ffp-bonds-that-bind",
       "name": "Bonds That Bind",
+      "image": "yaegirs-ffp-bonds-that-bind.png",
       "type": "firefightPloy",
       "cost": { "cp": 1 },
       "trigger": {
@@ -48,6 +50,7 @@
     {
       "id": "yaegirs-ffp-no-kin-left-behind",
       "name": "No Kin Left Behind",
+      "image": "yaegirs-ffp-no-kin-left-behind.png",
       "type": "firefightPloy",
       "cost": { "cp": 1 },
       "trigger": {
@@ -80,6 +83,7 @@
     {
       "id": "yaegirs-ffp-stalwart-defence",
       "name": "Stalwart Defence",
+      "image": "yaegirs-ffp-stalwart-defence.png",
       "type": "firefightPloy",
       "cost": { "cp": 1 },
       "trigger": {

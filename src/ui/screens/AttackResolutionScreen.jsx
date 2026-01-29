@@ -642,7 +642,11 @@ function AttackResolutionScreen({
   const defenderCritRollLabel = isFight ? "Crits" : "Crit Saves";
 
   return (
-    <div className="kt-modal" data-testid="attack-resolution-modal">
+    <div
+      className="kt-modal"
+      data-testid="attack-resolution-modal"
+      data-attack-mode={isFight ? "fight" : "shoot"}
+    >
       <div className="kt-modal__backdrop" onClick={() => onCancel?.()} />
       <div className="kt-modal__panel attack-resolution__modal-panel">
         <button

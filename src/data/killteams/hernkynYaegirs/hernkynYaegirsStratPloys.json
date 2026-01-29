@@ -10,6 +10,7 @@
     {
       "id": "yaegirs-sp-hidden-engagement",
       "name": "Hidden Engagement",
+      "image": "yaegirs-sp-hidden-engagement.png",
       "type": "strategicPloy",
       "cost": { "cp": 1 },
       "duration": "untilStartOfNextTurningPoint",
@@ -25,6 +26,7 @@
     {
       "id": "yaegirs-sp-masterful-bladework",
       "name": "Masterful Bladework",
+      "image": "yaegirs-sp-masterful-bladework.png",
       "type": "strategicPloy",
       "cost": { "cp": 1 },
       "duration": "untilStartOfNextTurningPoint",
@@ -40,6 +42,7 @@
     {
       "id": "yaegirs-sp-tough-survivalists",
       "name": "Tough Survivalists",
+      "image": "yaegirs-sp-tough-survivalists.png",
       "type": "strategicPloy",
       "cost": { "cp": 1 },
       "duration": "untilStartOfNextTurningPoint",
@@ -58,6 +61,7 @@
     {
       "id": "yaegirs-sp-in-position",
       "name": "In Position",
+      "image": "yaegirs-sp-in-position.png",
       "type": "strategicPloy",
       "cost": { "cp": 1 },
       "duration": "untilStartOfNextTurningPoint",
