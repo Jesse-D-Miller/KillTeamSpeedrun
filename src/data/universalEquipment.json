@@ -13,6 +13,7 @@
     {
       "id": "ammo-cache",
       "name": "Ammo Cache",
+      "image": "ammo-cache.png",
       "type": "marker",
       "quantity": 1,
       "setup": {
@@ -43,6 +44,7 @@
     {
       "id": "razor-wire",
       "name": "Razor Wire",
+      "image": "razor-wire.png",
       "type": "terrain",
       "quantity": 1,
       "traits": ["exposed", "obstructing"],
@@ -66,6 +68,7 @@
     {
       "id": "comms-device",
       "name": "Comms Device",
+      "image": "comms-device.png",
       "type": "marker",
       "quantity": 1,
       "setup": {
@@ -84,6 +87,7 @@
     {
       "id": "mines",
       "name": "Mines",
+      "image": "mines.png",
       "type": "marker",
       "quantity": 1,
       "setup": {
@@ -108,6 +112,7 @@
     {
       "id": "light-barricades",
       "name": "Light Barricades",
+      "image": "light-barricades.png",
       "type": "terrain",
       "quantity": 2,
       "traits": ["light"],
@@ -128,6 +133,7 @@
     {
       "id": "heavy-barricade",
       "name": "Heavy Barricade",
+      "image": "light-barricades.png",
       "type": "terrain",
       "quantity": 1,
       "traits": ["heavy"],
@@ -145,6 +151,7 @@
     {
       "id": "ladders",
       "name": "Ladders",
+      "image": "ladders.png",
       "type": "terrain",
       "quantity": 2,
       "traits": ["insignificant", "exposed"],
@@ -167,6 +174,7 @@
     {
       "id": "portable-barricade",
       "name": "Portable Barricade",
+      "image": ["portable-barricade-1.png", "portable-barricade-2.png"],
       "type": "terrain",
       "quantity": 1,
       "traits": ["light", "protective", "portable"],
@@ -220,6 +228,7 @@
     {
       "id": "utility-grenades",
       "name": "Utility Grenades",
+      "image": ["utility-grenades.png", "utility-grenades-1.png", "utility-grenades-2.png"],
       "type": "grenadePackage",
       "quantity": 1,
       "selection": {
@@ -288,6 +297,7 @@
     {
       "id": "explosive-grenades",
       "name": "Explosive Grenades",
+      "image": "explosive-grenades.png",
       "type": "grenadePackage",
       "quantity": 1,
       "selection": {

@@ -25,6 +25,20 @@ function normalizeEquipmentData(moduleData) {
 	return moduleData?.default || moduleData;
 }
 
+const resolveEquipmentImage = (image, index = 0) => {
+	const imageList = Array.isArray(image) ? image : [image];
+	const imageValue = imageList[Math.max(0, Math.min(index, imageList.length - 1))];
+	if (!imageValue) return "/killteamSpeedrunLogo.png";
+	if (typeof imageValue !== "string") return "/killteamSpeedrunLogo.png";
+	if (imageValue.startsWith("http://") || imageValue.startsWith("https://")) return imageValue;
+	if (imageValue.startsWith("/")) return imageValue;
+	if (imageValue.startsWith("public/")) return `/${imageValue.slice("public/".length)}`;
+	return `/${imageValue}`;
+};
+
+const getEquipmentImages = (image) =>
+	Array.isArray(image) ? image.filter(Boolean) : image ? [image] : [];
+
 function formatFactionName(key) {
 	if (!key) return "Unknown";
 	return String(key)
@@ -43,6 +57,7 @@ function UnitSelector() {
 	const armyKeyB = location.state?.armyKeyB;
 	const isSingleSelect = Boolean(armyKey);
 	const socketRef = useRef(null);
+	const equipmentFlashTimerRef = useRef(null);
 
 	const storageKeyForSlot = (slotId) =>
 		gameCode ? `kt_game_${gameCode}_army_${slotId}` : null;
@@ -87,10 +102,40 @@ function UnitSelector() {
 		return localStorage.getItem(key) === "true";
 	};
 
+	const [flashEquipmentLimit, setFlashEquipmentLimit] = useState(false);
+	const [equipmentImageIndex, setEquipmentImageIndex] = useState({});
+
 	const [readySlots, setReadySlots] = useState(() => ({
 		A: readReadyState("A"),
 		B: readReadyState("B"),
 	}));
+
+	const triggerEquipmentLimitFlash = () => {
+		setFlashEquipmentLimit(true);
+		if (equipmentFlashTimerRef.current) {
+			clearTimeout(equipmentFlashTimerRef.current);
+		}
+		equipmentFlashTimerRef.current = setTimeout(() => {
+			setFlashEquipmentLimit(false);
+			equipmentFlashTimerRef.current = null;
+		}, 500);
+	};
+
+	const handleEquipmentImageNav = (equipmentId, direction, totalImages) => {
+		if (!equipmentId || totalImages <= 1) return;
+		setEquipmentImageIndex((prev) => {
+			const current = Number(prev[equipmentId] ?? 0);
+			const nextRaw = direction === "prev" ? current - 1 : current + 1;
+			const next = (nextRaw + totalImages) % totalImages;
+			return { ...prev, [equipmentId]: next };
+		});
+	};
+
+	useEffect(() => () => {
+		if (equipmentFlashTimerRef.current) {
+			clearTimeout(equipmentFlashTimerRef.current);
+		}
+	}, []);
 
 	const applyArmyEvent = (event) => {
 		if (!event || event.kind !== "ARMY_SELECTED") return;
@@ -267,6 +312,11 @@ function UnitSelector() {
 		const data = normalizeEquipmentData(entry?.[1]);
 		return Array.isArray(data?.equipment) ? data.equipment : [];
 	}, [selectedFactionKey]);
+
+	const tacOpsPlaceholders = useMemo(
+		() => ["tac-ops-1", "tac-ops-2", "tac-ops-3"],
+		[],
+	);
 
 	const getDefaultRoster = (armyKey, units, equipmentList = []) => {
 		if (!armyKey) return null;
@@ -608,42 +658,6 @@ function UnitSelector() {
 
 					<div className="unit-selector__section">
 						<div className="unit-selector__section-title">
-							Universal Equipment
-							<span className="unit-selector__section-count">
-								{selectedEquipmentIds.length}/4 selected
-							</span>
-						</div>
-						{universalEquipment.length === 0 ? (
-							<div className="unit-selector__equipment-empty">
-								No universal equipment found.
-							</div>
-						) : (
-							<div className="unit-selector__section-list">
-								{universalEquipment.map((item) => {
-									const isSelected = selectedEquipmentIds.includes(item.id);
-									const isDisabled = !isSelected && isEquipmentAtLimit;
-									return (
-										<button
-											key={item.id || item.name}
-											className={`unit-selector__tile unit-selector__equipment-tile ${
-												isSelected ? "unit-selector__tile--selected" : ""
-											}`}
-											type="button"
-											disabled={isDisabled || isRosterLocked}
-											onClick={() => {
-												if (isDisabled) return;
-												toggleEquipmentSelection(item.id);
-											}}
-										>
-											<div className="unit-selector__equipment-name">{item.name}</div>
-										</button>
-									);
-								})}
-							</div>
-						)}
-					</div>
-					<div className="unit-selector__section">
-						<div className="unit-selector__section-title">
 							Faction Equipment — {formatFactionName(selectedFactionKey)}
 							<span className="unit-selector__section-count">
 								{selectedEquipmentIds.length}/4 selected
@@ -655,34 +669,232 @@ function UnitSelector() {
 									No faction equipment found for this team.
 								</div>
 							) : (
-								<div className="unit-selector__section-list">
+								<div className="unit-selector__section-list unit-selector__equipment-grid">
 									{factionEquipment.map((item) => {
 										const isSelected = selectedEquipmentIds.includes(item.id);
-										const isDisabled = !isSelected && isEquipmentAtLimit;
+										const isLimitBlocked = !isSelected && isEquipmentAtLimit;
+										const isDisabled = isRosterLocked;
+										const images = getEquipmentImages(item.image);
+										const imageIndex = Math.max(
+											0,
+											Math.min(
+												Number(equipmentImageIndex[item.id] ?? 0),
+												Math.max(0, images.length - 1),
+											),
+										);
+										const imageSrc = resolveEquipmentImage(item.image, imageIndex);
+										const hasMultipleImages = images.length > 1;
 										return (
 											<button
 												key={item.id || item.name}
 												className={`unit-selector__tile unit-selector__equipment-tile ${
 													isSelected ? "unit-selector__tile--selected" : ""
+												} ${
+													isLimitBlocked ? "unit-selector__tile--limit" : ""
+												} ${
+													isLimitBlocked && flashEquipmentLimit
+														? "unit-selector__equipment-tile--limit-flash"
+														: ""
 												}`}
 												type="button"
-												disabled={isDisabled || isRosterLocked}
+												disabled={isDisabled}
+												aria-disabled={isDisabled || isLimitBlocked}
 												onClick={() => {
 													if (isDisabled) return;
+													if (isLimitBlocked) {
+														triggerEquipmentLimitFlash();
+														return;
+													}
 													toggleEquipmentSelection(item.id);
-												}}
-											>
-												<div className="unit-selector__equipment-name">{item.name}</div>
-											</button>
-										);
-									})}
-								</div>
-							)
+											}}
+											aria-label={item.name || item.id}
+										>
+											{hasMultipleImages && (
+												<div className="unit-selector__equipment-dots" aria-hidden="true">
+													{images.map((_, idx) => (
+														<span
+															key={`${item.id}-dot-${idx}`}
+															className={`unit-selector__equipment-dot ${
+																idx === imageIndex
+																	? "unit-selector__equipment-dot--active"
+																	: ""
+															}`}
+														/>
+													))}
+												</div>
+											)}
+											{hasMultipleImages && (
+												<>
+													<button
+														className="unit-selector__equipment-nav unit-selector__equipment-nav--left"
+														type="button"
+														aria-label="Previous equipment image"
+														onClick={(event) => {
+															event.stopPropagation();
+															handleEquipmentImageNav(item.id, "prev", images.length);
+														}}
+													>
+														<span aria-hidden="true">‹</span>
+													</button>
+													<button
+														className="unit-selector__equipment-nav unit-selector__equipment-nav--right"
+														type="button"
+														aria-label="Next equipment image"
+														onClick={(event) => {
+															event.stopPropagation();
+															handleEquipmentImageNav(item.id, "next", images.length);
+														}}
+													>
+														<span aria-hidden="true">›</span>
+													</button>
+												</>
+											)}
+											<img
+												className="unit-selector__equipment-image"
+												src={imageSrc}
+												alt={item.name || item.id}
+												loading="lazy"
+											/>
+										</button>
+									);
+								})}
+							</div>
+						)
 						) : (
 							<div className="unit-selector__equipment-empty">
 								Select a faction to view equipment.
 							</div>
 						)}
+					</div>
+
+					<div className="unit-selector__section">
+						<div className="unit-selector__section-title">
+							Universal Equipment
+							<span className="unit-selector__section-count">
+								{selectedEquipmentIds.length}/4 selected
+							</span>
+						</div>
+						{universalEquipment.length === 0 ? (
+							<div className="unit-selector__equipment-empty">
+								No universal equipment found.
+							</div>
+						) : (
+							<div className="unit-selector__section-list unit-selector__equipment-grid">
+								{universalEquipment.map((item) => {
+									const isSelected = selectedEquipmentIds.includes(item.id);
+									const isLimitBlocked = !isSelected && isEquipmentAtLimit;
+									const isDisabled = isRosterLocked;
+									const images = getEquipmentImages(item.image);
+									const imageIndex = Math.max(
+										0,
+										Math.min(
+											Number(equipmentImageIndex[item.id] ?? 0),
+											Math.max(0, images.length - 1),
+										),
+									);
+									const imageSrc = resolveEquipmentImage(item.image, imageIndex);
+									const hasMultipleImages = images.length > 1;
+									return (
+										<button
+											key={item.id || item.name}
+											className={`unit-selector__tile unit-selector__equipment-tile ${
+												isSelected ? "unit-selector__tile--selected" : ""
+											} ${
+												isLimitBlocked ? "unit-selector__tile--limit" : ""
+											} ${
+												isLimitBlocked && flashEquipmentLimit
+													? "unit-selector__equipment-tile--limit-flash"
+													: ""
+											}`}
+											type="button"
+											disabled={isDisabled}
+											aria-disabled={isDisabled || isLimitBlocked}
+											onClick={() => {
+												if (isDisabled) return;
+												if (isLimitBlocked) {
+													triggerEquipmentLimitFlash();
+													return;
+												}
+												toggleEquipmentSelection(item.id);
+											}}
+											aria-label={item.name || item.id}
+										>
+											{hasMultipleImages && (
+												<div className="unit-selector__equipment-dots" aria-hidden="true">
+													{images.map((_, idx) => (
+														<span
+															key={`${item.id}-dot-${idx}`}
+															className={`unit-selector__equipment-dot ${
+																idx === imageIndex
+																	? "unit-selector__equipment-dot--active"
+																	: ""
+															}`}
+														/>
+													))}
+												</div>
+											)}
+											{hasMultipleImages && (
+												<>
+													<button
+														className="unit-selector__equipment-nav unit-selector__equipment-nav--left"
+														type="button"
+														aria-label="Previous equipment image"
+														onClick={(event) => {
+															event.stopPropagation();
+															handleEquipmentImageNav(item.id, "prev", images.length);
+														}}
+													>
+														<span aria-hidden="true">‹</span>
+													</button>
+													<button
+														className="unit-selector__equipment-nav unit-selector__equipment-nav--right"
+														type="button"
+														aria-label="Next equipment image"
+														onClick={(event) => {
+															event.stopPropagation();
+															handleEquipmentImageNav(item.id, "next", images.length);
+														}}
+													>
+														<span aria-hidden="true">›</span>
+													</button>
+												</>
+											)}
+											<img
+												className="unit-selector__equipment-image"
+												src={imageSrc}
+												alt={item.name || item.id}
+												loading="lazy"
+											/>
+										</button>
+									);
+								})}
+							</div>
+						)}
+					</div>
+
+					<div className="unit-selector__section">
+						<div className="unit-selector__section-title">
+							Tac Ops
+							<span className="unit-selector__section-count">0/3 selected</span>
+						</div>
+						<div className="unit-selector__section-list unit-selector__equipment-grid">
+							{tacOpsPlaceholders.map((id) => (
+								<button
+									key={id}
+									className="unit-selector__tile unit-selector__equipment-tile"
+									type="button"
+									disabled
+									aria-label="Tac Ops placeholder"
+								>
+									<img
+										className="unit-selector__equipment-image"
+										src="/killteamSpeedrunLogo.png"
+										alt="Tac Ops"
+										loading="lazy"
+									/>
+								</button>
+							))}
+						</div>
 					</div>
 				</div>
 
