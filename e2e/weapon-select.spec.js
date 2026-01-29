@@ -85,7 +85,7 @@ async function goToWeaponSelect(page, mode, options = {}) {
   await ensureAppReady(page);
   await resetE2EEvents(page);
 
-  await page.evaluate(({ flowMode, movementActions, attackerWeapons }) => {
+  await page.evaluate(({ flowMode, movementActions, attackerWeapons, attackerOrder }) => {
     const state = window.ktGetGameState?.();
 
     // Ensure arrays exist (some tests depend on reading them later)
@@ -118,7 +118,10 @@ async function goToWeaponSelect(page, mode, options = {}) {
         : Array.isArray(unit.weapons)
           ? unit.weapons.map(stripLimited)
           : [];
-      return { ...unit, weapons };
+      const nextState = attackerOrder
+        ? { ...(unit.state || {}), order: attackerOrder }
+        : unit.state;
+      return { ...unit, weapons, state: nextState };
     });
 
     const actionFlow = {
@@ -149,52 +152,6 @@ async function goToWeaponSelect(page, mode, options = {}) {
       locked: {
         attackerWeapon: false,
         defenderWeapon: false,
-
-test("heavy weapons are disabled after disallowed movement", async ({ page }) => {
-  const attackerWeapons = [
-    {
-      name: "Heavy Blasta",
-      mode: "ranged",
-      hit: 4,
-      atk: 4,
-      dmg: "4/5",
-      wr: [{ id: "heavy", note: "Dash only" }],
-    },
-    { name: "Slugga", mode: "ranged", hit: 4, atk: 4, dmg: "3/4", wr: [] },
-  ];
-
-  await goToWeaponSelect(page, "shoot", {
-    movementActions: ["reposition"],
-    attackerWeapons,
-  });
-
-  const heavyRow = page.getByTestId("weapon-option-attacker-Heavy Blasta");
-  const normalRow = page.getByTestId("weapon-option-attacker-Slugga");
-
-  await expect(heavyRow).toHaveAttribute("aria-disabled", "true");
-  await expect(normalRow).not.toHaveAttribute("aria-disabled", "true");
-});
-
-test("dash-only heavy weapons stay enabled after dash", async ({ page }) => {
-  const attackerWeapons = [
-    {
-      name: "Heavy Blasta",
-      mode: "ranged",
-      hit: 4,
-      atk: 4,
-      dmg: "4/5",
-      wr: [{ id: "heavy", note: "Dash only" }],
-    },
-  ];
-
-  await goToWeaponSelect(page, "shoot", {
-    movementActions: ["dash"],
-    attackerWeapons,
-  });
-
-  const heavyRow = page.getByTestId("weapon-option-attacker-Heavy Blasta");
-  await expect(heavyRow).not.toHaveAttribute("aria-disabled", "true");
-});
         attackerDice: false,
         defenderDice: false,
         diceRolled: false,
@@ -225,7 +182,12 @@ test("dash-only heavy weapons stay enabled after dash", async ({ page }) => {
         },
       },
     });
-  }, { flowMode: mode, movementActions: options.movementActions, attackerWeapons: options.attackerWeapons });
+  }, {
+    flowMode: mode,
+    movementActions: options.movementActions,
+    attackerWeapons: options.attackerWeapons,
+    attackerOrder: options.attackerOrder,
+  });
 
   await waitForPickWeapons(page);
   await expect(page.getByTestId("weapon-select-modal")).toBeVisible({ timeout: 15000 });
@@ -661,76 +623,61 @@ test("shoot flow shows no valid weapons when attacker lacks ranged", async ({ pa
 });
 
 test("conceal attacker only shows silent weapons in weapon select", async ({ page }) => {
-  await goToWeaponSelect(page, "shoot");
-
-  await page.evaluate(() => {
-    const state = window.ktGetGameState?.();
-    const attackerId = "alpha:kommando-bomb-squig";
-    const attacker = state?.game?.find((unit) => unit.id === attackerId);
-    const defender = state?.game?.find((unit) => unit.teamId !== attacker?.teamId);
-    if (!attacker || !defender) return;
-
-    const weapons = [
+  await goToWeaponSelect(page, "shoot", {
+    attackerOrder: "conceal",
+    attackerWeapons: [
       { name: "Silent Rifle", mode: "ranged", hit: 4, atk: 4, dmg: "3/4", wr: ["silent"] },
       { name: "Loud Rifle", mode: "ranged", hit: 4, atk: 4, dmg: "3/4", wr: [] },
-    ];
-
-    const nextGame = state.game.map((unit) => {
-      if (unit.id !== attackerId) return unit;
-      return {
-        ...unit,
-        weapons,
-        state: {
-          ...(unit.state || {}),
-          order: "conceal",
-        },
-      };
-    });
-
-    const actionFlow = {
-      mode: "shoot",
-      attackerId,
-      defenderId: defender.id,
-      step: "pickWeapons",
-      attackerWeapon: null,
-      defenderWeapon: null,
-      inputs: {
-        primaryTargetId: defender.id,
-        secondaryTargetIds: [],
-        accurateSpent: 0,
-        balancedClick: false,
-        balancedUsed: false,
-      },
-      log: [],
-      remainingDice: { attacker: [], defender: [] },
-      dice: {
-        attacker: { raw: [], crit: 0, norm: 0 },
-        defender: { raw: [], crit: 0, norm: 0 },
-      },
-      remaining: {
-        attacker: { crit: 0, norm: 0 },
-        defender: { crit: 0, norm: 0 },
-      },
-      resolve: { turn: "attacker" },
-      locked: {
-        attackerWeapon: false,
-        defenderWeapon: false,
-        attackerDice: false,
-        defenderDice: false,
-        diceRolled: false,
-      },
-    };
-
-    window.ktSetGameState?.({
-      ...state,
-      game: nextGame,
-      phase: "FIREFIGHT",
-      topBar: { ...(state?.topBar || {}), phase: "FIREFIGHT" },
-      ui: { actionFlow },
-    });
+    ],
   });
 
   await expect(page.getByTestId("weapon-select-modal")).toBeVisible({ timeout: 15000 });
   await expect(page.getByTestId("weapon-option-attacker-Silent Rifle")).toBeVisible();
   await expect(page.getByTestId("weapon-option-attacker-Loud Rifle")).toHaveCount(0);
+});
+
+test("heavy weapons are disabled after disallowed movement", async ({ page }) => {
+  const attackerWeapons = [
+    {
+      name: "Heavy Blasta",
+      mode: "ranged",
+      hit: 4,
+      atk: 4,
+      dmg: "4/5",
+      wr: [{ id: "heavy", note: "Dash only" }],
+    },
+    { name: "Slugga", mode: "ranged", hit: 4, atk: 4, dmg: "3/4", wr: [] },
+  ];
+
+  await goToWeaponSelect(page, "shoot", {
+    movementActions: ["reposition"],
+    attackerWeapons,
+  });
+
+  const heavyRow = page.getByTestId("weapon-option-attacker-Heavy Blasta");
+  const normalRow = page.getByTestId("weapon-option-attacker-Slugga");
+
+  await expect(heavyRow).toHaveAttribute("aria-disabled", "true");
+  await expect(normalRow).not.toHaveAttribute("aria-disabled", "true");
+});
+
+test("dash-only heavy weapons stay enabled after dash", async ({ page }) => {
+  const attackerWeapons = [
+    {
+      name: "Heavy Blasta",
+      mode: "ranged",
+      hit: 4,
+      atk: 4,
+      dmg: "4/5",
+      wr: [{ id: "heavy", note: "Dash only" }],
+    },
+  ];
+
+  await goToWeaponSelect(page, "shoot", {
+    movementActions: ["dash"],
+    attackerWeapons,
+  });
+
+  const heavyRow = page.getByTestId("weapon-option-attacker-Heavy Blasta");
+  await expect(heavyRow).not.toHaveAttribute("aria-disabled", "true");
 });

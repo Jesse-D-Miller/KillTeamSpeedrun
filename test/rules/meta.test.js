@@ -6,7 +6,7 @@ describe("weaponRuleMeta", () => {
     expect(getRuleResponsibility("stun")).to.equal(RESPONSIBILITY.SEMI);
     expect(getRuleResponsibility("hot")).to.equal(RESPONSIBILITY.SEMI);
     expect(getRuleResponsibility("brutal")).to.equal(RESPONSIBILITY.AUTO);
-    expect(getRuleResponsibility("lethal")).to.equal(RESPONSIBILITY.AUTO);
+    expect(getRuleResponsibility("lethal")).to.equal(RESPONSIBILITY.PLAYER);
     expect(getRuleResponsibility("balanced")).to.equal(RESPONSIBILITY.PLAYER);
   });
 

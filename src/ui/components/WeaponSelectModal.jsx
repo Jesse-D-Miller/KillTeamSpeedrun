@@ -128,6 +128,7 @@ function WeaponSelectModal({
     const readyTestId = role === "attacker" ? "weapon-ready-attacker" : "weapon-ready-defender";
     const statusTestId =
       role === "attacker" ? "weapon-status-attacker" : "weapon-status-defender";
+    const unitForCard = role === "attacker" ? { ...unit, weapons } : unit;
     const hasValidWeapons = weapons.length > 0;
     const bothReady = attackerReady && defenderReady;
 
@@ -189,7 +190,7 @@ function WeaponSelectModal({
         </div>
         <div className="kt-modal__tile-sub weapon-select__card-wrap">
           <UnitCard
-            unit={unit}
+            unit={unitForCard}
             dispatch={() => {}}
             canChooseOrder={false}
             onChooseOrder={() => {}}
