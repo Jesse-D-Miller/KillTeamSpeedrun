@@ -1073,6 +1073,15 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
         : null;
   const canCancelWeaponSelect =
     actionFlow?.mode === "shoot" ? canCancelShootFlow : canCancelFightFlow;
+  const weaponSelectMovementActions = Array.isArray(
+    state.firefight?.activation?.actionsTaken,
+  )
+    ? state.firefight.activation.actionsTaken
+        .map((action) => String(action || "").toLowerCase())
+        .filter((action) =>
+          ["reposition", "dash", "charge", "fallback"].includes(action),
+        )
+    : [];
 
   const showIssues = (result, event) =>
     setIntentGate({
@@ -1967,6 +1976,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
           defenderReady={defenderReady}
           localRole={weaponSelectLocalRole}
           weaponUsage={state.weaponUsage || {}}
+          movementActions={weaponSelectMovementActions}
           onSetWeapon={(role, weaponName) => {
             dispatchGameEvent("FLOW_SET_WEAPON", { role, weaponName });
           }}

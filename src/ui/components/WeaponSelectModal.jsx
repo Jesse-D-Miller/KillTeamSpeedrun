@@ -17,6 +17,7 @@ function WeaponSelectModal({
   defenderReady,
   localRole = null,
   weaponUsage = {},
+  movementActions = [],
   onSetWeapon,
   onReady,
   onCancel,
@@ -47,12 +48,68 @@ function WeaponSelectModal({
     ? defenderUnit.weapons.filter((weapon) => weapon.mode === weaponMode)
     : [];
 
-  const getLocalButtonState = (selectedWeapon, isReady, selectedWeaponUsable) => {
+  const normalizedMovementActions = Array.isArray(movementActions)
+    ? movementActions.map((action) => String(action || "").toLowerCase()).filter(Boolean)
+    : [];
+  const hasMovementActions = normalizedMovementActions.length > 0;
+
+  const getHeavyRuleState = (weapon) => {
+    const raw = weapon?.wr ?? weapon?.rules ?? [];
+    const list = Array.isArray(raw) ? raw : [raw];
+    for (const entry of list) {
+      if (!entry) continue;
+      if (typeof entry === "string") {
+        const note = entry.trim().toLowerCase();
+        if (note.startsWith("heavy")) {
+          const dashOnly = note.includes("dash");
+          const repositionOnly = note.includes("reposition");
+          return { hasHeavy: true, dashOnly, repositionOnly };
+        }
+        continue;
+      }
+      const id = String(entry?.id || "").toLowerCase();
+      if (id !== "heavy") continue;
+      const note = String(entry?.note ?? entry?.value ?? "").toLowerCase();
+      const dashOnly = note.includes("dash");
+      const repositionOnly = note.includes("reposition");
+      return { hasHeavy: true, dashOnly, repositionOnly };
+    }
+    return { hasHeavy: false, dashOnly: false, repositionOnly: false };
+  };
+
+  const getHeavyBlockState = (weapon) => {
+    const heavy = getHeavyRuleState(weapon);
+    if (!heavy.hasHeavy || !hasMovementActions) {
+      return { blocked: false, reason: null };
+    }
+    if (heavy.dashOnly) {
+      const blocked = normalizedMovementActions.some((action) => action !== "dash");
+      return { blocked, reason: blocked ? "DASH_ONLY" : null };
+    }
+    if (heavy.repositionOnly) {
+      const blocked = normalizedMovementActions.some(
+        (action) => action !== "reposition",
+      );
+      return { blocked, reason: blocked ? "REPOSITION_ONLY" : null };
+    }
+    return { blocked: true, reason: "MOVED" };
+  };
+
+  const getLocalButtonState = (
+    selectedWeapon,
+    isReady,
+    selectedWeaponUsable,
+    disabledReason,
+  ) => {
     if (!selectedWeapon) {
       return { label: "Select weapon", disabled: true, showSpinner: false };
     }
     if (!selectedWeaponUsable) {
-      return { label: "Limited used", disabled: true, showSpinner: false };
+      return {
+        label: disabledReason || "Weapon disabled",
+        disabled: true,
+        showSpinner: false,
+      };
     }
     if (!isReady) {
       return { label: "READY", disabled: false, showSpinner: false };
@@ -75,15 +132,22 @@ function WeaponSelectModal({
     const bothReady = attackerReady && defenderReady;
 
     const selectedWeaponProfile = weapons.find((weapon) => weapon.name === selectedWeapon);
+    const selectedHeavyState = selectedWeaponProfile
+      ? getHeavyBlockState(selectedWeaponProfile)
+      : { blocked: false, reason: null };
+    const selectedLimitedUsage = selectedWeaponProfile
+      ? canUseLimitedWeapon({
+          weaponProfile: selectedWeaponProfile,
+          operativeId: unit?.id,
+          weaponName: selectedWeaponProfile?.name ?? selectedWeapon,
+          weaponUsage,
+        })
+      : true;
     const selectedWeaponUsable =
       role !== "attacker" || !selectedWeaponProfile
         ? true
-        : canUseLimitedWeapon({
-            weaponProfile: selectedWeaponProfile,
-            operativeId: unit?.id,
-            weaponName: selectedWeaponProfile?.name ?? selectedWeapon,
-            weaponUsage,
-          });
+        : selectedLimitedUsage && !selectedHeavyState.blocked;
+
     const getWeaponLimitedUsage = (weapon) => {
       const limit = getLimitedValue(weapon);
       if (!limit) return null;
@@ -91,10 +155,23 @@ function WeaponSelectModal({
       const used = Number(weaponUsage?.[key]?.used ?? 0);
       return { limit, used };
     };
+    const getWeaponDisabledReason = (weapon) => {
+      if (role !== "attacker") return null;
+      const heavyState = getHeavyBlockState(weapon);
+      if (heavyState.blocked) {
+        if (heavyState.reason === "DASH_ONLY") return "Heavy: Dash only.";
+        if (heavyState.reason === "REPOSITION_ONLY") return "Heavy: Reposition only.";
+        return "Heavy: moved this activation.";
+      }
+      const usage = getWeaponLimitedUsage(weapon);
+      if (!usage) return null;
+      return usage.used >= usage.limit ? "Limited uses spent." : null;
+    };
     const localButtonState = getLocalButtonState(
       selectedWeapon,
       isReady,
       selectedWeaponUsable,
+      selectedWeaponUsable ? null : getWeaponDisabledReason(selectedWeaponProfile),
     );
     const localStatusLabel = localButtonState.label;
     const opponentStatusLabel = isReady ? "Opponent ready ✅" : "Opponent selecting…";
@@ -124,22 +201,18 @@ function WeaponSelectModal({
             autoSelectFirstWeapon={false}
             emptyWeaponsLabel="No valid weapons"
             weaponOptionRole={role}
-            isWeaponSelectable={(weapon) =>
-              role !== "attacker"
-                ? true
-                : canUseLimitedWeapon({
-                    weaponProfile: weapon,
-                    operativeId: unit?.id,
-                    weaponName: weapon?.name,
-                    weaponUsage,
-                  })
-            }
-            getWeaponDisabledReason={(weapon) => {
-              if (role !== "attacker") return null;
-              const usage = getWeaponLimitedUsage(weapon);
-              if (!usage) return null;
-              return usage.used >= usage.limit ? "Limited uses spent." : null;
+            isWeaponSelectable={(weapon) => {
+              if (role !== "attacker") return true;
+              const heavyState = getHeavyBlockState(weapon);
+              if (heavyState.blocked) return false;
+              return canUseLimitedWeapon({
+                weaponProfile: weapon,
+                operativeId: unit?.id,
+                weaponName: weapon?.name,
+                weaponUsage,
+              });
             }}
+            getWeaponDisabledReason={getWeaponDisabledReason}
             getWeaponBadge={(weapon) => {
               if (role !== "attacker") return null;
               const usage = getWeaponLimitedUsage(weapon);
