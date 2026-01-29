@@ -465,61 +465,94 @@
   line-height: 1.3;
 }
 
-/* Ploys: row */
+/* Ploys: grid (dynamic 4 x auto-ish) */
 .attack-resolution__ploys {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding-top: 12px;
   display: grid;
   gap: 10px;
+  min-width: 0;
 }
 
+/*
+  Dynamic grid:
+  - Tries to fit up to 4 columns when there’s room
+  - Falls back to 3/2/1 automatically when constrained
+*/
 .attack-resolution__ploy-list {
-  display: flex;
+  display: grid;
   gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 6px;
-  scroll-snap-type: x mandatory;
+
+  /* key: dynamic columns */
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+
+  /* allow it to actually shrink in your grid/flex parent */
+  min-width: 0;
+  width: 100%;
 }
 
+/* Card */
 .attack-resolution__ploy {
-  flex: 0 0 auto;
-  min-width: 240px;
-  max-width: 320px;
-  scroll-snap-align: start;
-
-  text-align: left;
+  width: 100%;
+  aspect-ratio: 2 / 3;
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.04);
-  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.12);
+  padding: 4px;
+  box-sizing: border-box;
+
   cursor: pointer;
   color: inherit;
+  position: relative;
+  overflow: hidden;
+
+  display: grid;
+  place-items: center;
 }
 
-.attack-resolution__ploy-name {
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-size: 0.9rem;
+/* Image: scale to fit, keep aspect, no squish, no crop */
+.attack-resolution__ploy-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+
+  object-fit: cover;
+  object-position: center;
+
+  border-radius: 10px;
+  transform: scale(1.05);
+  transform-origin: center;
 }
 
-.attack-resolution__ploy-meta {
-  margin-top: 6px;
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  opacity: 0.8;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
+/* Badge */
+.attack-resolution__ploy-cost-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
 
-.attack-resolution__ploy-cost,
-.attack-resolution__ploy-timing {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 999px;
   padding: 4px 8px;
-  background: rgba(255, 255, 255, 0.03);
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #f7f7f7;
+  background: rgba(12, 14, 18, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  text-transform: uppercase;
+
+  pointer-events: none;
+}
+
+@media (max-width: 900px) {
+  .attack-resolution__ploy-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .attack-resolution__ploy-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 900px) {

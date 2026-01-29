@@ -1,43 +1,103 @@
+/* FirefightPloys.css */
+
 .kt-firefight-ploys {
   width: 100%;
 }
 
+/* 4 columns, auto rows, responsive */
 .kt-firefight-ploys__list {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+
   gap: 12px;
-  overflow-x: auto;
-  padding: 6px 2px 10px;
-  scroll-snap-type: x proximity;
-  min-height: 120px;
+
+  padding: 8px 2px 10px;
+
+  /* if your parent container gets narrow, we still want this to behave */
+  width: 100%;
+  box-sizing: border-box;
 }
 
+/* Card: fixed aspect ratio so the grid looks clean */
 .kt-firefight-ploys__item {
-  min-width: 160px;
-  height: 110px;
-  background: rgba(16, 19, 24, 0.8);
+  width: 100%;
+  aspect-ratio: 2 / 3;
+
+  background: rgba(0, 0, 0, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  padding: 10px 12px;
-  color: #f7f7f7;
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  scroll-snap-align: start;
-  transition: border-color 0.2s ease, transform 0.2s ease;
+  padding: 4px;
+  box-sizing: border-box;
+
+  position: relative;
+  overflow: hidden;
+
+  display: grid;
+  place-items: center;
+
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease, border-color 0.15s ease;
+}
+
+.kt-firefight-ploys__item:not(:disabled):hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .kt-firefight-ploys__item:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+  transform: none;
 }
 
-.kt-firefight-ploys__name {
-  font-weight: 600;
-  font-size: 0.95rem;
+/*
+  Image scales up/down within the padded interior.
+  No squish: maintain aspect ratio.
+*/
+.kt-firefight-ploys__image {
+  width: 100%;
+  height: 100%;
+  display: block;
+
+  object-fit: cover;
+  object-position: center;
+
+  border-radius: 10px;
+  transform: scale(1.05);
+  transform-origin: center;
 }
 
-.kt-firefight-ploys__cost {
-  font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.7);
+/* CP cost badge */
+.kt-firefight-ploys__cost-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+
+  padding: 4px 8px;
+  border-radius: 999px;
+
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+
+  color: #f7f7f7;
+  background: rgba(12, 14, 18, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+
+  pointer-events: none;
+}
+
+/* Dynamic responsiveness:
+   - on smaller screens, drop to fewer columns automatically */
+@media (max-width: 900px) {
+  .kt-firefight-ploys__list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .kt-firefight-ploys__list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

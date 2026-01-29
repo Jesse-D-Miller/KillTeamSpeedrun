@@ -33,6 +33,11 @@ const normKey = (value) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "");
 
+const extractTeamKeyFromPath = (path) => {
+  const match = String(path || "").match(/\/killteams\/([^/]+)\//i);
+  return match ? match[1] : null;
+};
+
 function normalizeDataset(mod) {
   if (!mod) return null;
   const data = mod.default ?? mod;
@@ -171,6 +176,7 @@ function AttackResolutionScreen({
   defenseRoll,
   combatModifiers,
   weaponUsage,
+  teamKeys,
   rollsLocked: rollsLockedFromState,
   attackLocked,
   defenseLocked,
@@ -482,25 +488,46 @@ function AttackResolutionScreen({
 
   // Firefight ploys dataset selection
   const firefightPloys = useMemo(() => {
-    const datasets = Object.values(firefightPloyModules)
-      .map(normalizeDataset)
+    const datasets = Object.entries(firefightPloyModules)
+      .map(([path, mod]) => {
+        const data = normalizeDataset(mod);
+        if (!data) return null;
+        const teamKey = extractTeamKeyFromPath(path);
+        return {
+          data,
+          normalizedTeamKey: normKey(teamKey),
+          normalizedKillTeam: normKey(data.killTeam),
+        };
+      })
       .filter(Boolean);
 
     if (datasets.length === 0) return { label: "No ploys found", ploys: [] };
 
-    const hint = getKillTeamHint(attacker, defender);
-    const target = normKey(hint);
+    const owner = role === "defender" ? defender?.owner : attacker?.owner;
+    const teamKeyFromOwner =
+      owner === "B" ? teamKeys?.beta ?? teamKeys?.alpha : teamKeys?.alpha ?? teamKeys?.beta;
+    const teamKeyTarget = normKey(teamKeyFromOwner);
 
-    const exact = datasets.find((d) => normKey(d.killTeam) === target);
-    const fallback = exact || datasets[0];
+    const exactByTeam = teamKeyTarget
+      ? datasets.find((d) =>
+          [d.normalizedTeamKey, d.normalizedKillTeam].includes(teamKeyTarget),
+        )
+      : null;
+
+    const hint = getKillTeamHint(attacker, defender);
+    const hintTarget = normKey(hint);
+    const exactByHint = hintTarget
+      ? datasets.find((d) => d.normalizedKillTeam === hintTarget)
+      : null;
+
+    const fallback = exactByTeam || exactByHint || datasets[0];
+    const data = fallback?.data || null;
 
     return {
-      label: fallback?.killTeam
-        ? `${fallback.killTeam} Firefight Ploys`
-        : "Firefight Ploys",
-      ploys: Array.isArray(fallback?.ploys) ? fallback.ploys : [],
+      label: data?.killTeam ? `${data.killTeam} Firefight Ploys` : "Firefight Ploys",
+      ploys: Array.isArray(data?.ploys) ? data.ploys : [],
     };
-  }, [attacker, defender]);
+  }, [attacker, defender, role, teamKeys]);
 
   const markPostRollRuleUsed = (ruleId, label) => {
     if (usedRules[ruleId]) return;
@@ -1135,16 +1162,26 @@ function AttackResolutionScreen({
                         const cost = ploy?.cost?.cp ? `${ploy.cost.cp}CP` : "—";
                         addLog("Ploy", `Used ${ploy.name} (${cost}).`);
                       }}
+                      aria-label={ploy.name || ploy.id}
                     >
-                      <div className="attack-resolution__ploy-name">{ploy.name}</div>
-                      <div className="attack-resolution__ploy-meta">
-                        <span className="attack-resolution__ploy-cost">
-                          {ploy?.cost?.cp ? `${ploy.cost.cp}CP` : "—"}
+                      <img
+                        className="attack-resolution__ploy-image"
+                        src={(() => {
+                          const image = ploy?.image;
+                          if (!image || typeof image !== "string") return "/killteamSpeedrunLogo.png";
+                          if (image.startsWith("http://") || image.startsWith("https://")) return image;
+                          if (image.startsWith("/")) return image;
+                          if (image.startsWith("public/")) return `/${image.slice("public/".length)}`;
+                          return `/${image}`;
+                        })()}
+                        alt={ploy.name || ploy.id}
+                        loading="lazy"
+                      />
+                      {ploy?.cost?.cp != null && (
+                        <span className="attack-resolution__ploy-cost-badge">
+                          {ploy.cost.cp}CP
                         </span>
-                        <span className="attack-resolution__ploy-timing">
-                          {ploy.timing || "—"}
-                        </span>
-                      </div>
+                      )}
                     </button>
                   ))}
                 </div>

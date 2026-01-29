@@ -11,6 +11,7 @@
     {
       "id": "kommandos-ffp-just-a-scratch",
       "name": "JUST A SCRATCH",
+      "image": "kommandos-ffp-just-a-scratch.png",
       "type": "firefightPloy",
       "cost": { "cp": 1 },
       "timing": "firefightPhase",
@@ -31,6 +32,7 @@
       "id": "kommandos-ffp-krump-em",
       "name": "KRUMP ’EM!",
       "type": "firefightPloy",
+      "image": "kommandos-ffp-krump-em.png",
       "cost": { "cp": 1 },
       "timing": "endOfFirefightPhase",
       "effect": {
@@ -42,6 +44,7 @@
       "id": "kommandos-ffp-kunnin-but-brutal",
       "name": "KUNNIN’ BUT BRUTAL",
       "type": "firefightPloy",
+      "image": "kommandos-ffp-kunnin-but-brutal.png",
       "cost": { "cp": 1 },
       "timing": "fightSequence",
       "trigger": {
@@ -62,6 +65,7 @@
       "id": "kommandos-ffp-shake-it-off",
       "name": "SHAKE IT OFF",
       "type": "firefightPloy",
+      "image": "kommandos-ffp-shake-it-off.png",
       "cost": { "cp": 1 },
       "timing": "whenOperativeActivatedOrWhenAplChanged",
       "trigger": {

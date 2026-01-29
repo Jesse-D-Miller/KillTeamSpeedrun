@@ -6,6 +6,14 @@ const ployModules = import.meta.glob(
 );
 
 const normalizeData = (moduleData) => moduleData?.default || moduleData || null;
+const resolvePloyImage = (image) => {
+  if (!image) return "/killteamSpeedrunLogo.png";
+  if (typeof image !== "string") return "/killteamSpeedrunLogo.png";
+  if (image.startsWith("http://") || image.startsWith("https://")) return image;
+  if (image.startsWith("/")) return image;
+  if (image.startsWith("public/")) return `/${image.slice("public/".length)}`;
+  return `/${image}`;
+};
 
 function StrategicPloys({
   armyKey,
@@ -55,20 +63,32 @@ function StrategicPloys({
         {waitingLabel && <span className="kt-ploys__waiting">{waitingLabel}</span>}
       </div>
       <div className="kt-ploys__list">
-        {ploys.map((ploy) => (
-          <button
-            key={ploy.id || ploy.name}
-            className="kt-ploys__item"
-            type="button"
-            disabled={!isInteractive || !isMyTurn || usedPloyIds.includes(ploy.id)}
-            onClick={() => onUsePloy?.(ploy)}
-          >
-            <div className="kt-ploys__name">{ploy.name}</div>
-            {ploy.cost?.cp != null && (
-              <div className="kt-ploys__cost">CP {ploy.cost.cp}</div>
-            )}
-          </button>
-        ))}
+        {ploys.map((ploy) => {
+          const ployKey = ploy.id || ploy.name || "ploy";
+          const cost = Number(ploy?.cost?.cp ?? 0);
+          const hasCost = Number.isFinite(cost);
+          const imageSrc = resolvePloyImage(ploy?.image);
+          return (
+            <button
+              key={ployKey}
+              className="kt-ploys__item"
+              type="button"
+              aria-label={ploy.name || ployKey}
+              disabled={!isInteractive || !isMyTurn || usedPloyIds.includes(ploy.id)}
+              onClick={() => onUsePloy?.(ploy)}
+            >
+              <img
+                className="kt-ploys__image"
+                src={imageSrc}
+                alt={ploy.name || ployKey}
+                loading="lazy"
+              />
+              {hasCost && (
+                <span className="kt-ploys__cost-badge">{cost}CP</span>
+              )}
+            </button>
+          );
+        })}
       </div>
       <div className="kt-ploys__actions">
         <button

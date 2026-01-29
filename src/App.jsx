@@ -2479,6 +2479,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
         defenseRoll={combatState?.defenseRoll}
         combatModifiers={combatState?.modifiers}
         weaponUsage={state.weaponUsage || {}}
+        teamKeys={teamKeys}
         rollsLocked={
           combatState?.rollsLocked ||
           (combatState?.rollReady?.A && combatState?.rollReady?.B)
@@ -2897,6 +2898,7 @@ function E2EAttackResolutionRoute() {
         defenseRoll={defenseRoll}
         combatModifiers={combatModifiers}
         weaponUsage={{}}
+        teamKeys={{ alpha: "kommandos", beta: "kommandos" }}
         rollsLocked={rollsLocked}
         attackLocked={rollsLocked}
         defenseLocked={rollsLocked}
