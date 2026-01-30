@@ -55,8 +55,8 @@ test('Vantage 4": Accurate 2 and defender cover disabled (and clears on second c
 }) => {
   const { attacker, defender, context } = await openAttackerDefender(browser, "engage");
 
-  // Attacker should not have cover control at all
-  await expect(attacker.getByTestId("condition-cover")).toHaveCount(0);
+  // Attacker should not be able to control cover in defender panel
+  await expectCoverDisabled(attacker.getByTestId("condition-cover"));
 
   const vantage = attacker.getByTestId("condition-vantage");
 
@@ -68,9 +68,9 @@ test('Vantage 4": Accurate 2 and defender cover disabled (and clears on second c
   await attacker.waitForTimeout(25);
 
   // Accurate from vantage should show up in PRE-ROLL weapon rules
-  await expect(attacker.getByTestId("wr-chip-accurate-vantage-2")).toBeVisible({
-    timeout: 15000,
-  });
+  await expect(
+    attacker.getByTestId("wr-chip-accurate-vantage-2").first(),
+  ).toBeVisible({ timeout: 15000 });
 
   // Defender cover should become unavailable and not applied
   const cover = defender.getByTestId("condition-cover");
@@ -98,9 +98,9 @@ test('Vantage 2": Accurate 1 and defender cover disabled', async ({ browser }) =
 
   await attacker.waitForTimeout(25);
 
-  await expect(attacker.getByTestId("wr-chip-accurate-vantage-1")).toBeVisible({
-    timeout: 15000,
-  });
+  await expect(
+    attacker.getByTestId("wr-chip-accurate-vantage-1").first(),
+  ).toBeVisible({ timeout: 15000 });
 
   const cover = defender.getByTestId("condition-cover");
   await expectCoverDisabled(cover);

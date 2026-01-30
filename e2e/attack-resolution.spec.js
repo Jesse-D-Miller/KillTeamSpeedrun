@@ -10,7 +10,7 @@ import { test, expect } from "@playwright/test";
  */
 
 async function openAttackResolutionForBoth(browser, options = {}) {
-  const { weaponRules, combatCtxOverrides } = options;
+  const { weaponRules, combatCtxOverrides, mode } = options;
 
   // ✅ ONE shared context (two pages)
   const context = await browser.newContext();
@@ -24,8 +24,9 @@ async function openAttackResolutionForBoth(browser, options = {}) {
   const pageA = await context.newPage();
   const pageB = await context.newPage();
 
-  await pageA.goto("/e2e/attack-resolution?role=attacker");
-  await pageB.goto("/e2e/attack-resolution?role=defender");
+  const modeParam = mode ? `&mode=${encodeURIComponent(mode)}` : "";
+  await pageA.goto(`/e2e/attack-resolution?role=attacker${modeParam}`);
+  await pageB.goto(`/e2e/attack-resolution?role=defender${modeParam}`);
 
   await expect(pageA.getByTestId("attack-resolution-modal")).toBeVisible({ timeout: 15000 });
   await expect(pageB.getByTestId("attack-resolution-modal")).toBeVisible({ timeout: 15000 });
@@ -57,17 +58,27 @@ test("roll instructions render", async ({ browser }) => {
     defenderSuccessThreshold: 4,
   };
 
-  const instructionsA = pageA.getByTestId("roll-instructions");
-  const instructionsB = pageB.getByTestId("roll-instructions");
+  const attackerInstructionsA = pageA.getByTestId("roll-instructions");
+  const defenderInstructionsA = pageA.getByTestId("roll-instructions-defender");
+  const attackerInstructionsB = pageB.getByTestId("roll-instructions");
+  const defenderInstructionsB = pageB.getByTestId("roll-instructions-defender");
 
-  await expect(instructionsA).toBeVisible();
-  await expect(instructionsB).toBeVisible();
+  await expect(attackerInstructionsA).toBeVisible();
+  await expect(defenderInstructionsA).toBeVisible();
+  await expect(attackerInstructionsB).toBeVisible();
+  await expect(defenderInstructionsB).toBeVisible();
 
-  await expect(instructionsA).toContainText(`Roll ${expected.maxAttackDice}`);
-  await expect(instructionsA).toContainText(`success on ${expected.attackerSuccessThreshold}+`);
-  await expect(instructionsA).toContainText("crit on 6+");
-  await expect(instructionsA).toContainText(`Roll ${expected.maxDefenseDice}`);
-  await expect(instructionsA).toContainText(`success on ${expected.defenderSuccessThreshold}+`);
+  await expect(attackerInstructionsA).toContainText(`Roll ${expected.maxAttackDice}`);
+  await expect(attackerInstructionsA).toContainText(
+    `success on ${expected.attackerSuccessThreshold}+`,
+  );
+  await expect(attackerInstructionsA).toContainText("crit on 6+");
+
+  await expect(defenderInstructionsA).toContainText(`Roll ${expected.maxDefenseDice}`);
+  await expect(defenderInstructionsA).toContainText(
+    `success on ${expected.defenderSuccessThreshold}+`,
+  );
+  await expect(defenderInstructionsA).toContainText("crit on 6+");
 
   await context.close();
 });
@@ -279,6 +290,27 @@ test("attack resolution resolves with zero damage when final hits and crits are 
   await expect(pageA.locator("text=Total Damage:")).toContainText("0");
 
   await pageA.getByRole("button", { name: "Apply Damage" }).click();
+
+  await expect(pageA.getByTestId("attack-resolution-modal")).toBeHidden({ timeout: 15000 });
+  await expect(pageB.getByTestId("attack-resolution-modal")).toBeHidden({ timeout: 15000 });
+
+  await context.close();
+});
+
+test("fight apply damage closes modal", async ({ browser }) => {
+  const { context, pageA, pageB } = await openAttackResolutionForBoth(browser, {
+    mode: "fight",
+  });
+
+  await expect(pageA.getByTestId("attack-resolution-modal")).toBeVisible();
+  await expect(pageB.getByTestId("attack-resolution-modal")).toBeVisible();
+
+  await pageA.getByTestId("final-hits").fill("1");
+  await pageA.getByTestId("final-crits").fill("0");
+  await pageA.getByTestId("final-defense-hits").fill("1");
+  await pageA.getByTestId("final-defense-crits").fill("0");
+
+  await pageA.getByRole("button", { name: /apply damage/i }).click();
 
   await expect(pageA.getByTestId("attack-resolution-modal")).toBeHidden({ timeout: 15000 });
   await expect(pageB.getByTestId("attack-resolution-modal")).toBeHidden({ timeout: 15000 });

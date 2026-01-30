@@ -219,6 +219,8 @@ function isRuleClickable(ctx, rule) {
 export function clickWeaponRule(ctx, rule, payload = {}) {
   ensureUi(ctx);
 
+  const target = ctx?.inputs?.role === "defender" ? "attacker" : "defender";
+
   const phase = ctx.phase || getRulePhase(rule?.id);
   const gate = isRuleClickable(ctx, rule);
   if (!gate.ok) {
@@ -250,11 +252,11 @@ export function clickWeaponRule(ctx, rule, payload = {}) {
 
   if (rule.id === "piercing-crits") {
     const x = Number(rule.value || 0);
-    if (x > 0 && !hasEffect(ctx, "defender", "piercing-crits")) {
+    if (x > 0 && !hasEffect(ctx, target, "piercing-crits")) {
       addEffect(ctx, {
         id: "piercing-crits",
         sourceRuleId: "piercing-crits",
-        target: "defender",
+        target,
         label: `Piercing Crits -${x} dice`,
         pillColor: "red",
         detail: { reduceDefenseDiceBy: x },
@@ -262,11 +264,11 @@ export function clickWeaponRule(ctx, rule, payload = {}) {
     }
 
     const hasNote = ctx.ui.notes.some(
-      (note) => note?.ruleId === "piercing-crits" && note?.target === "defender",
+      (note) => note?.ruleId === "piercing-crits" && note?.target === target,
     );
     if (!hasNote) {
       ctx.ui.notes.push({
-        target: "defender",
+        target,
         type: "RULE_NOTE",
         ruleId: "piercing-crits",
         text: `Piercing Crits: roll ${x} fewer defence dice.`,
@@ -277,11 +279,11 @@ export function clickWeaponRule(ctx, rule, payload = {}) {
   }
 
   if (rule.id === "shock") {
-    if (!hasEffect(ctx, "defender", "shock")) {
+    if (!hasEffect(ctx, target, "shock")) {
       addEffect(ctx, {
         id: "shock",
         sourceRuleId: "shock",
-        target: "defender",
+        target,
         label: "Shock",
         pillColor: "red",
         detail: { discard: "normal-success-then-crit" },
@@ -289,11 +291,11 @@ export function clickWeaponRule(ctx, rule, payload = {}) {
     }
 
     const hasNote = ctx.ui.notes.some(
-      (note) => note?.ruleId === "shock" && note?.target === "defender",
+      (note) => note?.ruleId === "shock" && note?.target === target,
     );
     if (!hasNote) {
       ctx.ui.notes.push({
-        target: "defender",
+        target,
         type: "RULE_NOTE",
         ruleId: "shock",
         text: "Shock: In post-roll, discard 1 normal success; if none, discard 1 crit.",
@@ -302,11 +304,11 @@ export function clickWeaponRule(ctx, rule, payload = {}) {
   }
 
   if (rule.id === "stun") {
-    if (!hasEffect(ctx, "defender", "stunned")) {
+    if (!hasEffect(ctx, target, "stunned")) {
       addEffect(ctx, {
         id: "stunned",
         sourceRuleId: "stun",
-        target: "defender",
+        target,
         label: "Stunned (-1 APL)",
         pillColor: "red",
         detail: { aplMod: -1 },
@@ -315,11 +317,11 @@ export function clickWeaponRule(ctx, rule, payload = {}) {
     }
 
     const hasNote = ctx.ui.notes.some(
-      (note) => note?.ruleId === "stun" && note?.target === "defender",
+      (note) => note?.ruleId === "stun" && note?.target === target,
     );
     if (!hasNote) {
       ctx.ui.notes.push({
-        target: "defender",
+        target,
         type: "RULE_NOTE",
         ruleId: "stun",
         text: "Stunned: -1 APL until end of next activation.",
@@ -333,7 +335,7 @@ export function clickWeaponRule(ctx, rule, payload = {}) {
       detail: {
         effectId: "stunned",
         sourceRuleId: "stun",
-        target: "defender",
+        target,
       },
     });
   }

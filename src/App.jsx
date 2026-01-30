@@ -2780,8 +2780,10 @@ function E2EAttackResolutionRoute() {
   const params = new URLSearchParams(location.search);
   const targetOrderParam = String(params.get("targetOrder") || "engage").toLowerCase();
   const roleParam = String(params.get("role") || "attacker").toLowerCase();
+  const modeParam = String(params.get("mode") || "shoot").toLowerCase();
   const role = roleParam === "defender" ? "defender" : "attacker";
   const defenderOrder = targetOrderParam === "conceal" ? "conceal" : "engage";
+  const isFight = modeParam === "fight";
   const [rollsLocked, setRollsLocked] = useState(false);
   const [open, setOpen] = useState(true);
   const resolveChannelRef = useRef(null);
@@ -2837,17 +2839,17 @@ function E2EAttackResolutionRoute() {
       weapons: [
         {
           name: "E2E Blaster",
-          mode: "ranged",
+          mode: isFight ? "melee" : "ranged",
           hit: 4,
           atk: 4,
-          dmg: "3/4",
+          dmg: isFight ? "4/5" : "3/4",
           wr: [],
         },
       ],
       rules: [],
       abilities: [],
     }),
-    [defenderOrder],
+    [defenderOrder, isFight],
   );
 
   const defender = useMemo(
@@ -2866,17 +2868,17 @@ function E2EAttackResolutionRoute() {
       weapons: [
         {
           name: "E2E Blaster",
-          mode: "ranged",
+          mode: isFight ? "melee" : "ranged",
           hit: 4,
           atk: 4,
-          dmg: "3/4",
+          dmg: isFight ? "4/5" : "3/4",
           wr: [],
         },
       ],
       rules: [],
       abilities: [],
     }),
-    [defenderOrder],
+    [defenderOrder, isFight],
   );
 
   const weapon = attacker.weapons[0];
@@ -2897,7 +2899,7 @@ function E2EAttackResolutionRoute() {
         attacker={attacker}
         defender={defender}
         weapon={weapon}
-        combatStage="ATTACK_ROLLING"
+        combatStage={isFight ? "FIGHT_ROLLING" : "ATTACK_ROLLING"}
         attackRoll={attackRoll}
         defenseRoll={defenseRoll}
         combatModifiers={combatModifiers}
@@ -2907,7 +2909,7 @@ function E2EAttackResolutionRoute() {
         attackLocked={rollsLocked}
         defenseLocked={rollsLocked}
         attackDiceCount={4}
-        defenseDiceCount={3}
+        defenseDiceCount={isFight ? 4 : 3}
         onSetAttackRoll={(roll) => setAttackRoll(Array.isArray(roll) ? roll : [])}
         onLockAttack={() => setRollsLocked(true)}
         onSetDefenseRoll={(roll) => setDefenseRoll(Array.isArray(roll) ? roll : [])}

@@ -620,7 +620,7 @@ test("shoot flow shows no valid weapons when attacker lacks ranged", async ({ pa
   });
 
   await expect(page.getByTestId("weapon-select-modal")).toBeVisible({ timeout: 15000 });
-  await expect(page.getByText("No valid weapons")).toBeVisible({ timeout: 15000 });
+  await expect(page.getByTestId("weapon-select-modal")).toContainText("No valid weapons");
   await expect(page.getByTestId("weapon-ready-attacker")).toBeDisabled();
 });
 
