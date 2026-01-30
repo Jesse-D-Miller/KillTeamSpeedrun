@@ -260,7 +260,7 @@ function AttackResolutionScreen({
     ? Number(
         defender?.state?.selectedWeaponHit ??
           defender?.meleeHit ??
-          weapon?.hit ??
+          defenderWeapon?.hit ??
           6,
       )
     : Number(defender?.stats?.save ?? 6);
@@ -532,6 +532,22 @@ function AttackResolutionScreen({
     return 6;
   })();
 
+  const defenderCritThreshold = (() => {
+    if (!defenderCombatCtx) return 6;
+    const fromModifier = Number(defenderCombatCtx?.modifiers?.lethalThreshold);
+    if (Number.isFinite(fromModifier) && fromModifier >= 2 && fromModifier <= 6) {
+      return fromModifier;
+    }
+    const lethalRule = (defenderCombatCtx?.weaponRules || []).find(
+      (rule) => String(rule?.id || "").toLowerCase() === "lethal",
+    );
+    const fromRule = Number(lethalRule?.value);
+    if (Number.isFinite(fromRule) && fromRule >= 2 && fromRule <= 6) {
+      return fromRule;
+    }
+    return 6;
+  })();
+
   const setCombatCtx = (updater) => {
     setUiState((prevOverlay) => {
       if (!baseCtx) return prevOverlay;
@@ -642,13 +658,13 @@ function AttackResolutionScreen({
 
   const finalDefensePreview = useMemo(() => {
     return computeDamagePreview({
-      weapon,
+      weapon: isFight ? defenderWeapon : weapon,
       attackHits: finalDefenseHits,
       attackCrits: finalDefenseCrits,
       defenseHits: 0,
       defenseCrits: 0,
     });
-  }, [weapon, finalDefenseHits, finalDefenseCrits]);
+  }, [weapon, defenderWeapon, isFight, finalDefenseHits, finalDefenseCrits]);
 
   const resolveFromFinalWindow = () => {
     if (isFight) {
@@ -903,7 +919,7 @@ function AttackResolutionScreen({
                         onChooseOrder={() => {}}
                         className="attack-resolution__unit-card"
                         weaponMode={weapon?.mode ?? null}
-                        selectedWeaponNameOverride={weapon?.name ?? null}
+                        selectedWeaponNameOverride={defenderWeapon?.name ?? weapon?.name ?? null}
                         autoSelectFirstWeapon={false}
                         collapsibleSections={true}
                         showWoundsText={false}
@@ -963,7 +979,7 @@ function AttackResolutionScreen({
                             <>
                               <span>ATK {maxDefenseDice}</span>
                               <span>HIT {defenderSuccessThreshold}+</span>
-                              <span>CRIT 6+</span>
+                              <span>CRIT {defenderCritThreshold}+</span>
                               <span>DMG {defenderDamageLabel}</span>
                             </>
                           ) : (
@@ -1291,7 +1307,7 @@ function AttackResolutionScreen({
                         </div>
                         <div className="attack-resolution__instruction-line">
                           Roll {maxDefenseDice} · success on {defenderSuccessThreshold}+ ·
-                          crit on 6+
+                          crit on {isFight ? defenderCritThreshold : 6}+
                         </div>
                       </div>
                       <div className={isDefenderRole ? "" : "attack-resolution__readonly"}>
