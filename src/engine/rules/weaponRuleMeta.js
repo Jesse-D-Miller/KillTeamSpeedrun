@@ -18,12 +18,10 @@ export function getRuleResponsibility(ruleOrId) {
   switch (id) {
     case "stun":
     case "hot":
-    case "shock":
     case "piercing-crits":
     case "devastating":
       return RESPONSIBILITY.SEMI;
 
-    case "brutal":
     case "range":
     case "seek":
     case "silent":
@@ -36,6 +34,8 @@ export function getRuleResponsibility(ruleOrId) {
       return RESPONSIBILITY.AUTO;
 
     case "balanced":
+    case "brutal":
+    case "shock":
     case "ceaseless":
     case "relentless":
     case "accurate":
