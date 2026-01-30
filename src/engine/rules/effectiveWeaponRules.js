@@ -5,6 +5,7 @@ export function getEffectiveWeaponRules(ctx) {
   const baseRules = Array.isArray(ctx?.weaponRules)
     ? [...ctx.weaponRules]
     : [];
+  const role = String(ctx?.inputs?.role || "").toLowerCase();
 
   const vantage = ctx?.modifiers?.vantageState;
   const accurateModeValue =
@@ -22,6 +23,10 @@ export function getEffectiveWeaponRules(ctx) {
   const filteredBase = baseRules.filter(
     (rule) => !(rule?.id === "accurate" && rule?.source === "vantage"),
   );
+
+  if (role !== "attacker") {
+    return filteredBase;
+  }
 
   if (!Number.isFinite(accurateModeValue) || !Number.isFinite(resolvedAccurateValue)) {
     return filteredBase;

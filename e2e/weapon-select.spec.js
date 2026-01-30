@@ -221,21 +221,9 @@ test("shoot weapon select requires ready and starts attack when both ready", asy
   await expect(readyBtn).toContainText(/WAITING/i);
   await expect(attackerStatus).toContainText(/WAITING/i);
 
-  const defenderWeapon = await page.evaluate(() => {
-    const state = window.ktGetGameState?.();
-    const flow = state?.ui?.actionFlow;
-    const defenderId = flow?.defenderId;
-    const defender = state?.game?.find((unit) => unit.id === defenderId);
-    const weapons = Array.isArray(defender?.weapons) ? defender.weapons : [];
-    const ranged = weapons.filter((weapon) => weapon.mode === "ranged");
-    return ranged[0]?.name || weapons[0]?.name || null;
-  });
-  expect(defenderWeapon).toBeTruthy();
-
-  await page.evaluate((weaponName) => {
-    window.ktDispatchGameEvent?.("FLOW_SET_WEAPON", { role: "defender", weaponName });
+  await page.evaluate(() => {
     window.ktDispatchGameEvent?.("FLOW_LOCK_WEAPON", { role: "defender" });
-  }, defenderWeapon);
+  });
 
   const waitForCombatStart = (expectId = true) =>
     page.waitForFunction(

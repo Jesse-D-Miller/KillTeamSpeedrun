@@ -28,6 +28,8 @@ export default function WeaponRulesPanel({
 }) {
   const effectiveRules = useMemo(() => {
     const rules = getEffectiveWeaponRules(ctx) || [];
+    const role = String(ctx?.inputs?.role || "").toLowerCase();
+    if (role !== "attacker") return rules;
     const accurateValue = Number(ctx?.modifiers?.vantageState?.accurateValue);
     if (!Number.isFinite(accurateValue) || accurateValue <= 0) return rules;
     const hasAccurate = rules.some((rule) =>

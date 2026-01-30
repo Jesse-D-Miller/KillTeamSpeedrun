@@ -100,8 +100,12 @@ function WeaponSelectModal({
     isReady,
     selectedWeaponUsable,
     disabledReason,
+    allowReadyWithoutWeapon,
   ) => {
     if (!selectedWeapon) {
+      if (allowReadyWithoutWeapon) {
+        return { label: "READY", disabled: false, showSpinner: false };
+      }
       return { label: "Select weapon", disabled: true, showSpinner: false };
     }
     if (!selectedWeaponUsable) {
@@ -122,16 +126,22 @@ function WeaponSelectModal({
 
   const renderSide = ({ role, unit, weapons, selectedWeapon, isReady }) => {
     const isLocal = localRole === role;
-    const canPick = isLocal && !isReady;
+    const isShootDefender = mode === "shoot" && role === "defender";
+    const canPick = isLocal && !isReady && !isShootDefender;
     const roleLabel = role === "attacker" ? "Attacker" : "Defender";
-    const selectionLabel = `${roleLabel} weapon selected: ${selectedWeapon || "None"}`;
+    const selectionLabel = isShootDefender
+      ? `${roleLabel} weapon selected: Not required`
+      : `${roleLabel} weapon selected: ${selectedWeapon || "None"}`;
     const readyTestId = role === "attacker" ? "weapon-ready-attacker" : "weapon-ready-defender";
     const statusTestId =
       role === "attacker" ? "weapon-status-attacker" : "weapon-status-defender";
     const unitForCard = role === "attacker" ? { ...unit, weapons } : unit;
     const hasValidWeapons = weapons.length > 0;
     const bothReady = attackerReady && defenderReady;
-    const selectedWeaponProfile = weapons.find((weapon) => weapon.name === selectedWeapon);
+    const effectiveSelectedWeapon = isShootDefender ? null : selectedWeapon;
+    const selectedWeaponProfile = weapons.find(
+      (weapon) => weapon.name === effectiveSelectedWeapon,
+    );
     const selectedHeavyState = selectedWeaponProfile
       ? getHeavyBlockState(selectedWeaponProfile)
       : { blocked: false, reason: null };
@@ -168,10 +178,11 @@ function WeaponSelectModal({
       return usage.used >= usage.limit ? "Limited uses spent." : null;
     };
     const localButtonState = getLocalButtonState(
-      selectedWeapon,
+      effectiveSelectedWeapon,
       isReady,
       selectedWeaponUsable,
       selectedWeaponUsable ? null : getWeaponDisabledReason(selectedWeaponProfile),
+      isShootDefender,
     );
     const localStatusLabel = localButtonState.label;
     const opponentStatusLabel = isReady ? "Opponent ready ✅" : "Opponent selecting…";
@@ -197,11 +208,12 @@ function WeaponSelectModal({
             className="weapon-select__card"
             weaponSelectionEnabled={canPick}
             onSelectWeapon={(weaponName) => onSetWeapon?.(role, weaponName)}
-            selectedWeaponNameOverride={selectedWeapon}
+            selectedWeaponNameOverride={effectiveSelectedWeapon}
             autoSelectFirstWeapon={false}
             emptyWeaponsLabel="No valid weapons"
             weaponOptionRole={role}
             isWeaponSelectable={(weapon) => {
+              if (isShootDefender) return false;
               if (role !== "attacker") return true;
               const heavyState = getHeavyBlockState(weapon);
               if (heavyState.blocked) return false;

@@ -483,6 +483,9 @@ export function applyAutoRulesForPhase(ctx, phase) {
   const hasSaturate = rules.some(
     (rule) => String(rule?.id || "").toLowerCase() === "saturate",
   );
+  const hasPiercing = rules.some(
+    (rule) => String(rule?.id || "").toLowerCase() === "piercing",
+  );
 
   if (phase === "PRE_ROLL" && hasSaturate) {
     if (!nextUi.disabledOptions.retainCover) {
@@ -496,6 +499,13 @@ export function applyAutoRulesForPhase(ctx, phase) {
     if (!next.modifiers) next.modifiers = {};
     if (!next.modifiers.coverDisabledBySaturate) {
       next.modifiers.coverDisabledBySaturate = true;
+      changed = true;
+    }
+  }
+
+  if (phase === "PRE_ROLL" && hasPiercing) {
+    if (!nextUi.appliedRules.piercing) {
+      nextUi.appliedRules.piercing = true;
       changed = true;
     }
   }

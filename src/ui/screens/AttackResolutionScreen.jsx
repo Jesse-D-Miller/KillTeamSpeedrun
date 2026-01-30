@@ -234,6 +234,7 @@ function AttackResolutionScreen({
     String(combatStage || "").toLowerCase().includes("fight");
 
   const defenderWeapon = useMemo(() => {
+    if (!isFight) return null;
     if (!defender) return null;
     const selectedName = defender?.state?.selectedWeapon;
     if (selectedName) {
@@ -243,7 +244,7 @@ function AttackResolutionScreen({
       if (match) return match;
     }
     return Array.isArray(defender?.weapons) ? defender.weapons[0] : null;
-  }, [defender]);
+  }, [defender, isFight]);
 
   const attackerDamageLabel = weapon?.dmg ?? "-";
   const defenderDamageLabel = defenderWeapon?.dmg ?? "-";
@@ -270,15 +271,37 @@ function AttackResolutionScreen({
   const maxAttackDice = Math.max(0, Number(attackDiceCount || 0));
   const maxDefenseDice = Math.max(0, Number(defenseDiceCount || 0));
 
-  const defenderAttackDice = useMemo(
+  const piercingValue = useMemo(() => {
+    const rules = normalizeWeaponRules(weapon);
+    const piercingRule = rules.find(
+      (rule) => String(rule?.id || "").toLowerCase() === "piercing",
+    );
+    const value = Number(piercingRule?.value ?? 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }, [weapon]);
+  const adjustedDefenseRoll = useMemo(
     () =>
       Array.isArray(defenseRoll)
-        ? defenseRoll.map((value) => ({ value: Number(value), tags: [] }))
+        ? defenseRoll.map((value) => {
+            const base = Number(value);
+            if (!Number.isFinite(base)) return value;
+            if (piercingValue <= 0) return base;
+            return Math.max(1, base - piercingValue);
+          })
         : [],
-    [defenseRoll],
+    [defenseRoll, piercingValue],
   );
-  const defenderCritsFromRoll = Array.isArray(defenseRoll)
-    ? defenseRoll.filter((value) => Number(value) >= 6).length
+  const defenderRollDiceCount = Math.max(0, maxDefenseDice - piercingValue);
+
+  const defenderAttackDice = useMemo(
+    () =>
+      Array.isArray(adjustedDefenseRoll)
+        ? adjustedDefenseRoll.map((value) => ({ value: Number(value), tags: [] }))
+        : [],
+    [adjustedDefenseRoll],
+  );
+  const defenderCritsFromRoll = Array.isArray(adjustedDefenseRoll)
+    ? adjustedDefenseRoll.filter((value) => Number(value) >= 6).length
     : 0;
   const defenderCrits = Math.max(defenderCritsFromRoll, finalDefenseCrits);
 
@@ -992,6 +1015,7 @@ function AttackResolutionScreen({
                               <span>ATK {maxAttackDice}</span>
                               <span>HIT {attackerSuccessThreshold}+</span>
                               <span>CRIT {attackerCritThreshold}+</span>
+                              <span>DMG {attackerDamageLabel}</span>
                             </>
                           )}
                         </div>
@@ -1340,7 +1364,7 @@ function AttackResolutionScreen({
                           Roll defender dice
                         </div>
                         <div className="attack-resolution__instruction-line">
-                          Roll {maxDefenseDice} · success on {defenderSuccessThreshold}+ ·
+                          Roll {defenderRollDiceCount} · success on {defenderSuccessThreshold}+ ·
                           crit on {isFight ? defenderCritThreshold : 6}+
                         </div>
                       </div>

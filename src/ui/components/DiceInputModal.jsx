@@ -64,6 +64,19 @@ function DiceInputModal({
     () => normalizeWeaponRules(weaponProfile),
     [weaponProfile],
   );
+  const piercingValue = useMemo(() => {
+    const piercingRule = weaponRules.find(
+      (rule) => String(rule?.id || "").toLowerCase() === "piercing",
+    );
+    const value = Number(piercingRule?.value ?? 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }, [weaponRules]);
+  const applyPiercingToDie = (value) => {
+    if (piercingValue <= 0) return value;
+    const base = Number(value);
+    if (!Number.isFinite(base)) return value;
+    return Math.max(1, base - piercingValue);
+  };
 
   const rollDiceNumbers = (count) =>
     Array.from({ length: count }, () => 1 + Math.floor(Math.random() * 6));
@@ -78,9 +91,10 @@ function DiceInputModal({
     const initialAttack = [...retained, ...rolled];
     const attackAfterCeaseless = initialAttack;
     const defenseRoll = rollDiceNumbers(defenseDiceCount);
+    const adjustedDefenseRoll = defenseRoll.map(applyPiercingToDie);
 
     setAttackDice(rolled.map(String));
-    setDefenseDice(defenseRoll.map(String));
+    setDefenseDice(adjustedDefenseRoll.map(String));
     setCeaselessApplied(false);
     lastCeaselessRef.current = null;
 
@@ -88,7 +102,7 @@ function DiceInputModal({
     onAutoRoll?.({
       attackBefore: initialAttack,
       attackAfter: attackAfterCeaseless,
-      defenseDice: defenseRoll,
+      defenseDice: adjustedDefenseRoll,
       ceaseless: null,
     });
   };

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { normalizeWeaponRules } from "../../engine/rules/weaponRules";
 import "./DefenseRollModal.css";
 
 function buildInitialDice(count) {
@@ -26,6 +27,24 @@ function DefenseRollModal({
   const [isRolling, setIsRolling] = useState(false);
   const rollIntervalRef = useRef(null);
   const rollTimeoutRef = useRef(null);
+  const weaponRules = useMemo(
+    () => normalizeWeaponRules(weaponProfile),
+    [weaponProfile],
+  );
+  const piercingValue = useMemo(() => {
+    const piercingRule = weaponRules.find(
+      (rule) => String(rule?.id || "").toLowerCase() === "piercing",
+    );
+    const value = Number(piercingRule?.value ?? 0);
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  }, [weaponRules]);
+  const applyPiercingToDie = (value) => {
+    if (value === "" || value === null || value === undefined) return value;
+    if (piercingValue <= 0) return value;
+    const base = Number(value);
+    if (!Number.isFinite(base)) return value;
+    return Math.max(1, base - piercingValue);
+  };
 
   const rollDiceNumbers = (count) =>
     Array.from({ length: count }, () => 1 + Math.floor(Math.random() * 6));
@@ -102,16 +121,18 @@ function DefenseRollModal({
   const handleRollClick = () => {
     if (readOnly || isRolling) return;
     const rolled = rollDiceNumbers(defenseDiceCount || 0);
+    const adjustedRoll = rolled.map(applyPiercingToDie);
     setIsRolling(true);
     rollIntervalRef.current = setInterval(() => {
-      setDefenseDice(rollDiceNumbers(defenseDiceCount || 0).map(String));
+      const preview = rollDiceNumbers(defenseDiceCount || 0).map(applyPiercingToDie);
+      setDefenseDice(preview.map(String));
     }, 100);
     rollTimeoutRef.current = setTimeout(() => {
       if (rollIntervalRef.current) clearInterval(rollIntervalRef.current);
       rollIntervalRef.current = null;
       setIsRolling(false);
-      setDefenseDice(rolled.map(String));
-      onSetDefenseRoll?.(rolled);
+      setDefenseDice(adjustedRoll.map(String));
+      onSetDefenseRoll?.(adjustedRoll);
     }, 2000);
   };
 
@@ -255,7 +276,9 @@ function DefenseRollModal({
                           disabled={readOnly || isRolling}
                           onChange={(event) => {
                             const next = [...defenseDice];
-                            next[index] = event.target.value;
+                            const raw = event.target.value;
+                            const reduced = applyPiercingToDie(raw);
+                            next[index] = String(reduced);
                             setDefenseDice(next);
                           }}
                         />
