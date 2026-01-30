@@ -1962,6 +1962,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
             turningPoint={turningPoint}
             phase={phase}
             initiativePlayerId={state.topBar?.initiativePlayerId ?? null}
+            gameCode={gameCode}
           />
           <LogNotice summary={latestLogSummary} />
 

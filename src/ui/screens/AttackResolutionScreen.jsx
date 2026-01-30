@@ -1099,6 +1099,7 @@ function AttackResolutionScreen({
                           phase={PHASES.PRE_ROLL}
                           onCtxChange={handleCtxChange}
                           testId={undefined}
+                          enablePopover={false}
                         />
                       </div>
 
@@ -1228,6 +1229,7 @@ function AttackResolutionScreen({
                           phase={PHASES.PRE_ROLL}
                           onCtxChange={handleCtxChange}
                           testId={undefined}
+                          enablePopover={false}
                         />
                       </div>
                     </div>
@@ -1259,6 +1261,7 @@ function AttackResolutionScreen({
                           phase={PHASES.ROLL}
                           onCtxChange={handleCtxChange}
                           testId="weapon-rules-panel"
+                          enablePopover={false}
                         />
                       </div>
 
@@ -1274,6 +1277,7 @@ function AttackResolutionScreen({
                           phase={PHASES.POST_ROLL}
                           onCtxChange={handleCtxChange}
                           testId={undefined}
+                          enablePopover={false}
                         />
                         <button
                           className="attack-resolution__rule attack-resolution__rule--secondary"
@@ -1316,6 +1320,7 @@ function AttackResolutionScreen({
                           phase={PHASES.ROLL}
                           onCtxChange={handleCtxChange}
                           testId={undefined}
+                          enablePopover={false}
                         />
                       </div>
 
@@ -1325,6 +1330,7 @@ function AttackResolutionScreen({
                           phase={PHASES.POST_ROLL}
                           onCtxChange={handleCtxChange}
                           testId={undefined}
+                          enablePopover={false}
                         />
                       </div>
                     </div>

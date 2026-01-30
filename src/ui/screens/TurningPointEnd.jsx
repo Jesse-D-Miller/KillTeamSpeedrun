@@ -164,6 +164,7 @@ function TurningPointEnd() {
             turningPoint={topBar.turningPoint ?? 1}
             phase={topBar.phase ?? "STRATEGY"}
             initiativePlayerId={topBar.initiativePlayerId ?? null}
+            gameCode={gameCode}
           />
           <LogNotice summary={latestLogSummary} />
         </div>

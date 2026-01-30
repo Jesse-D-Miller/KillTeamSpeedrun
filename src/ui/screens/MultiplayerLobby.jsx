@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import "./MultiplayerLobby.css";
 import { getOrCreatePlayerId, getSavedName, saveName } from "../../lib/playerIdentity";
 import { connectWS, createGame, joinGame } from "../../lib/multiplayer";
+import { ensureTimerStart } from "../../lib/gameTimer";
 
 const eventReducer = (state, action) => {
   switch (action.type) {
@@ -238,6 +239,9 @@ function MultiplayerLobby() {
     if (uiState.phase !== "inGame" || hasNavigated) return;
     const hasBothPlayers = Boolean(uiState.players.A && uiState.players.B);
     if (!hasBothPlayers) return;
+    if (uiState.gameCode) {
+      ensureTimerStart(uiState.gameCode);
+    }
     const slug = (uiState.me.name || "player").toLowerCase().replace(/\s+/g, "-");
     setHasNavigated(true);
     navigate(`/${slug}/army-selector`, {

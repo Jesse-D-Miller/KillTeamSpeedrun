@@ -19,7 +19,13 @@ function useOutsideClick(ref, onOutside) {
   }, [ref, onOutside]);
 }
 
-export default function WeaponRulesPanel({ ctx, phase, onCtxChange, testId }) {
+export default function WeaponRulesPanel({
+  ctx,
+  phase,
+  onCtxChange,
+  testId,
+  enablePopover = true,
+}) {
   const effectiveRules = useMemo(() => {
     const rules = getEffectiveWeaponRules(ctx) || [];
     const accurateValue = Number(ctx?.modifiers?.vantageState?.accurateValue);
@@ -54,14 +60,16 @@ export default function WeaponRulesPanel({ ctx, phase, onCtxChange, testId }) {
   useOutsideClick(popRef, () => setPopover(null));
 
   useEffect(() => {
+    if (!enablePopover) return undefined;
     const onKey = (e) => {
       if (e.key === "Escape") setPopover(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [enablePopover]);
 
   useEffect(() => {
+    if (!enablePopover) return undefined;
     if (!popover?.ruleId) return;
 
     const reposition = () => {
@@ -93,7 +101,7 @@ export default function WeaponRulesPanel({ ctx, phase, onCtxChange, testId }) {
       window.removeEventListener("resize", reposition);
       window.removeEventListener("scroll", reposition, true);
     };
-  }, [popover?.ruleId]);
+  }, [enablePopover, popover?.ruleId]);
 
   useEffect(() => {
     if (!onCtxChange) return;
@@ -106,6 +114,7 @@ export default function WeaponRulesPanel({ ctx, phase, onCtxChange, testId }) {
   if (!items.length) return null;
 
   const openPopoverFor = (anchorId, title, text) => {
+    if (!enablePopover) return;
     const el = document.querySelector(`[data-wr-anchor="${anchorId}"]`);
     const r = el?.getBoundingClientRect?.();
     const scrollX = window.scrollX || window.pageXOffset || 0;
@@ -193,7 +202,7 @@ export default function WeaponRulesPanel({ ctx, phase, onCtxChange, testId }) {
         ))}
       </div>
 
-      {popover ? (
+      {enablePopover && popover ? (
         <div
           ref={popRef}
           className="wr-popover"

@@ -66,6 +66,10 @@ body,
   min-width: 90px;
 }
 
+.kt-topbar__item--timer {
+  min-width: 110px;
+}
+
 .kt-topbar__label {
   font-size: 0.65rem;
   letter-spacing: 0.2em;
@@ -77,6 +81,15 @@ body,
 .kt-topbar__value {
   font-size: 1rem;
   font-weight: 800;
+}
+
+.kt-topbar__value--timer {
+  font-variant-numeric: tabular-nums;
+  font-family: "SF Mono", "Menlo", "Monaco", "Consolas", "Liberation Mono", monospace;
+}
+
+.kt-topbar__value--timer.is-stopped {
+  color: rgba(255, 200, 120, 0.95);
 }
 
 .kt-nav {

@@ -287,6 +287,7 @@ function UnitCardFocused() {
             turningPoint={effectiveTurningPoint}
             phase={effectivePhase}
             initiativePlayerId={effectiveInitiativePlayerId}
+            gameCode={gameCode}
           />
           <div className="unit-card-focused__log-row">
             <LogNotice summary={latestLogSummary} />
