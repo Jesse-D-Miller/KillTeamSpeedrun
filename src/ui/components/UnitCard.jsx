@@ -25,9 +25,13 @@ function UnitCard({
   emptyWeaponsLabel = "No weapons",
   weaponOptionRole = null,
   weaponOptionTestIdPrefix = "weapon-option",
+  showOnlySelectedWeapon = false,
   className = "",
   weaponMode = null,
   collapsibleSections = false,
+  collapsibleWeapons = null,
+  collapsibleRules = null,
+  collapsibleAbilities = null,
   showWoundsText = true,
   showInjuredInHeader = false,
 }) {
@@ -73,6 +77,19 @@ function UnitCard({
   const [rulesOpen, setRulesOpen] = useState(false);
   const [abilitiesOpen, setAbilitiesOpen] = useState(false);
 
+  const resolvedCollapsibleWeapons =
+    collapsibleWeapons !== null && collapsibleWeapons !== undefined
+      ? collapsibleWeapons
+      : collapsibleSections;
+  const resolvedCollapsibleRules =
+    collapsibleRules !== null && collapsibleRules !== undefined
+      ? collapsibleRules
+      : collapsibleSections;
+  const resolvedCollapsibleAbilities =
+    collapsibleAbilities !== null && collapsibleAbilities !== undefined
+      ? collapsibleAbilities
+      : collapsibleSections;
+
   const isUnitInjured = isInjured(unit);
   const baseMove = toNumber(stats.move);
   const effectiveMove = unitMove(unit);
@@ -84,7 +101,7 @@ function UnitCard({
   const safeWoundsPct = Math.max(0, Math.min(100, woundsPct));
   const isDead = Number(state.woundsCurrent ?? 0) <= 0;
 
-  const filteredWeapons = Array.isArray(weapons)
+  const baseWeapons = Array.isArray(weapons)
     ? weaponMode
       ? weapons.filter((w) => w?.mode === weaponMode)
       : weapons
@@ -95,10 +112,18 @@ function UnitCard({
       ? selectedWeaponNameOverride
       : state.selectedWeapon || "";
   const selectedWeaponName = selectedWeaponNameRaw
-    ? filteredWeapons.find((w) => w.name === selectedWeaponNameRaw)?.name || ""
+    ? baseWeapons.find((w) => w.name === selectedWeaponNameRaw)?.name || ""
     : autoSelectFirstWeapon
-      ? filteredWeapons[0]?.name || ""
+      ? baseWeapons[0]?.name || ""
       : "";
+
+  const filteredWeapons = showOnlySelectedWeapon
+    ? selectedWeaponName
+      ? baseWeapons.filter((w) => w.name === selectedWeaponName)
+      : autoSelectFirstWeapon
+        ? baseWeapons.slice(0, 1)
+        : []
+    : baseWeapons;
 
   const unitImage = resolveUnitImage(image);
   const readyState = unit.state?.readyState;
@@ -238,7 +263,7 @@ function UnitCard({
 
       {/* Weapons table */}
       <section className="kt-card__section">
-        {collapsibleSections ? (
+        {resolvedCollapsibleWeapons ? (
           <>
             <button
               className="kt-card__section-toggle"
@@ -467,7 +492,7 @@ function UnitCard({
       {/* Rules */}
       {rules.length > 0 && (
         <section className="kt-card__section kt-card__rules">
-          {collapsibleSections ? (
+          {resolvedCollapsibleRules ? (
             <>
               <button
                 className="kt-card__section-toggle"
@@ -503,7 +528,7 @@ function UnitCard({
       {/* Abilities */}
       {abilities.length > 0 && (
         <section className="kt-card__section kt-card__abilities">
-          {collapsibleSections ? (
+          {resolvedCollapsibleAbilities ? (
             <>
               <button
                 className="kt-card__section-toggle"

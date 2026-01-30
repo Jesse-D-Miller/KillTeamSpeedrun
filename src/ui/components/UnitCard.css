@@ -393,8 +393,7 @@
   padding: 12px 4px;
   font-size: var(--fs-base);
   line-height: 1.25;
-  overflow: auto;
-  max-height: 210px;
+  overflow: visible;
 }
 
 .kt-card__section-toggle {

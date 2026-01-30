@@ -131,7 +131,6 @@ function WeaponSelectModal({
     const unitForCard = role === "attacker" ? { ...unit, weapons } : unit;
     const hasValidWeapons = weapons.length > 0;
     const bothReady = attackerReady && defenderReady;
-
     const selectedWeaponProfile = weapons.find((weapon) => weapon.name === selectedWeapon);
     const selectedHeavyState = selectedWeaponProfile
       ? getHeavyBlockState(selectedWeaponProfile)

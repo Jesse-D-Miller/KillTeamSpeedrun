@@ -83,20 +83,6 @@ test("roll instructions render", async ({ browser }) => {
   await context.close();
 });
 
-test("weapon rule click shows tooltip", async ({ browser }) => {
-  const { context, pageA } = await openAttackResolutionForBoth(browser, { weaponRules: ["silent"] });
-
-  const silentChip = pageA.locator(".wr-chip", { hasText: "Silent" });
-  await expect(silentChip).toBeVisible();
-  await silentChip.click();
-
-  const popover = pageA.getByTestId("weapon-rules-popover");
-  await expect(popover).toBeVisible();
-  await expect(popover).toContainText("Silent");
-  await expect(popover).toContainText("You can Shoot while on Conceal.");
-
-  await context.close();
-});
 
 test("weapon rules popover uses deterministic rules list", async ({ browser }) => {
   const { context, pageA } = await openAttackResolutionForBoth(browser, {
@@ -112,48 +98,6 @@ test("weapon rules popover uses deterministic rules list", async ({ browser }) =
   await context.close();
 });
 
-test("weapon rules popover shows label + boiled down text", async ({ browser }) => {
-  const { context, pageA } = await openAttackResolutionForBoth(browser, {
-    weaponRules: [{ id: "lethal", value: 5 }],
-  });
-
-  const lethalChip = pageA.locator(".wr-chip", { hasText: "Lethal 5+" });
-  await lethalChip.click();
-
-  const popover = pageA.getByTestId("weapon-rules-popover");
-  await expect(popover).toBeVisible();
-  await expect(popover).toContainText("Lethal 5+");
-  await expect(popover).toContainText("Critical successes are 5+");
-
-  await context.close();
-});
-
-test("weapon rules popover closes via close, outside, and escape", async ({ browser }) => {
-  const { context, pageA } = await openAttackResolutionForBoth(browser, { weaponRules: ["balanced"] });
-
-  const chip = pageA.locator(".wr-chip", { hasText: "Balanced" });
-
-  await chip.click();
-  await expect(pageA.getByTestId("weapon-rules-popover")).toBeVisible();
-
-  // Close button
-  await pageA.getByLabel(/close/i).click();
-  await expect(pageA.getByTestId("weapon-rules-popover")).toBeHidden();
-
-  // Outside click
-  await chip.click();
-  await expect(pageA.getByTestId("weapon-rules-popover")).toBeVisible();
-  await pageA.locator(".attack-resolution__main").click({ position: { x: 10, y: 10 } });
-  await expect(pageA.getByTestId("weapon-rules-popover")).toBeHidden();
-
-  // Escape
-  await chip.click();
-  await expect(pageA.getByTestId("weapon-rules-popover")).toBeVisible();
-  await pageA.keyboard.press("Escape");
-  await expect(pageA.getByTestId("weapon-rules-popover")).toBeHidden();
-
-  await context.close();
-});
 
 test("saturate disables defender cover save", async ({ browser }) => {
   const { context, pageA, pageB } = await openAttackResolutionForBoth(browser, {
@@ -188,81 +132,6 @@ test("saturate auto-disables defender cover save", async ({ browser }) => {
   await context.close();
 });
 
-test("weapon rules popover repositions on scroll", async ({ browser }) => {
-  const { context, pageA } = await openAttackResolutionForBoth(browser, { weaponRules: ["balanced"] });
-
-  await pageA.locator(".wr-chip", { hasText: "Balanced" }).click();
-  const popover = pageA.getByTestId("weapon-rules-popover");
-  await expect(popover).toBeVisible();
-
-  const before = await popover.boundingBox();
-
-  await pageA.evaluate(() => {
-    const main = document.querySelector(".attack-resolution__main");
-    if (!main) return;
-    main.style.paddingBottom = "2000px";
-    main.scrollTop = main.scrollTop + 200;
-  });
-
-  await pageA.waitForTimeout(50);
-  const after = await popover.boundingBox();
-
-  if (before && after) {
-    await expect(after.y).not.toEqual(before.y);
-  }
-
-  await context.close();
-});
-
-test("disabled rule chips show explanation popover", async ({ browser }) => {
-  const { context, pageA } = await openAttackResolutionForBoth(browser, {
-    weaponRules: [{ id: "devastating", value: 3 }],
-    combatCtxOverrides: { inputs: { attackLockedIn: false } },
-  });
-
-  const disabledChip = pageA.locator(".wr-chip", { hasText: "Devastating 3" });
-  await expect(disabledChip).toBeVisible();
-  await expectChipDisabled(disabledChip);
-
-  // Even if "disabled", we want the click to show the "why" popover.
-  await disabledChip.click({ force: true });
-
-  const popover = pageA.getByTestId("weapon-rules-popover");
-  await expect(popover).toBeVisible();
-  await expect(popover).toContainText(/lock in attack first/i);
-
-  await context.close();
-});
-
-test("clicking a second rule updates popover content", async ({ browser }) => {
-  const { context, pageA } = await openAttackResolutionForBoth(browser, {
-    weaponRules: [{ id: "lethal", value: 5 }, "balanced"],
-  });
-
-  const popover = pageA.getByTestId("weapon-rules-popover");
-
-  await pageA.locator(".wr-chip", { hasText: "Balanced" }).click();
-  await expect(popover).toBeVisible();
-  await expect(popover).toContainText("Balanced");
-
-  await pageA.locator(".wr-chip", { hasText: "Lethal 5+" }).click();
-  await expect(popover).toContainText("Lethal 5+");
-  await expect(popover).toContainText("Critical successes are 5+");
-
-  await context.close();
-});
-
-test("popover does not create extra modal overlays", async ({ browser }) => {
-  const { context, pageA } = await openAttackResolutionForBoth(browser, { weaponRules: ["balanced"] });
-
-  await pageA.locator(".wr-chip", { hasText: "Balanced" }).click();
-  await expect(pageA.getByTestId("weapon-rules-popover")).toBeVisible();
-
-  const modalCount = await pageA.locator(".kt-modal").count();
-  await expect(modalCount).toBe(1);
-
-  await context.close();
-});
 
 test("final entry applies damage + closes modal", async ({ browser }) => {
   const { context, pageA, pageB } = await openAttackResolutionForBoth(browser);

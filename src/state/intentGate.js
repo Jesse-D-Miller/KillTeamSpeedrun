@@ -58,6 +58,7 @@ const PHASE_ALLOWED_EVENTS = {
     "FLOW_ROLL_DICE",
     "FLOW_RESOLVE_ACTION",
     "FLOW_RESOLVE_COMBAT",
+    "FLOW_SET_FINAL_ENTRY",
     "START_RANGED_ATTACK",
     "SET_ATTACK_ROLL",
     "SET_COMBAT_INPUTS",
@@ -74,6 +75,7 @@ const PHASE_ALLOWED_EVENTS = {
     "SET_COMBAT_STAGE",
     "ADVANCE_ATTACK_QUEUE",
     "COMBAT_SET_ROLL_READY",
+    "COMBAT_LOG_APPEND",
     "USE_FIREFIGHT_PLOY",
     "APPLY_DAMAGE",
     "DAMAGE_UNIT",
@@ -660,6 +662,14 @@ export const validateGameIntent = (state, event) => {
     }
 
     case "FLOW_RESOLVE_COMBAT": {
+      break;
+    }
+
+    case "FLOW_SET_FINAL_ENTRY": {
+      break;
+    }
+
+    case "COMBAT_LOG_APPEND": {
       break;
     }
 

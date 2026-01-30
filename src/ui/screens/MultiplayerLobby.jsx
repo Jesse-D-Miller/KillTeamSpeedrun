@@ -76,6 +76,12 @@ function MultiplayerLobby() {
     const playerId = event.payload?.playerId;
     const displayName = event.payload?.displayName;
     if (!slot || !playerId) return;
+    if (uiState.gameCode && displayName) {
+      localStorage.setItem(
+        `kt_game_${uiState.gameCode}_player_${slot}_name`,
+        displayName,
+      );
+    }
     setUiState((prev) => ({
       ...prev,
       players: {
@@ -150,6 +156,10 @@ function MultiplayerLobby() {
         playerId: uiState.me.playerId,
         displayName: uiState.me.name.trim(),
       });
+      localStorage.setItem(
+        `kt_game_${uiState.gameCode}_player_${uiState.slot}_name`,
+        uiState.me.name.trim(),
+      );
       setUiState((prev) => ({
         ...prev,
         phase: "inGame",
@@ -158,6 +168,16 @@ function MultiplayerLobby() {
       if (Array.isArray(result.eventLog)) {
         eventDispatch({ type: "SET_EVENT_LOG", eventLog: result.eventLog });
         result.eventLog.forEach(applyPlayerJoinEvent);
+      }
+      if (result.players) {
+        Object.entries(result.players).forEach(([slot, player]) => {
+          const name = player?.displayName || player?.name || "";
+          if (!name) return;
+          localStorage.setItem(
+            `kt_game_${uiState.gameCode}_player_${slot}_name`,
+            name,
+          );
+        });
       }
     } catch (err) {
       setError(err.message);
@@ -195,6 +215,14 @@ function MultiplayerLobby() {
               ...prev,
               players: message.players,
             }));
+            Object.entries(message.players).forEach(([slot, player]) => {
+              const name = player?.displayName || player?.name || "";
+              if (!name) return;
+              localStorage.setItem(
+                `kt_game_${uiState.gameCode}_player_${slot}_name`,
+                name,
+              );
+            });
           }
           if (Array.isArray(message.eventLog)) {
             eventDispatch({ type: "SET_EVENT_LOG", eventLog: message.eventLog });

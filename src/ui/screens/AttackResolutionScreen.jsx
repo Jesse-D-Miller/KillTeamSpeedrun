@@ -179,6 +179,7 @@ function AttackResolutionScreen({
   battleLog,
   weaponUsage,
   teamKeys,
+  playerDisplayNames = {},
   rollsLocked: rollsLockedFromState,
   attackLocked,
   defenseLocked,
@@ -250,7 +251,8 @@ function AttackResolutionScreen({
   const defenderWeaponRules = useMemo(() => {
     const rules = defenderWeapon ? normalizeWeaponRules(defenderWeapon) : [];
     return rules.filter(
-      (rule) => String(rule?.id || "").toLowerCase() !== "range",
+      (rule) =>
+        !["range", "heavy"].includes(String(rule?.id || "").toLowerCase()),
     );
   }, [defenderWeapon]);
 
@@ -308,9 +310,28 @@ function AttackResolutionScreen({
     ? Math.max(0, Number(limitedValue) - Number(limitedUsed))
     : 0;
 
-  const addLog = (group, message) => {
+  const resolveActorName = (actorRole) => {
+    const localName = getSavedName().trim();
+    const attackerOwner = attacker?.owner ?? null;
+    const defenderOwner = defender?.owner ?? null;
+    const localOwner = role === "attacker" ? attackerOwner : role === "defender" ? defenderOwner : null;
+    const actorOwner = actorRole === "attacker" ? attackerOwner : actorRole === "defender" ? defenderOwner : null;
+
+    if (actorOwner && playerDisplayNames?.[actorOwner]) {
+      return playerDisplayNames[actorOwner];
+    }
+    if (actorOwner && localOwner && actorOwner === localOwner && localName) {
+      return localName;
+    }
+    if (actorOwner) return `Player ${actorOwner}`;
+    if (actorRole === "attacker") return "Attacker";
+    if (actorRole === "defender") return "Defender";
+    return localName || "Player";
+  };
+
+  const addLog = (group, message, actorRole = role) => {
     logIdRef.current += 1;
-    const actorName = getSavedName().trim() || "Player";
+    const actorName = resolveActorName(actorRole);
     const entry = {
       id:
         typeof crypto !== "undefined" && crypto.randomUUID
@@ -337,7 +358,7 @@ function AttackResolutionScreen({
 
     const last = Array.isArray(nextCtx.log) ? nextCtx.log.at(-1) : null;
     if (last?.type === "UI_WR_CLICK") {
-      addLog("Rules", `WR click: ${last.detail?.ruleId || "unknown"}`);
+      addLog("Rules", `WR click: ${last.detail?.ruleId || "unknown"}`, nextCtx?.inputs?.role);
     }
   };
 
@@ -433,7 +454,8 @@ function AttackResolutionScreen({
         ? normalizeWeaponRules(weapon)
         : [];
     const filteredRules = normalizedRules.filter(
-      (rule) => String(rule?.id || "").toLowerCase() !== "range",
+      (rule) =>
+        !["range", "heavy"].includes(String(rule?.id || "").toLowerCase()),
     );
     const hasSaturate = normalizedRules.some(
       (rule) => String(rule?.id || "").toLowerCase() === "saturate",
@@ -885,7 +907,11 @@ function AttackResolutionScreen({
                         weaponMode={weapon?.mode ?? null}
                         selectedWeaponNameOverride={weapon?.name ?? null}
                         autoSelectFirstWeapon={false}
-                        collapsibleSections={true}
+                        showOnlySelectedWeapon={true}
+                        collapsibleSections={false}
+                        collapsibleWeapons={false}
+                        collapsibleRules={true}
+                        collapsibleAbilities={true}
                         showWoundsText={false}
                         showInjuredInHeader={true}
                       />
@@ -921,7 +947,11 @@ function AttackResolutionScreen({
                         weaponMode={weapon?.mode ?? null}
                         selectedWeaponNameOverride={defenderWeapon?.name ?? weapon?.name ?? null}
                         autoSelectFirstWeapon={false}
-                        collapsibleSections={true}
+                        showOnlySelectedWeapon={true}
+                        collapsibleSections={false}
+                        collapsibleWeapons={false}
+                        collapsibleRules={true}
+                        collapsibleAbilities={true}
                         showWoundsText={false}
                         showInjuredInHeader={true}
                       />

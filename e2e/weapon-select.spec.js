@@ -399,6 +399,39 @@ test("fight weapon select flow still works", async ({ page }) => {
   await expect(fightModal).toHaveAttribute("data-attack-mode", "fight");
 });
 
+test("fight apply damage closes modal", async ({ page }) => {
+  await goToWeaponSelect(page, "fight");
+
+  await selectWeaponRow(page, "attacker", "melee", { excludeLimited: true });
+
+  const readyBtn = page.getByTestId("weapon-ready-attacker");
+  await expect(readyBtn).toBeEnabled();
+  await readyBtn.click();
+
+  const defenderWeapon = await page.evaluate(() => {
+    const state = window.ktGetGameState?.();
+    const flow = state?.ui?.actionFlow;
+    const defenderId = flow?.defenderId;
+    const defender = state?.game?.find((unit) => unit.id === defenderId);
+    const weapons = Array.isArray(defender?.weapons) ? defender.weapons : [];
+    const melee = weapons.filter((weapon) => weapon.mode === "melee");
+    return melee[0]?.name || weapons[0]?.name || null;
+  });
+  expect(defenderWeapon).toBeTruthy();
+
+  await page.evaluate((weaponName) => {
+    window.ktDispatchGameEvent?.("FLOW_SET_WEAPON", { role: "defender", weaponName });
+    window.ktDispatchGameEvent?.("FLOW_LOCK_WEAPON", { role: "defender" });
+  }, defenderWeapon);
+
+  const fightModal = page.getByTestId("attack-resolution-modal");
+  await expect(fightModal).toBeVisible({ timeout: 15000 });
+
+  await page.getByRole("button", { name: "Apply Damage" }).click();
+
+  await expect(fightModal).toBeHidden({ timeout: 15000 });
+});
+
 test("limited weapon is disabled after use", async ({ page }) => {
   await goToWeaponSelect(page, "shoot");
 
@@ -681,5 +714,6 @@ test("dash-only heavy weapons stay enabled after dash", async ({ page }) => {
   });
 
   const heavyRow = page.getByTestId("weapon-option-attacker-Heavy Blasta");
+  await expect(heavyRow).toBeVisible();
   await expect(heavyRow).not.toHaveAttribute("aria-disabled", "true");
 });

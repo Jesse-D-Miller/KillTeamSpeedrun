@@ -722,6 +722,15 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
 
   const currentPlayerId = playerSlot || getOrCreatePlayerId();
   const otherPlayerId = playerSlot ? (playerSlot === "A" ? "B" : "A") : null;
+  const playerDisplayNames = useMemo(() => {
+    if (typeof window === "undefined" || !gameCode) return {};
+    const readName = (slot) =>
+      localStorage.getItem(`kt_game_${gameCode}_player_${slot}_name`) || null;
+    return {
+      A: readName("A"),
+      B: readName("B"),
+    };
+  }, [gameCode]);
   const combatState = state.combatState;
   const actionFlow = state.ui?.actionFlow ?? null;
   const isTargetSelectStep =
@@ -799,6 +808,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
     attackingOperativeId: null,
     defendingOperativeId: null,
   });
+  const lastFightResolvedRef = useRef(null);
 
   useEffect(() => {
     if (combatState?.attackingOperativeId || combatState?.defendingOperativeId) {
@@ -833,6 +843,59 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
     combatState?.stage,
     combatState?.attackerId,
     combatState?.defenderId,
+    currentPlayerId,
+    username,
+    location.pathname,
+    location.search,
+    navigate,
+    playerSlot,
+    gameCode,
+  ]);
+
+  useEffect(() => {
+    if (!username) return;
+    const fightResolved = state.ui?.lastFightResolved;
+    const resolvedAt = Number(fightResolved?.resolvedAt);
+    if (!Number.isFinite(resolvedAt)) return;
+    if (lastFightResolvedRef.current === resolvedAt) return;
+    const storageKey = gameCode
+      ? `kt_game_${gameCode}_lastFightResolvedHandled`
+      : "kt_local_lastFightResolvedHandled";
+    const storage = typeof window !== "undefined" ? window.sessionStorage : null;
+    const storedValue = Number(storage?.getItem(storageKey));
+    if (Number.isFinite(storedValue) && storedValue >= resolvedAt) return;
+    lastFightResolvedRef.current = resolvedAt;
+
+    const attackerId = fightResolved?.attackerId ?? null;
+    const defenderId = fightResolved?.defenderId ?? null;
+    if (!attackerId || !defenderId) return;
+
+    const attackerUnit = state.game.find((unit) => unit.id === attackerId);
+    const defenderUnit = state.game.find((unit) => unit.id === defenderId);
+
+    const targetId =
+      attackerUnit?.owner === currentPlayerId
+        ? attackerId
+        : defenderUnit?.owner === currentPlayerId
+          ? defenderId
+          : null;
+    if (!targetId) return;
+
+    const search = isE2E() ? location.search : "";
+    const targetPath = `/${username}/army/unit/${targetId}${search}`;
+    if (location.pathname === targetPath) return;
+    navigate(targetPath, {
+      state: {
+        slot: playerSlot,
+        gameCode,
+      },
+    });
+    if (storage) {
+      storage.setItem(storageKey, String(resolvedAt));
+    }
+  }, [
+    state.ui?.lastFightResolved,
+    state.game,
     currentPlayerId,
     username,
     location.pathname,
@@ -2106,6 +2169,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
           finalEntry={actionFlow?.finalEntry || null}
           weaponUsage={state.weaponUsage || {}}
           teamKeys={teamKeys}
+          playerDisplayNames={playerDisplayNames}
           rollsLocked={
             Boolean(actionFlow?.locked?.attackerDice) &&
             Boolean(actionFlow?.locked?.defenderDice)
@@ -2125,14 +2189,18 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
             dispatchGameEvent("FLOW_LOCK_DICE", { role: "defender" });
           }}
           onSetCombatModifiers={() => {}}
-          onApplyDamage={() => {}}
-          onResolveComplete={() => {}}
+          onApplyDamage={(targetUnitId, damage) => {
+            dispatchDamageEvent(targetUnitId, damage);
+          }}
+          onResolveComplete={() => {
+            dispatchGameEvent("FLOW_RESOLVE_COMBAT", { force: true });
+          }}
           onCancel={() => {
             if (!canCancelFightFlow) return;
             dispatchGameEvent("FLOW_CANCEL");
           }}
           onAppendBattleLog={(entry) => {
-            dispatchGameEvent("FLOW_APPEND_LOG", { entry });
+            dispatchCombatEvent("COMBAT_LOG_APPEND", { entry });
           }}
           onSetFinalEntry={(finalEntry) => {
             dispatchGameEvent("FLOW_SET_FINAL_ENTRY", { finalEntry });
@@ -2467,6 +2535,7 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
         finalEntry={combatState?.finalEntry || null}
         weaponUsage={state.weaponUsage || {}}
         teamKeys={teamKeys}
+        playerDisplayNames={playerDisplayNames}
         rollsLocked={
           combatState?.rollsLocked ||
           (combatState?.rollReady?.A && combatState?.rollReady?.B)

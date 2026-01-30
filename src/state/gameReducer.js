@@ -914,8 +914,23 @@ function reduceGameState(state, action) {
 			const { role, weaponName } = action.payload || {};
 			const flow = state.ui?.actionFlow;
 			if (!flow || (role !== "attacker" && role !== "defender")) return state;
+			const targetUnitId = role === "attacker" ? flow.attackerId : flow.defenderId;
+			const nextGame = targetUnitId
+				? state.game.map((unit) =>
+						unit.id === targetUnitId
+							? {
+									...unit,
+									state: {
+										...(unit.state || {}),
+										selectedWeapon: weaponName ?? null,
+									},
+								}
+							: unit,
+					)
+				: state.game;
 			return {
 				...state,
+				game: nextGame,
 				ui: {
 					...(state.ui || {}),
 					actionFlow: {
@@ -1441,11 +1456,17 @@ function reduceGameState(state, action) {
 		case "FLOW_RESOLVE_COMBAT": {
 			const flow = state.ui?.actionFlow;
 			if (!flow || flow.mode !== "fight") return state;
-			if (flow.step !== "summary") return state;
+			const forceClose = Boolean(action.payload?.force);
+			if (!forceClose && flow.step !== "summary") return state;
 			return {
 				...state,
 				ui: {
 					...(state.ui || {}),
+					lastFightResolved: {
+						attackerId: flow.attackerId ?? null,
+						defenderId: flow.defenderId ?? null,
+						resolvedAt: Number(action.meta?.ts) || Date.now(),
+					},
 					actionFlow: null,
 				},
 			};
