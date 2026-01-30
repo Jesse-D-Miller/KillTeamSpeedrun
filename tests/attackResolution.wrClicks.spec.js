@@ -18,13 +18,40 @@ async function openAttackResolution(page, { weaponRules, combatCtxOverrides } = 
 }
 
 test("stun click adds defender pill", async ({ page }) => {
-  await openAttackResolution(page, { weaponRules: [{ id: "stun" }] });
+  await openAttackResolution(page, {
+    weaponRules: [{ id: "stun" }],
+    combatCtxOverrides: {
+      attackDice: [{ value: 6, tags: ["retained", "crit"] }],
+      inputs: { attackCrits: 1 },
+    },
+  });
 
   const chip = page.locator(".wr-chip", { hasText: "Stun" });
   await expect(chip).toBeVisible();
+  await expect(chip).toHaveAttribute("aria-disabled", "false");
   await chip.click();
 
   await expect(page.getByTestId("effect-pill-stunned-defender")).toBeVisible();
+});
+
+test("stun click updates defender card APL", async ({ page }) => {
+  await openAttackResolution(page, {
+    weaponRules: [{ id: "stun" }],
+    combatCtxOverrides: {
+      attackDice: [{ value: 6, tags: ["retained", "crit"] }],
+      inputs: { attackCrits: 1 },
+    },
+  });
+
+  const chip = page.locator(".wr-chip", { hasText: "Stun" });
+  await expect(chip).toBeVisible();
+  await expect(chip).toHaveAttribute("aria-disabled", "false");
+  await chip.click();
+
+  const defenderPanel = page.getByTestId("defender-pre-roll");
+  await expect(defenderPanel.getByTestId("effect-pill-stunned-defender")).toBeVisible();
+  await expect(defenderPanel.getByTestId("status-pill-stunned")).toBeVisible();
+  await expect(defenderPanel.getByTestId("unit-apl-current")).toHaveText("2/3");
 });
 
 test("hot click shows attacker pill and modal on apply", async ({ page }) => {

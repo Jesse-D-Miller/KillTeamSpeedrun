@@ -57,6 +57,17 @@ function UnitCard({
     return list.length ? list.join(", ") : "-";
   };
 
+  const normalizeEffects = (effects) => {
+    if (!Array.isArray(effects)) return [];
+    return effects
+      .map((effect) => {
+        if (!effect) return null;
+        if (typeof effect === "string") return { id: effect };
+        return effect;
+      })
+      .filter(Boolean);
+  };
+
   const toNumber = (value) => {
     const parsed = Number(String(value).replace("+", ""));
     return Number.isNaN(parsed) ? null : parsed;
@@ -72,6 +83,12 @@ function UnitCard({
   };
 
   const { name, stats, state, weapons = [], rules = [], abilities = [], image } = unit;
+
+  const statusEffects = normalizeEffects(state?.effects);
+  const isStunned = statusEffects.some((effect) => {
+    const id = String(effect?.id || "").toLowerCase();
+    return id === "stunned" || id === "stun";
+  });
 
   const [weaponsOpen, setWeaponsOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -186,7 +203,7 @@ function UnitCard({
         <div className="kt-card__stats">
           <div className="statbox">
             <div className="statbox__label">APL</div>
-            <div className="statbox__value">
+            <div className="statbox__value" data-testid="unit-apl-current">
               {Number.isFinite(Number(state.apCurrent))
                 ? Number(state.apCurrent)
                 : stats.apl}
@@ -258,6 +275,11 @@ function UnitCard({
         {isDead && <span className="pill pill--red">DEAD</span>}
         {!isDead && !showInjuredInHeader && isUnitInjured && (
           <span className="pill pill--red">INJURED</span>
+        )}
+        {!isDead && isStunned && (
+          <span className="pill pill--red" data-testid="status-pill-stunned">
+            STUNNED
+          </span>
         )}
       </section>
 

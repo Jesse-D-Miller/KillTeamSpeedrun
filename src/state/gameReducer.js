@@ -169,6 +169,47 @@ function clamp(n, min, max) {
 	return Math.max(min, Math.min(max, n));
 }
 
+function normalizeUnitEffects(effects) {
+	if (!Array.isArray(effects)) return [];
+	return effects
+		.map((effect) => {
+			if (!effect) return null;
+			if (typeof effect === "string") return { id: effect };
+			return effect;
+		})
+		.filter(Boolean);
+}
+
+function buildStatusEffect(effectId, sourceRuleId) {
+	if (!effectId) return null;
+	const id = String(effectId).toLowerCase();
+	if (id === "stunned") {
+		return {
+			id: "stunned",
+			label: "Stunned (-1 APL)",
+			sourceRuleId: sourceRuleId || "stun",
+			aplMod: -1,
+			expires: { type: "end_next_activation" },
+		};
+	}
+	return null;
+}
+
+function sumAplMods(effects) {
+	return normalizeUnitEffects(effects).reduce((total, effect) => {
+		const delta = Number(effect?.aplMod ?? 0);
+		return Number.isFinite(delta) ? total + delta : total;
+	}, 0);
+}
+
+function removeEffectById(effects, effectId) {
+	const id = String(effectId || "").toLowerCase();
+	return normalizeUnitEffects(effects).filter((effect) => {
+		const effectKey = String(effect?.id || "").toLowerCase();
+		return effectKey && effectKey !== id;
+	});
+}
+
 function pushLog(log, entry) {
 	const truncatedEntries = log.entries.slice(0, log.cursor);
 	return {
@@ -293,7 +334,11 @@ function resetTpFlags(state) {
 			state: {
 				...unit.state,
 				hasCounteractedThisTP: false,
-				apCurrent: Number(unit.stats?.apl ?? 0),
+				apCurrent: clamp(
+					Number(unit.stats?.apl ?? 0) + sumAplMods(unit.state?.effects),
+					0,
+					Number(unit.stats?.apl ?? 0),
+				),
 				actionMarks: {},
 			},
 		})),
@@ -691,6 +736,43 @@ function reduceGameState(state, action) {
 		case "APPLY_DAMAGE": {
 			const { targetUnitId, damage } = action.payload;
 			return applyDamageToState(state, targetUnitId, damage, action);
+		}
+
+		case "APPLY_STATUS_EFFECT": {
+			const { targetUnitId, effectId, sourceRuleId } = action.payload || {};
+			if (!targetUnitId || !effectId) return state;
+			const targetUnit = state.game.find((unit) => unit.id === targetUnitId);
+			if (!targetUnit) return state;
+			const existingEffects = normalizeUnitEffects(targetUnit.state?.effects);
+			const effectKey = String(effectId).toLowerCase();
+			if (existingEffects.some((effect) => String(effect?.id || "").toLowerCase() === effectKey)) {
+				return state;
+			}
+			const nextEffect = buildStatusEffect(effectId, sourceRuleId);
+			if (!nextEffect) return state;
+			const prevAp = Number(targetUnit.state?.apCurrent ?? targetUnit.stats?.apl ?? 0);
+			const baseAp = Number(targetUnit.stats?.apl ?? 0);
+			const nextAp = clamp(
+				prevAp + (Number(nextEffect.aplMod) || 0),
+				0,
+				baseAp,
+			);
+			const updatedGame = state.game.map((unit) =>
+				unit.id === targetUnitId
+					? {
+							...unit,
+							state: {
+								...unit.state,
+								effects: [...existingEffects, nextEffect],
+								apCurrent: nextAp,
+							},
+						}
+					: unit,
+			);
+			return {
+				...state,
+				game: updatedGame,
+			};
 		}
 
 		case "ACTION_USE": {
@@ -1825,6 +1907,7 @@ function reduceGameState(state, action) {
 							state: {
 								...unit.state,
 								readyState: "EXPENDED",
+								effects: removeEffectById(unit.state?.effects, "stunned"),
 							},
 						}
 					: unit,

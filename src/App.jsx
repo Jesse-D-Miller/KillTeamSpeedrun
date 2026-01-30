@@ -269,6 +269,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
   });
   const socketRef = useRef(null);
   const seenDamageIdsRef = useRef(new Set());
+  const seenCombatIdsRef = useRef(new Set());
+  const seenGameIdsRef = useRef(new Set());
   const [attackerId, setAttackerId] = useState(null);
   const [defenderId, setDefenderId] = useState(null);
   const [shootModalOpen, setShootModalOpen] = useState(false);
@@ -1984,7 +1986,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
 
   const applyRemoteCombatEvent = (event) => {
     if (!event || event.kind !== "COMBAT_EVENT") return;
-    if (!event.id) return;
+    if (!event.id || seenCombatIdsRef.current.has(event.id)) return;
+    seenCombatIdsRef.current.add(event.id);
     const { type, payload } = event.payload || {};
     if (!type) return;
     dispatch({ type, payload, meta: { eventId: event.id, ts: event.ts } });
@@ -1992,7 +1995,8 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
 
   const applyRemoteGameEvent = (event) => {
     if (!event || event.kind !== "GAME_EVENT") return;
-    if (!event.id) return;
+    if (!event.id || seenGameIdsRef.current.has(event.id)) return;
+    seenGameIdsRef.current.add(event.id);
     const { type, payload } = event.payload || {};
     if (!type) return;
     dispatch({ type, payload, meta: { eventId: event.id, ts: event.ts } });
@@ -2208,6 +2212,13 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
           onSetCombatModifiers={() => {}}
           onApplyDamage={(targetUnitId, damage) => {
             dispatchDamageEvent(targetUnitId, damage);
+          }}
+          onApplyStatusEffect={({ targetUnitId, effectId, sourceRuleId }) => {
+            dispatchGameEvent("APPLY_STATUS_EFFECT", {
+              targetUnitId,
+              effectId,
+              sourceRuleId,
+            });
           }}
           onResolveComplete={() => {
             dispatchGameEvent("FLOW_RESOLVE_COMBAT", { force: true });
@@ -2589,6 +2600,13 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
         onApplyDamage={(targetUnitId, damage) => {
           dispatchDamageEvent(targetUnitId, damage);
         }}
+        onApplyStatusEffect={({ targetUnitId, effectId, sourceRuleId }) => {
+          dispatchGameEvent("APPLY_STATUS_EFFECT", {
+            targetUnitId,
+            effectId,
+            sourceRuleId,
+          });
+        }}
         onResolveComplete={() => {
           dispatchCombatEvent("RESOLVE_COMBAT_DONE");
 
@@ -2881,6 +2899,7 @@ function E2EAttackResolutionRoute() {
   const [attackRoll, setAttackRoll] = useState([]);
   const [defenseRoll, setDefenseRoll] = useState([]);
   const [combatModifiers, setCombatModifiers] = useState({});
+  const [statusByUnitId, setStatusByUnitId] = useState({});
   const modifiersChannelRef = useRef(null);
 
   useEffect(() => {
@@ -2914,7 +2933,7 @@ function E2EAttackResolutionRoute() {
     };
   }, []);
 
-  const attacker = useMemo(
+  const baseAttacker = useMemo(
     () => ({
       id: "e2e-attacker",
       name: "E2E Attacker",
@@ -2943,7 +2962,7 @@ function E2EAttackResolutionRoute() {
     [defenderOrder, isFight],
   );
 
-  const defender = useMemo(
+  const baseDefender = useMemo(
     () => ({
       id: "e2e-defender",
       name: "E2E Defender",
@@ -2970,6 +2989,38 @@ function E2EAttackResolutionRoute() {
       abilities: [],
     }),
     [defenderOrder, isFight],
+  );
+
+  const applyStatusToUnit = (unit, status = {}) => {
+    if (!unit) return unit;
+    const statusState = statusByUnitId?.[unit.id] || {};
+    const effects = Array.isArray(statusState.effects)
+      ? statusState.effects
+      : Array.isArray(unit.state?.effects)
+        ? unit.state.effects
+        : [];
+    const apCurrent =
+      Number.isFinite(Number(statusState.apCurrent))
+        ? Number(statusState.apCurrent)
+        : unit.state?.apCurrent;
+    return {
+      ...unit,
+      state: {
+        ...unit.state,
+        effects,
+        ...(Number.isFinite(Number(apCurrent)) ? { apCurrent } : {}),
+      },
+    };
+  };
+
+  const attacker = useMemo(
+    () => applyStatusToUnit(baseAttacker),
+    [baseAttacker, statusByUnitId],
+  );
+
+  const defender = useMemo(
+    () => applyStatusToUnit(baseDefender),
+    [baseDefender, statusByUnitId],
   );
 
   const weapon = attacker.weapons[0];
@@ -3014,6 +3065,33 @@ function E2EAttackResolutionRoute() {
           });
         }}
         onApplyDamage={() => {}}
+        onApplyStatusEffect={({ targetUnitId, effectId }) => {
+          if (!targetUnitId || !effectId) return;
+          setStatusByUnitId((prev) => {
+            const current = prev?.[targetUnitId] || {};
+            const effects = Array.isArray(current.effects) ? current.effects : [];
+            const hasEffect = effects.some(
+              (effect) => String(effect?.id || effect).toLowerCase() === String(effectId).toLowerCase(),
+            );
+            if (hasEffect) return prev;
+            const nextEffects = [...effects, { id: effectId }];
+            const baseAp = targetUnitId === baseDefender.id
+              ? baseDefender.state?.apCurrent
+              : baseAttacker.state?.apCurrent;
+            const nextAp =
+              String(effectId).toLowerCase() === "stunned"
+                ? Math.max(0, Number(baseAp ?? 0) - 1)
+                : current.apCurrent;
+            return {
+              ...prev,
+              [targetUnitId]: {
+                ...current,
+                effects: nextEffects,
+                ...(Number.isFinite(Number(nextAp)) ? { apCurrent: nextAp } : {}),
+              },
+            };
+          });
+        }}
         onResolveComplete={() => {
           setOpen(false);
           resolveChannelRef.current?.postMessage({ type: "RESOLVE_COMPLETE" });

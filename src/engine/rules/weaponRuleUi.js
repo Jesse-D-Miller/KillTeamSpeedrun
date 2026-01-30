@@ -186,6 +186,8 @@ function getRulePillPreview(rule) {
       return "Shock";
     case "piercing-crits":
       return "Piercing Crits";
+    case "devastating":
+      return "Devastating";
     default:
       return null;
   }
@@ -201,7 +203,7 @@ function isRuleClickable(ctx, rule) {
 
   // Example gating rules that match “speed up combat” expectations:
   if (id === "balanced" && ctx?.modifiers?.balancedUsed) return { ok: false, reason: "Already used." };
-  if (id === "devastating" && !ctx?.inputs?.attackLockedIn) return { ok: false, reason: "Lock in attack first." };
+  if (id === "devastating") return { ok: true, reason: null };
   if (id === "bipod" && ctx?.modifiers?.bipodUsed) return { ok: false, reason: "Already used." };
   if (id === "bipod" && !canUseBipod(ctx))
     return { ok: false, reason: "Must not reposition, dash, or fall back." };
@@ -214,9 +216,8 @@ function isRuleClickable(ctx, rule) {
     return { ok: false, reason: "Need a retained crit + retained hit." };
   if (id === "punishing" && !(hasRetainedCrit(ctx) && hasMiss(ctx)))
     return { ok: false, reason: "Need a retained crit + a fail." };
-  if (id === "severe" && (hasRetainedCrit(ctx) || !hasRetainedHit(ctx)))
-    return { ok: false, reason: "Only if no retained crits and you have a retained hit." };
-  if (id === "stun" && !hasRetainedCrit(ctx)) return { ok: false, reason: "No retained crits." };
+  if (id === "severe") return { ok: true, reason: null };
+  if (id === "stun") return { ok: true, reason: null };
 
   // Limited tracking (if you track remaining in modifiers)
   if (id === "limited") {

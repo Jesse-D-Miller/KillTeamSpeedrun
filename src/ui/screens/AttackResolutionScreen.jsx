@@ -191,6 +191,7 @@ function AttackResolutionScreen({
   onLockDefense,
   onSetCombatModifiers,
   onApplyDamage,
+  onApplyStatusEffect,
   onResolveComplete,
   onCancel,
   onAppendBattleLog,
@@ -209,8 +210,10 @@ function AttackResolutionScreen({
   // Final-entry (ignores defender blocks)
   const [finalAttackHits, setFinalAttackHits] = useState(0);
   const [finalAttackCrits, setFinalAttackCrits] = useState(0);
+  const [finalAttackDevastatingDamage, setFinalAttackDevastatingDamage] = useState(0);
   const [finalDefenseHits, setFinalDefenseHits] = useState(0);
   const [finalDefenseCrits, setFinalDefenseCrits] = useState(0);
+  const [finalDefenseDevastatingDamage, setFinalDefenseDevastatingDamage] = useState(0);
 
   const [usedRules, setUsedRules] = useState({});
   const [preRollFlags, setPreRollFlags] = useState({
@@ -224,6 +227,8 @@ function AttackResolutionScreen({
     Array.isArray(battleLog) ? battleLog : [],
   );
   const logIdRef = useRef(0);
+  const appliedStatusRef = useRef(new Set());
+  const ctxLogLengthRef = useRef(0);
 
   const [hotModalOpen, setHotModalOpen] = useState(false);
   const [hotDamageDraft, setHotDamageDraft] = useState("0");
@@ -248,6 +253,14 @@ function AttackResolutionScreen({
 
   const attackerDamageLabel = weapon?.dmg ?? "-";
   const defenderDamageLabel = defenderWeapon?.dmg ?? "-";
+  const attackerHasDevastating = useMemo(() => {
+    const rules = normalizeWeaponRules(weapon);
+    return rules.some((rule) => String(rule?.id || "").toLowerCase() === "devastating");
+  }, [weapon]);
+  const defenderHasDevastating = useMemo(() => {
+    const rules = defenderWeapon ? normalizeWeaponRules(defenderWeapon) : [];
+    return rules.some((rule) => String(rule?.id || "").toLowerCase() === "devastating");
+  }, [defenderWeapon]);
 
   const defenderWeaponRules = useMemo(() => {
     const rules = defenderWeapon ? normalizeWeaponRules(defenderWeapon) : [];
@@ -379,10 +392,37 @@ function AttackResolutionScreen({
       log: nextCtx.log || prev.log,
     }));
 
-    const last = Array.isArray(nextCtx.log) ? nextCtx.log.at(-1) : null;
-    if (last?.type === "UI_WR_CLICK") {
-      addLog("Rules", `WR click: ${last.detail?.ruleId || "unknown"}`, nextCtx?.inputs?.role);
-    }
+    const nextLog = Array.isArray(nextCtx.log) ? nextCtx.log : [];
+    const startIndex = Math.max(0, ctxLogLengthRef.current || 0);
+    const newEntries = nextLog.slice(startIndex);
+
+    newEntries.forEach((entry) => {
+      if (entry?.type === "UI_WR_CLICK") {
+        addLog("Rules", `WR click: ${entry.detail?.ruleId || "unknown"}`, nextCtx?.inputs?.role);
+      }
+      if (entry?.type === "EFFECT_APPLIED") {
+        const effectId = entry.detail?.effectId;
+        const target = entry.detail?.target;
+        const targetUnitId =
+          target === "attacker"
+            ? attacker?.id
+            : target === "defender"
+              ? defender?.id
+              : null;
+        if (effectId && targetUnitId) {
+          const key = `${targetUnitId}:${String(effectId).toLowerCase()}`;
+          if (appliedStatusRef.current.has(key)) return;
+          appliedStatusRef.current.add(key);
+          onApplyStatusEffect?.({
+            targetUnitId,
+            effectId,
+            sourceRuleId: entry.detail?.sourceRuleId,
+          });
+        }
+      }
+    });
+
+    ctxLogLengthRef.current = nextLog.length;
   };
 
   const conditionFlags = useMemo(
@@ -406,6 +446,8 @@ function AttackResolutionScreen({
 
     setUsedRules({});
     setLogs(Array.isArray(battleLog) ? battleLog : []);
+    ctxLogLengthRef.current = 0;
+    appliedStatusRef.current = new Set();
     setUiState({
       ui: { prompts: [], notes: [], appliedRules: {} },
       effects: { attacker: [], defender: [] },
@@ -415,8 +457,10 @@ function AttackResolutionScreen({
 
     setFinalAttackHits(0);
     setFinalAttackCrits(0);
+    setFinalAttackDevastatingDamage(0);
     setFinalDefenseHits(0);
     setFinalDefenseCrits(0);
+    setFinalDefenseDevastatingDamage(0);
 
     setPreRollFlags({ cover: false, obscured: false });
     setRollsLocked(Boolean(rollsLockedFromState));
@@ -425,20 +469,24 @@ function AttackResolutionScreen({
     // Keep this simple: both players start on PRE_ROLL visually.
     // Your multiplayer stage can still exist; we just aren't gatekeeping UI anymore.
     setPhase(PHASES.PRE_ROLL);
-  }, [open, role, combatStage, rollsLockedFromState, battleLog]);
+  }, [open, role, combatStage, rollsLockedFromState]);
 
   useEffect(() => {
     if (!open || !finalEntry) return;
     setFinalAttackHits(Number(finalEntry.attackHits ?? 0));
     setFinalAttackCrits(Number(finalEntry.attackCrits ?? 0));
+    setFinalAttackDevastatingDamage(Number(finalEntry.attackDevastatingDamage ?? 0));
     setFinalDefenseHits(Number(finalEntry.defenseHits ?? 0));
     setFinalDefenseCrits(Number(finalEntry.defenseCrits ?? 0));
+    setFinalDefenseDevastatingDamage(Number(finalEntry.defenseDevastatingDamage ?? 0));
   }, [
     open,
     finalEntry?.attackHits,
     finalEntry?.attackCrits,
+    finalEntry?.attackDevastatingDamage,
     finalEntry?.defenseHits,
     finalEntry?.defenseCrits,
+    finalEntry?.defenseDevastatingDamage,
   ]);
 
   useEffect(() => {
@@ -537,6 +585,7 @@ function AttackResolutionScreen({
         prompts: Array.isArray(overlay.ui?.prompts) ? overlay.ui.prompts : [],
         notes: Array.isArray(overlay.ui?.notes) ? overlay.ui.notes : [],
         appliedRules: { ...(overlay.ui?.appliedRules || {}) },
+        disabledOptions: { ...(overlay.ui?.disabledOptions || {}) },
       },
       effects: overlay.effects || base.effects,
       log: Array.isArray(overlay.log) ? overlay.log : base.log,
@@ -593,6 +642,7 @@ function AttackResolutionScreen({
     return 6;
   })();
 
+
   const setCombatCtx = (updater) => {
     setUiState((prevOverlay) => {
       if (!baseCtx) return prevOverlay;
@@ -613,10 +663,21 @@ function AttackResolutionScreen({
   const areModifiersEqual = (left, right) => {
     if (left === right) return true;
     if (!left || !right) return false;
+    if (typeof left !== "object" || typeof right !== "object") return false;
     const leftKeys = Object.keys(left);
     const rightKeys = Object.keys(right);
     if (leftKeys.length !== rightKeys.length) return false;
-    return leftKeys.every((key) => Object.is(left[key], right[key]));
+    return leftKeys.every((key) => {
+      const leftValue = left[key];
+      const rightValue = right[key];
+      if (leftValue === rightValue) return true;
+      const leftIsObj = leftValue && typeof leftValue === "object";
+      const rightIsObj = rightValue && typeof rightValue === "object";
+      if (leftIsObj && rightIsObj) {
+        return areModifiersEqual(leftValue, rightValue);
+      }
+      return Object.is(leftValue, rightValue);
+    });
   };
 
   useEffect(() => {
@@ -700,6 +761,8 @@ function AttackResolutionScreen({
       defenseCrits: 0,
     });
   }, [weapon, finalAttackHits, finalAttackCrits]);
+  const finalAttackTotalDamage = finalAttackPreview.totalDamage +
+    Number(finalAttackDevastatingDamage || 0);
 
   const finalDefensePreview = useMemo(() => {
     return computeDamagePreview({
@@ -710,28 +773,30 @@ function AttackResolutionScreen({
       defenseCrits: 0,
     });
   }, [weapon, defenderWeapon, isFight, finalDefenseHits, finalDefenseCrits]);
+  const finalDefenseTotalDamage = finalDefensePreview.totalDamage +
+    Number(finalDefenseDevastatingDamage || 0);
 
   const resolveFromFinalWindow = () => {
     if (isFight) {
       addLog(
         "Damage",
-        `Final (fight): attacker hits ${finalAttackHits}, crits ${finalAttackCrits} (${finalAttackPreview.totalDamage}); defender hits ${finalDefenseHits}, crits ${finalDefenseCrits} (${finalDefensePreview.totalDamage}).`,
+        `Final (fight): attacker hits ${finalAttackHits}, crits ${finalAttackCrits} (${finalAttackTotalDamage}); defender hits ${finalDefenseHits}, crits ${finalDefenseCrits} (${finalDefenseTotalDamage}).`,
       );
 
-      if (defender?.id && finalAttackPreview.totalDamage > 0) {
-        onApplyDamage?.(defender.id, finalAttackPreview.totalDamage);
+      if (defender?.id && finalAttackTotalDamage > 0) {
+        onApplyDamage?.(defender.id, finalAttackTotalDamage);
       }
-      if (attacker?.id && finalDefensePreview.totalDamage > 0) {
-        onApplyDamage?.(attacker.id, finalDefensePreview.totalDamage);
+      if (attacker?.id && finalDefenseTotalDamage > 0) {
+        onApplyDamage?.(attacker.id, finalDefenseTotalDamage);
       }
     } else {
       addLog(
         "Damage",
-        `Final: hits ${finalAttackHits}, crits ${finalAttackCrits}. Total damage ${finalAttackPreview.totalDamage}.`,
+        `Final: hits ${finalAttackHits}, crits ${finalAttackCrits}. Total damage ${finalAttackTotalDamage}.`,
       );
 
-      if (defender?.id && finalAttackPreview.totalDamage > 0) {
-        onApplyDamage?.(defender.id, finalAttackPreview.totalDamage);
+      if (defender?.id && finalAttackTotalDamage > 0) {
+        onApplyDamage?.(defender.id, finalAttackTotalDamage);
       }
     }
 
@@ -1420,6 +1485,20 @@ function AttackResolutionScreen({
                             disabled={!isFight && !isAttackerRole}
                             testId="final-crits"
                           />
+                          {attackerHasDevastating ? (
+                            <CountInput
+                              label="Devastating Damage"
+                              value={finalAttackDevastatingDamage}
+                              max={99}
+                              min={-99}
+                              onChange={(next) => {
+                                setFinalAttackDevastatingDamage(next);
+                                onSetFinalEntry?.({ attackDevastatingDamage: next });
+                              }}
+                              disabled={!isFight && !isAttackerRole}
+                              testId="final-devastating"
+                            />
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -1454,6 +1533,20 @@ function AttackResolutionScreen({
                               disabled={false}
                               testId="final-defense-crits"
                             />
+                            {defenderHasDevastating ? (
+                              <CountInput
+                                label="Devastating Damage"
+                                value={finalDefenseDevastatingDamage}
+                                max={99}
+                                min={-99}
+                                onChange={(next) => {
+                                  setFinalDefenseDevastatingDamage(next);
+                                  onSetFinalEntry?.({ defenseDevastatingDamage: next });
+                                }}
+                                disabled={false}
+                                testId="final-defense-devastating"
+                              />
+                            ) : null}
                           </div>
                         </div>
                       ) : (
@@ -1479,7 +1572,7 @@ function AttackResolutionScreen({
                               {finalAttackPreview.remainingHits} hits ·{" "}
                               {finalAttackPreview.remainingCrits} crits ·{" "}
                               {finalAttackPreview.normalDamage}/{finalAttackPreview.critDamage} ·{" "}
-                              {finalAttackPreview.totalDamage} dmg
+                              {finalAttackTotalDamage} dmg
                             </strong>
                           </div>
                           <div className="attack-resolution__damage-line">
@@ -1488,7 +1581,7 @@ function AttackResolutionScreen({
                               {finalDefensePreview.remainingHits} hits ·{" "}
                               {finalDefensePreview.remainingCrits} crits ·{" "}
                               {finalDefensePreview.normalDamage}/{finalDefensePreview.critDamage} ·{" "}
-                              {finalDefensePreview.totalDamage} dmg
+                              {finalDefenseTotalDamage} dmg
                             </strong>
                           </div>
                           <div className="attack-resolution__damage-sub">
@@ -1511,7 +1604,7 @@ function AttackResolutionScreen({
                             </strong>
                           </div>
                           <div className="attack-resolution__damage-total">
-                            Total Damage: <strong>{finalAttackPreview.totalDamage}</strong>
+                            Total Damage: <strong>{finalAttackTotalDamage}</strong>
                           </div>
                           <div className="attack-resolution__damage-sub">
                             (Final entry ignores defender blocks — fast mode.)

@@ -20,6 +20,7 @@ export function getRuleResponsibility(ruleOrId) {
     case "hot":
     case "shock":
     case "piercing-crits":
+    case "devastating":
       return RESPONSIBILITY.SEMI;
 
     case "brutal":
@@ -31,7 +32,6 @@ export function getRuleResponsibility(ruleOrId) {
     case "saturate":
     case "blast":
     case "torrent":
-    case "devastating":
     case "limited":
       return RESPONSIBILITY.AUTO;
 
