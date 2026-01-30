@@ -1262,14 +1262,6 @@ function AttackResolutionScreen({
                             </div>
                           </div>
 
-                          <div className="attack-resolution__e2e-state">
-                            <div data-testid="vantage-state">
-                              {combatCtx.modifiers?.vantageState?.mode || "none"}
-                            </div>
-                            <div data-testid="cover-state">
-                              {preRollFlags.cover && !coverDisabledByVantage ? "on" : "off"}
-                            </div>
-                          </div>
                         </>
                       ) : (
                         <div className="attack-resolution__empty">
@@ -1320,12 +1312,6 @@ function AttackResolutionScreen({
                       </div>
 
                       <div className={isAttackerRole ? "" : "attack-resolution__readonly"}>
-                        {!rollsLocked ? (
-                          <div className="attack-resolution__empty">
-                            Lock rolls first to use post-roll rules.
-                          </div>
-                        ) : null}
-
                         <WeaponRulesPanel
                           ctx={combatCtx}
                           phase={PHASES.POST_ROLL}
@@ -1343,8 +1329,7 @@ function AttackResolutionScreen({
                               onSpendCp?.(cpOwner, 1);
                             }
                           }}
-                          disabled={!rollsLocked || !isAttackerRole}
-                          title={!rollsLocked ? "Lock rolls first" : undefined}
+                          disabled={!isAttackerRole}
                         >
                           CP Re-roll
                         </button>
@@ -1386,6 +1371,20 @@ function AttackResolutionScreen({
                           testId={undefined}
                           enablePopover={false}
                         />
+                        <button
+                          className="attack-resolution__rule attack-resolution__rule--secondary"
+                          type="button"
+                          onClick={() => {
+                            if (!isDefenderRole) return;
+                            addLog("Post-Roll", "CP re-roll used.");
+                            if (cpOwner) {
+                              onSpendCp?.(cpOwner, 1);
+                            }
+                          }}
+                          disabled={!isDefenderRole}
+                        >
+                          CP Re-roll
+                        </button>
                       </div>
                     </div>
                   </div>
