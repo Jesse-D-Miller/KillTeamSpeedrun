@@ -106,6 +106,55 @@ describe("weapon rules engine", () => {
     });
   });
 
+  describe("Bipod", () => {
+    it("appears in ROLL phase when stationary", () => {
+      const engine = makeEngine();
+      const ctx = makeCtx({
+        weapon: { atk: 4, hit: 4 },
+        attackDice: [{ value: 1 }, { value: 2 }, { value: 4 }],
+        wr: [{ id: "bipod" }],
+        modifiers: { movementActions: [] },
+      });
+
+      applyPhase(engine, ctx, "ROLL");
+
+      expect(ctx.ui.availableRules.ROLL).to.include("bipod");
+      const prompt = expectPrompt(ctx, { type: "bipod", phase: "ROLL" });
+      expect(prompt.enabled).to.equal(true);
+      expectSuggested(ctx, "ceaselessGroupValue", 1);
+    });
+
+    it("is disabled after reposition, dash, or fall back", () => {
+      const engine = makeEngine();
+      const ctx = makeCtx({
+        weapon: { atk: 4, hit: 4 },
+        attackDice: [{ value: 1 }, { value: 2 }, { value: 4 }],
+        wr: [{ id: "bipod" }],
+        modifiers: { movementActions: ["dash"] },
+      });
+
+      applyPhase(engine, ctx, "ROLL");
+
+      const prompt = expectPrompt(ctx, { type: "bipod", phase: "ROLL" });
+      expect(prompt.enabled).to.equal(false);
+    });
+
+    it("is allowed during counteract even if moved", () => {
+      const engine = makeEngine();
+      const ctx = makeCtx({
+        weapon: { atk: 4, hit: 4 },
+        attackDice: [{ value: 1 }, { value: 2 }, { value: 4 }],
+        wr: [{ id: "bipod" }],
+        modifiers: { movementActions: ["reposition"], isCounteract: true },
+      });
+
+      applyPhase(engine, ctx, "ROLL");
+
+      const prompt = expectPrompt(ctx, { type: "bipod", phase: "ROLL" });
+      expect(prompt.enabled).to.equal(true);
+    });
+  });
+
   describe("Lethal X", () => {
     it("applies in ROLL phase and logs threshold", () => {
       const engine = makeEngine();

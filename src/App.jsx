@@ -577,7 +577,16 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
   const attackCritThreshold = getAttackCritThreshold(selectedWeapon);
   const hasCeaseless = (() => {
     const rules = normalizeWeaponRules(selectedWeapon);
-    return rules.some((rule) => rule.id === "ceaseless");
+    if (rules.some((rule) => rule.id === "ceaseless")) return true;
+    const hasBipod = rules.some((rule) => rule.id === "bipod");
+    if (!hasBipod) return false;
+    if (state.firefight?.activation?.isCounteract) return true;
+    const actions = Array.isArray(state.firefight?.activation?.actionsTaken)
+      ? state.firefight.activation.actionsTaken
+          .map((action) => String(action || "").toLowerCase())
+          .filter((action) => ["reposition", "dash", "fallback"].includes(action))
+      : [];
+    return actions.length === 0;
   })();
   const hasBalanced = (() => {
     const rules = normalizeWeaponRules(selectedWeapon);
@@ -1175,6 +1184,14 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
           ["reposition", "dash", "charge", "fallback"].includes(action),
         )
     : [];
+  const combatMovementActions = Array.isArray(state.firefight?.activation?.actionsTaken)
+    ? state.firefight.activation.actionsTaken
+        .map((action) => String(action || "").toLowerCase())
+        .filter((action) =>
+          ["reposition", "dash", "fallback"].includes(action),
+        )
+    : [];
+  const isCombatCounteract = Boolean(state.firefight?.activation?.isCounteract);
 
   const showIssues = (result, event) =>
     setIntentGate({
@@ -2530,7 +2547,11 @@ function GameOverlay({ initialUnits, playerSlot, gameCode, teamKeys, renderUi = 
         combatStage={combatState?.stage}
         attackRoll={combatState?.attackRoll}
         defenseRoll={combatState?.defenseRoll}
-        combatModifiers={combatState?.modifiers}
+        combatModifiers={{
+          ...(combatState?.modifiers || {}),
+          movementActions: combatMovementActions,
+          isCounteract: isCombatCounteract,
+        }}
         battleLog={combatState?.log || []}
         finalEntry={combatState?.finalEntry || null}
         weaponUsage={state.weaponUsage || {}}

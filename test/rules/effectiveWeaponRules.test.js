@@ -17,6 +17,7 @@ describe("getEffectiveWeaponRules", () => {
     const ctx = {
       weaponRules: [{ id: "balanced" }],
       modifiers: { vantageState: { mode: "4in", accurateValue: 2 } },
+      inputs: { role: "attacker" },
     };
 
     const rules = getEffectiveWeaponRules(ctx);
@@ -33,6 +34,7 @@ describe("getEffectiveWeaponRules", () => {
     const ctx = {
       weaponRules: [{ id: "lethal", value: 5 }],
       modifiers: { vantageState: { mode: "2in", accurateValue: 1 } },
+      inputs: { role: "attacker" },
     };
 
     const rules = getEffectiveWeaponRules(ctx);
@@ -60,6 +62,7 @@ describe("getEffectiveWeaponRules", () => {
     const ctx = {
       weaponRules: [],
       modifiers: { vantageState: { mode: "4in", accurateValue: "2" } },
+      inputs: { role: "attacker" },
     };
 
     const rules = getEffectiveWeaponRules(ctx);

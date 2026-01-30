@@ -34,3 +34,11 @@ test("vantage shows chooser and applies Accurate", async ({ page }) => {
 
   await expect(page.locator(".wr-chip", { hasText: "Accurate 2" })).toBeVisible();
 });
+
+test("bipod renders as Ceaseless (Bipod)", async ({ page }) => {
+  await openAttackResolution(page, { weaponRules: [{ id: "bipod" }] });
+
+  const chip = page.locator(".wr-chip", { hasText: "Ceaseless (Bipod)" });
+  await expect(chip).toBeVisible();
+  await expect(chip).toHaveClass(/wr-chip--player/);
+});

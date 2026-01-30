@@ -95,6 +95,15 @@ const computeCeaselessGroup = (ctx) => {
   return chosen || null;
 };
 
+const canUseBipod = (ctx) => {
+  if (ctx?.modifiers?.isCounteract) return true;
+  const actions = Array.isArray(ctx?.modifiers?.movementActions)
+    ? ctx.modifiers.movementActions
+    : [];
+  const normalized = actions.map((action) => String(action || "").toLowerCase());
+  return !normalized.some((action) => ["reposition", "dash", "fallback"].includes(action));
+};
+
 const computeBalancedSuggestion = (ctx) => {
   const hit = getWeaponHit(ctx);
   if (!Number.isFinite(hit) || !Array.isArray(ctx.attackDice)) return null;
@@ -516,6 +525,69 @@ export const createRulesEngine = ({ rollD6 = defaultRollD6 } = {}) => {
           });
           ctx.log.push({
             type: "RULE_CEASELESS_CLICK",
+            detail: { phase: "ROLL", value: chosen },
+          });
+        },
+      },
+    },
+    bipod: {
+      id: "bipod",
+      uiLabel: "Ceaseless (Bipod)",
+      phases: ["ROLL"],
+      getUiHints: (ctx, rule, phase) => {
+        if (phase !== "ROLL") return;
+        ensureCtxScaffold(ctx);
+        const canUse = canUseBipod(ctx);
+        const chosen = computeCeaselessGroup(ctx);
+        const enabled = Boolean(chosen) && canUse;
+        if (chosen) {
+          ctx.ui.suggestedInputs.ceaselessGroupValue = chosen.value;
+        }
+        addPrompt(ctx, {
+          ruleId: "bipod",
+          phase,
+          text: "Ceaseless (Bipod): reroll all dice showing the most common miss value.",
+          enabled,
+        });
+      },
+      apply: () => {},
+      onClick: (ctx, rule) => {
+        RULES.bipod.hooks.ON_CLICK?.(ctx, rule);
+      },
+      hooks: {
+        ON_ROLL_ATTACK: (ctx) => {
+          ensureCtxScaffold(ctx);
+          if (!canUseBipod(ctx)) return;
+          const chosen = computeCeaselessGroup(ctx);
+          if (!chosen) return;
+          ctx.ui.suggestedInputs.ceaselessGroupValue = chosen.value;
+          ctx.log.push({
+            type: "RULE_BIPOD_SUGGEST",
+            detail: { value: chosen.value, count: chosen.count },
+          });
+        },
+        ON_CLICK: (ctx) => {
+          ensureCtxScaffold(ctx);
+          if (ctx?.inputs?.phase !== "ROLL") return;
+          if (ctx?.inputs?.clickedRuleId !== "bipod") return;
+          if (ctx?.modifiers?.bipodUsed) return;
+          if (!canUseBipod(ctx)) return;
+          const provided = Number(ctx?.inputs?.ceaselessGroupValue);
+          const computed = computeCeaselessGroup(ctx)?.value;
+          const chosen = Number.isFinite(provided) ? provided : computed ?? null;
+          if (!Number.isFinite(chosen)) return;
+          ctx.modifiers.bipodUsed = true;
+          ctx.ui.suggestedInputs.ceaselessGroupValue = chosen;
+          addPrompt(ctx, {
+            ruleId: "bipod",
+            phase: "ROLL",
+            steps: [
+              `Reroll all dice showing value ${chosen} (largest miss group).`,
+            ],
+            enabled: true,
+          });
+          ctx.log.push({
+            type: "RULE_BIPOD_CLICK",
             detail: { phase: "ROLL", value: chosen },
           });
         },

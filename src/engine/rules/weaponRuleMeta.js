@@ -43,6 +43,7 @@ export function getRuleResponsibility(ruleOrId) {
     case "punishing":
     case "rending":
     case "severe":
+    case "bipod":
       return RESPONSIBILITY.PLAYER;
 
     default:
@@ -70,6 +71,7 @@ export function getRulePhase(ruleId) {
     case "ceaseless":
     case "relentless":
     case "lethal":
+    case "bipod":
       return PHASES.ROLL;
 
     case "devastating":

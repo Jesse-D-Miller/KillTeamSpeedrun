@@ -52,6 +52,15 @@ const hasMiss = (ctx) =>
     return tags.includes("miss") || tags.includes("fail");
   });
 
+const canUseBipod = (ctx) => {
+  if (ctx?.modifiers?.isCounteract) return true;
+  const actions = Array.isArray(ctx?.modifiers?.movementActions)
+    ? ctx.modifiers.movementActions
+    : [];
+  const normalized = actions.map((action) => String(action || "").toLowerCase());
+  return !normalized.some((action) => ["reposition", "dash", "fallback"].includes(action));
+};
+
 /**
  * Human-facing display label with real numbers.
  */
@@ -70,6 +79,8 @@ export function formatWeaponRuleLabel(rule) {
       return `Piercing ${Number(rule.value)}`;
     case "piercing-crits":
       return `Piercing Crits ${Number(rule.value)}`;
+    case "bipod":
+      return "Ceaseless (Bipod)";
     case "devastating": {
       const x = Number(rule.value);
       const dist = Number(rule.distance);
@@ -113,6 +124,8 @@ export function getWeaponRuleBoiledDown(ctx, rule, phase = ctx?.phase) {
     case "balanced":
       return `Once, you may reroll 1 attack die (recommend: lowest miss; otherwise lowest hit; otherwise lowest crit).`;
     case "ceaseless":
+      return `After rolling, reroll all dice showing the most common missed value (ties: reroll the lower value).`;
+    case "bipod":
       return `After rolling, reroll all dice showing the most common missed value (ties: reroll the lower value).`;
     case "lethal":
       return `Critical successes are ${x}+ for this attack.`;
@@ -189,6 +202,9 @@ function isRuleClickable(ctx, rule) {
   // Example gating rules that match “speed up combat” expectations:
   if (id === "balanced" && ctx?.modifiers?.balancedUsed) return { ok: false, reason: "Already used." };
   if (id === "devastating" && !ctx?.inputs?.attackLockedIn) return { ok: false, reason: "Lock in attack first." };
+  if (id === "bipod" && ctx?.modifiers?.bipodUsed) return { ok: false, reason: "Already used." };
+  if (id === "bipod" && !canUseBipod(ctx))
+    return { ok: false, reason: "Must not reposition, dash, or fall back." };
 
   if (id === "piercing-crits" && ctx?.inputs?.role && ctx.inputs.role !== "attacker")
     return { ok: false, reason: "Attacker only." };
